@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<!--
+
+    This is SWI-Tinker, a SWI-Prolog interactive playground running in
+    your browser.  It must be served  through a web server. An example
+    server  is provided  by  server.pl.   To use  it,  build the  wasm
+    version in e.g., `build.wasm` and from this directory, run
+
+	swipl ../src/wasm/server.pl
+
+    and browse to http://localhost:8080/
+-->
+
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>SWI-Tinker</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.9/codemirror.css">
+  <link rel="stylesheet" href="tinker.css">
+  <link rel="stylesheet" href="term.css">
+  <link rel="stylesheet" href="source.css">
+  <link rel="icon" type="image/x-icon" href="https://www.swi-prolog.org/download/logo/swipl-64x64.ico">
+  <script crossorigin="anonymous" async defer src="https://buttons.github.io/buttons.js"></script>
+</head>
+<body>
+
+<div class="header">
+  <img id="logo" alt="SWI-Prolog logo" src="https://www.swi-prolog.org/download/logo/swipl-128.png">
+  <div>
+    This is <a href="https://github.com/SWI-Prolog/tinker"
+    target="_blank">SWI-Tinker</a>: 
+    <a href="https://www.swi-prolog.org"
+    target="_blank">SWI-Prolog</a> running inside your browser</div>
+  <div>Please consult our <a href="https://github.com/SWI-Prolog/tinker/wiki"
+			     target="_blank">Wiki for help</a></div>
+<div class="github-buttons">
+  <a class="github-button" href="https://github.com/SWI-Prolog/tinker" data-color-scheme="no-preference: light; light: light; dark: dark;" data-size="large" data-show-count="true" aria-label="Star SWI-Prolog/tinker on GitHub">Star</a>
+</div>
+</div>
+<div class="content">
+  <div id="left">
+    <div class="tinker-console">
+    </div>
+  </div>
+
+  <div id="right">
+    <div class="tinker-source">
+      <div class="source-files">
+	<select name="select-file">
+	</select>
+	<button name="delete-file">&#128465;</button>
+	<button name="new-file">+</button>
+	<span class="create-file">
+          <input type="text" name="file-name" placeholder="File name">
+          <button name="create-button">Create</button>
+	</span>
+      </div>
+      <div class="editor-wrapper">
+	<div name="editor"></div> <!-- Filled with CodeMirror -->
+      </div>
+      <div class="source-buttons">
+	<button name="consult">(Re)consult</button>
+	<span class="exch-files">
+	  <input type="file" accept=".pl" multiple class="upload-file">
+	  <a class="btn upload" href="#" title="Upload files">📤</a>
+	  <a class="btn download" type="text/x-prolog">&#x1F4E5;</a>
+	</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Load Prolog -->
+<!-- Use swipl-bundle.js or swipl-web.js.  The bundle is easier to
+     distribute while web is better for local use with e.g., Emscripten
+     tools such as --profiling -->
+<script src="/wasm/swipl-bundle.js"></script>
+
+<!-- Splitter from https://split.js.org Requires #content to be flex.-->
+<script src="https://www.swi-prolog.org/download/web/split-1.6.5/split.min.js"></script>
+<script>
+  window.onload = () => {
+    Split(['#left', '#right'],
+	  { gutterSize: 10
+	  });
+  }
+</script>
+<style>
+.gutter {
+    background-color: #eee;
+    background-repeat: no-repeat;
+    background-position: 50%;
+    cursor: col-resize;
+}
+.gutter:hover { background-color: #ddd; }
+</style>
+
+<!-- Get require.js, needed to load CodeMirror, our editor -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js"></script>
+
+<!-- Glue it all together -->
+<script type="module">
+  import * as tinker from "./tinker.js";
+  import * as term from "./term.js";
+
+  let Prolog;
+  let Module;
+  let Tinker;
+  let Term;
+  
+  var options = {
+    arguments: ['-g', 'true'],
+    locateFile: function(file) { // not needed with swipl-bundle.js
+      return '/wasm/' + file;
+    },
+    on_output: print_output
+  };
+
+  function print_output(line, cls, sgr) {
+    Tinker.console.print(line, cls, sgr);
+  }
+
+  SWIPL(options).then(async (module) => {
+    Module = module;
+    Prolog = Module.prolog;
+    Tinker = new tinker.Tinker({ root:document.querySelector("div.content"),
+				 module:module,
+				 banner:true
+			       });
+    window.prolog = Prolog;
+    window.tinker = Tinker;
+    Term = new term.Term(Tinker.console.elem);
+  });
+
+</script>
+
+<script>
+  // Some global functions that can be used to demonstrate calling
+  // JavaScript
+
+  // Use as `?- X := add_one(1)`
+  add_one = (n) => n+1;
+  
+  // Use as `?- await promise_any(42)`
+  promise_any = (data) => {
+    console.log(data);
+    
+    return new Promise(function(resolve, reject) {
+      resolve(data);
+    });
+  }
+</script>
+
+</body>
+</html>

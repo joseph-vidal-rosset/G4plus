@@ -1,0 +1,427 @@
+ /* =============================================================================
+   THÈME LEUVEN BLANC - Adapté from juba/color-theme-tangotango
+   ============================================================================= */
+
+:root {
+    --margin: 10px;
+    /* Couleurs Leuven version blanche - contraste amélioré */
+    --leuven-bg: #ffffff;
+    --leuven-bg-alt: #f0f0f0;
+    --leuven-fg: #000000;
+    --leuven-fg-alt: #404040;
+    --leuven-border: #999999;
+    --leuven-red: #cc0000;
+    --leuven-green: #4e9a06;
+    --leuven-blue: #2a4d8f;
+    --leuven-purple: #7a28a0;
+    --leuven-yellow: #b09000;
+}
+
+html {
+    height: 100%;
+}
+
+body {
+    display: flex;
+    flex-direction: column;
+    width: 100%; height: 100%; margin: var(--margin);
+    overflow: hidden;
+    background: var(--leuven-bg) !important;
+    color: var(--leuven-fg) !important;
+    font-family: 'Monaco', 'DejaVu Sans Mono', monospace !important;
+}
+
+.header {
+    padding-bottom: 5px;
+    background: var(--leuven-bg) !important;
+    color: var(--leuven-fg) !important;
+    border-bottom: 1px solid var(--leuven-border) !important;
+}
+
+#logo {
+    width: 5ex;
+    float: left;
+    margin-right: 2ex;
+}
+
+#owl-link {
+    position: absolute;
+    top: var(--margin);
+    right: 120px;
+    display: inline-block;
+}
+
+#owl-logo {
+    width: 40px !important;
+    height: 40px !important;
+    display: block !important;
+}
+
+div.github-buttons {
+    position: absolute;
+    top: var(--margin);
+    right: var(--margin);
+    display: inline-block;
+    float: right;
+}
+
+.content {
+    position: relative;
+    flex-grow: 1;
+    display: flex;
+    flex-direction: row;
+    width: calc(100% - 2*var(--margin));
+    background: var(--leuven-bg) !important;
+}
+
+#left, #right {
+    position: relative;
+    box-sizing: border-box;
+    height: calc(100% - 2*var(--margin));
+    background: var(--leuven-bg) !important;
+    border: 1px solid var(--leuven-border) !important;
+}
+
+div.tinker-source {
+    position: relative;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.tinker-console-wrapper {
+    box-sizing: border-box;
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    height: 100%;
+    width: 100%;
+    padding: 5px;
+    overflow: auto; display: flex; flex-direction: column-reverse;
+    border: 1px solid var(--leuven-border) !important;
+    background: var(--leuven-bg) !important;
+    color: var(--leuven-fg) !important;
+}
+.tinker-scroll-start-at-top { flex: 1 1 0%; }
+
+.source-files button, .source-files select { 
+    height: 26px; 
+    background: var(--leuven-bg) !important;
+    color: var(--leuven-fg) !important;
+    border: 1px solid var(--leuven-border) !important;
+}
+.source-files select option.url { color: var(--leuven-blue) !important; }
+.source-files .create-file { display: none; }
+.tinker-source.create-file .source-files .create-file { display: inline; }
+
+.editor-wrapper {
+    border: 1px solid var(--leuven-border) !important;
+    padding: 1px;
+    position: relative;
+    flex-grow: 1;
+    background: var(--leuven-bg) !important;
+}
+
+.editor-wrapper div[name=editor] {
+    box-sizing: border-box;
+    border: 0px;
+    resize: none;
+    width: 100%; height: 100%;
+}
+
+.CodeMirror {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    height: 100%;
+    width: 100%;
+    font-size: 130%;
+    background: var(--leuven-bg) !important;
+    color: var(--leuven-fg) !important;
+}
+
+/* CORRESPONDANCE PARENTHÈSES ÉDITEUR */
+.CodeMirror-matchingbracket {
+    background: #ffff00 !important;
+    color: #000000 !important;
+    font-weight: bold !important;
+    border: 2px solid var(--leuven-purple) !important;
+    box-shadow: 0 0 5px #ffff00 !important;
+}
+
+.CodeMirror-cursor { border-color: var(--leuven-fg) !important; }
+.CodeMirror-selected { background: #d0d0d0 !important; }
+.cm-keyword { color: var(--leuven-purple) !important; font-weight: bold !important; }
+.cm-comment { color: #a0a0a0 !important; font-style: italic !important; }
+.cm-string { color: var(--leuven-green) !important; }
+.cm-variable { color: var(--leuven-fg) !important; }
+.cm-variable-2 { color: var(--leuven-blue) !important; }
+.cm-def { color: #a3651d !important; }
+.cm-number { color: #8e580e !important; }
+.cm-operator { color: #b05a63 !important; }
+.cm-builtin { color: #708090 !important; }
+.cm-atom { color: #8e580e !important; }
+
+.source-buttons {
+    margin-top: var(--margin);
+}
+
+.source-buttons button {
+    background: var(--leuven-bg) !important;
+    color: var(--leuven-fg) !important;
+    border: 1px solid var(--leuven-border) !important;
+    padding: 5px 10px;
+}
+
+.source-buttons button:hover {
+    background: var(--leuven-blue) !important;
+    color: var(--leuven-bg) !important;
+}
+
+		 /*******************************
+		 *        PROLOG CONSOLE        *
+		 *******************************/
+
+.tinker-input {
+    margin-top: 5px;
+    box-sizing: border-box;
+    width: 100%;
+}
+
+div.tinker-trace > button.nodebug > span,
+button.tinker-query-run > span {
+    position: relative;
+    top: -1px;
+}
+
+button.tinker-query-run {
+    color: var(--leuven-blue) !important;
+}
+
+.tinker-more, .tinker-trace { margin-left: 3ex; }
+
+.tinker-input, .tinker-more, .tinker-trace,
+.tinker-abort, .tinker-keyboard { display: none }
+
+.tinker-query.read          .query-header    { display: none }
+.tinker-query.read          .tinker-input    { display: flex }
+.tinker-query.prompt        .tinker-input    { display: flex }
+.tinker-query.more          .tinker-more     { display: inline-block }
+.tinker-query.trace         .tinker-trace    { display: inline-block }
+.tinker-query.run:not(.key) .tinker-abort    { display: block }
+.tinker-query.key           .tinker-keyboard { display: block }
+
+/* ZONE DE SAISIE AVEC CORRESPONDANCE PARENTHÈSES */
+.tinker-input input { 
+    flex-grow: 1; 
+    margin-left: 10px;
+    background: var(--leuven-bg) !important;
+    color: var(--leuven-fg) !important;
+    border: 2px solid var(--leuven-green) !important; /* Vert par défaut */
+    padding: 6px 10px !important;
+    border-radius: 4px !important;
+    transition: all 0.3s ease !important;
+}
+
+/* États des parenthèses dans la zone de saisie */
+.tinker-input input.parens-unbalanced {
+    border-color: var(--leuven-red) !important;
+    background: #fff5f5 !important;
+}
+
+.tinker-input input.parens-highlight {
+    box-shadow: 0 0 0 2px rgba(138, 50, 170, 0.3) !important;
+}
+
+.tinker-keyboard:focus { outline: 0px; }
+.tinker-keyboard > span { color: var(--leuven-border) !important; font-style: italic; font-size: 90%; }
+
+.tinker-console-output {
+    font-family: monospace;
+    word-break: break-all;
+    overflow-wrap: break-word;
+    white-space: normal;
+    color: var(--leuven-fg) !important;
+}
+
+.tinker-console-output div {
+    white-space: pre-wrap;     /* Respecte les sauts de ligne */
+    font-family: monospace;    /* Police à chasse fixe */
+    line-height: 1.4;          /* Espacement vertical */
+}
+
+.stderr, .stdout, .query-header {
+    white-space: pre-wrap;
+    font-family: monospace;
+    word-break: break-all;
+    overflow-wrap: break-word;
+}
+.underline { text-decoration: underline; color: #b05a63 !important; }
+div.write { display: contents; }
+
+div.query-header, span.prompt { 
+    font-weight: bold; 
+    color: var(--leuven-fg) !important;
+}
+div.query-header span.query-prompt { margin-right: 1ex; }
+.query-header { 
+    margin-top: 5px; 
+    padding: 3px 0px; 
+    display: block; 
+    background-color: var(--leuven-bg-alt) !important;
+    color: var(--leuven-fg) !important;
+    border-left: 4px solid var(--leuven-blue) !important;
+}
+.tinker-query.engine .query-header { 
+    background: var(--leuven-bg-alt) !important; 
+    border-left: 4px solid var(--leuven-green) !important;
+}
+.query-answer:nth-child(even) { background-color: var(--leuven-bg-alt) !important; }
+
+.tinker-query, .query-answer { position: relative; }
+span.query-buttons { 
+    position: absolute; 
+    right: 5px; 
+    top: 1px; 
+    padding: 0px; 
+    margin: 0px;
+    cursor: pointer; 
+    color: var(--leuven-fg-alt) !important;
+}
+span.query-buttons > span { margin-left: 0.5ex; border: 1px;}
+span.query-buttons > span:hover { color: #b05a63 !important; border: 1px solid #b05a63 !important;}
+.tinker-query.collapsed > .query-answers { display: none; }
+.tinker-query span.query-collapse:before { content: "\1401" }
+.tinker-query.collapsed span.query-collapse:before { content: "\1405" }
+span.query-collapse { font-size: 90%; }
+
+span.exch-files {
+    float: right;
+    text-decoration: none;
+}
+
+span.exch-files input.upload-file { display: none; }
+span.exch-files.upload-armed input.upload-file { display: inline; }
+
+/* BOUTONS COPY-LATEX - Gris métallique */
+.latex-copy-btn {
+    display: inline-block;
+    margin-left: 10px;
+    padding: 2px 8px;
+    background: #708090 !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 3px !important;
+    cursor: pointer !important;
+    font-size: 11px !important;
+    font-family: sans-serif !important;
+}
+
+.latex-copy-btn:hover {
+    background: #556070 !important;
+}
+
+/* Texte en gras (true, etc.) en vert clair comme time/1 */
+.bold { font-weight: bold; color: var(--leuven-green) !important; }
+
+.CodeMirror-search-match {
+  background-color: var(--leuven-yellow) !important;
+  color: var(--leuven-fg) !important;
+}
+.CodeMirror-trace-call      { background-color: var(--leuven-blue) !important; }
+.CodeMirror-trace-exit      { background-color: var(--leuven-green) !important; }
+.CodeMirror-trace-fail      { background-color: var(--leuven-red) !important; }
+.CodeMirror-trace-redo      { background-color: var(--leuven-yellow) !important; }
+.CodeMirror-trace-exception { background-color: var(--leuven-purple) !important; }
+
+/* FORÇAGE OUTPUT G4-MIC */
+.answer, .console-output, [class*="output"], [class*="answer"] {
+    font-size: 16px !important;
+    line-height: 1.7 !important;
+    font-family: monospace !important;
+    color: var(--leuven-fg) !important;
+}
+
+/* Cible large pour attraper tout l'output */
+div, pre, span {
+    font-size: 16px !important;
+}
+
+/* FORÇAGE INPUT - CodeMirror */
+.CodeMirror, .cm-editor, .cm-content, .cm-line {
+    font-size: 16px !important;
+    font-family: 'Monaco', 'Menlo', monospace !important;
+    background: var(--leuven-bg) !important;
+    color: var(--leuven-fg) !important;
+}
+
+/* Cibler spécifiquement la zone d'édition */
+#left .CodeMirror, #left .cm-editor {
+    font-size: 16px !important;
+}
+
+/* Header links */
+.header a {
+    color: var(--leuven-blue) !important;
+    text-decoration: none;
+}
+
+.header a:hover {
+    color: #005f87 !important;
+    text-decoration: underline;
+}
+
+.tinker-console-output div {
+    white-space: pre-wrap;     /* Respecte les sauts de ligne */
+    font-family: monospace;    /* Police à chasse fixe */
+    line-height: 1.4;          /* Espacement vertical */
+}
+
+/* =============================================================================
+   IMAGES FITCH SEULEMENT 
+   ============================================================================= */
+/* Images Fitch */
+img[alt="Preuve Fitch"] {
+    display: block;
+    margin: 10px 0;
+    max-width: 100%;
+    border: 1px solid var(--leuven-border);
+}
+
+/* =============================================================================
+   SCROLLBARS - Meilleure visibilité
+   ============================================================================= */
+/* Pour Firefox */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: #666666 #e0e0e0;
+}
+
+/* Pour Chrome, Edge, Safari */
+::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+}
+
+::-webkit-scrollbar-track {
+    background: #e0e0e0;
+    border-radius: 6px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #666666;
+    border-radius: 6px;
+    border: 2px solid #e0e0e0;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #404040;
+}
+
+::-webkit-scrollbar-corner {
+    background: #e0e0e0;
+}

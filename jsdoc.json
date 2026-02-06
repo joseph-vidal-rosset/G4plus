@@ -1,0 +1,13 @@
+{
+  "opts": {
+    "destination": "./doc",
+    "sort": false
+  },
+  "plugins": [
+    "plugins/markdown"
+  ],
+  "templates": {
+    "cleverLinks": true,
+    "sort": false
+  }
+}
