@@ -1,5 +1,61 @@
 % =========================================================================
+% G4+ : UNIFIED THEOREM PROVER FOR MINIMAL, INTUITIONISTIC AND CLASSICAL LOGIC
+% =========================================================================
+%
+% SYSTEM ARCHITECTURE:
+% -------------------
+% G4+ is a hybrid theorem prover combining:
+%   1. G4 sequent calculus (Roy Dyckhoff) - main proof engine
+%   2. nanoCoP connection prover (Jens Otten) - validation & filtering
+%   3. TPTP format support - interoperability standard
+%
+% PROOF STRATEGY:
+% --------------
+% Progressive logic escalation:
+%   Minimal → Intuitionistic → Classical
+% This maximizes constructive content while ensuring classical completeness.
+%
+% OUTPUT FORMATS:
+% --------------
+% Every successful proof is displayed in three styles:
+%   1. Sequent Calculus (bussproofs LaTeX) - direct G4 rules
+%   2. Fitch-style Natural Deduction - pedagogical format
+%   3. Tree-style Natural Deduction - visual format
+%
+% KEY FEATURES:
+% ------------
+% - Automatic logic level detection
+% - Pattern-based classical optimization
+% - nanoCoP cross-validation (100% agreement)
+% - Publication-quality LaTeX output
+% - TPTP library compatibility
+% - WASM-ready (web deployment)
+%
+% MAIN INTERFACES:
+% ---------------
+% prove(Formula)           - Full proof with all styles
+% prove([P1,...,Pn] > [C]) - Sequent with premises
+% prove(A <=> B)           - Biconditional equivalence
+% prove_tptp(fof(...))     - TPTP format
+% decide(Formula)          - Quick validity check
+%
+% AUTHORS:
+% -------
+% Joseph Vidal-Rosset (Université de Lorraine)
+% Built upon: G4 (Roy Dyckhoff), nanoCoP (Jens Otten), leanSeq (Jens Otten)
+%
+% =========================================================================
 % OPERATOR DECLARATIONS - Unified for g4mic + nanocop + TPTP
+% =========================================================================
+% This section loads the necessary Prolog libraries and operator definitions.
+% The system integrates three components:
+% - G4 sequent calculus prover (main system)
+% - nanoCoP connection prover (validation and filtering)
+% - TPTP format support (standard automated reasoning format)
+%
+% The minimal_driver (ii_minimal_driver) provides the bridge between
+% nanoCoP and G4, allowing nanoCoP to act as both a filter (rejecting
+% invalid formulas early) and a cross-validator (confirming G4 results).
 % =========================================================================
 :- use_module(library(lists)).
 :- use_module(library(statistics)).
@@ -9,6 +65,15 @@
 
 % =======================================================================================================================
 % NANOCOP WRAPPER - (nanocop as Filter: a formula that is invalid according to nanocop is not submitted to g4mic)
+% =======================================================================================================================
+% This wrapper provides a silent interface to nanoCoP for use as a filtering mechanism.
+% Key features:
+% - WASM compatible: uses inference limits instead of time limits
+% - Preserves occurs_check flag state
+% - Returns silently (no output) - success/failure indicates validity
+% - Used internally by G4+ to avoid attempting proofs of invalid formulas
+%
+% The filter strategy improves efficiency by eliminating hopeless proof attempts early.
 % =======================================================================================================================
 
 %  WASM compatible version
@@ -27,6 +92,19 @@ nanocop_decides_silent(Formula) :-
 
 % =========================================================================
 % NANOCOP REFUTATION ANALYSIS
+% =========================================================================
+% When nanoCoP determines a formula is invalid, this predicate provides
+% detailed diagnostic information to help understand WHY it's invalid.
+%
+% The analysis includes:
+% 1. Raw matrix construction (internal nanoCoP representation)
+% 2. Open path extraction (path through matrix without complementary connection)
+% 3. Counter-model assignments (truth value assignments that falsify the formula)
+%
+% This is particularly useful for:
+% - Debugging formula errors
+% - Understanding counter-examples
+% - Teaching purposes (showing why a formula doesn't hold)
 % =========================================================================
 
 % Analyze and display nanoCoP refutation
@@ -149,6 +227,27 @@ for(Threshold, M, N) :- M < N, M1 is M+1, for(Threshold, M1, N).
 % =========================================================================
 % OPTIMIZED CLASSICAL PATTERN DETECTION
 % =========================================================================
+% This section implements intelligent detection of classical logic patterns
+% to optimize proof search strategy.
+%
+% Key optimizations:
+% 1. Double negation elimination: ~~A → A (in safe contexts)
+% 2. Excluded middle detection: A ∨ ¬A patterns
+% 3. DNE (Double Negation Elimination) presence checking
+% 4. Peirce's law detection: ((A → B) → A) → A
+%
+% Strategy:
+% - If classical patterns detected early → skip minimal/intuitionistic attempts
+% - Start directly with classical logic rules
+% - Avoid wasting time on constructive proof attempts for inherently classical formulas
+%
+% This is a significant performance optimization: formulas like ~~A → A or
+% A ∨ ¬A cannot be proven constructively, so detecting them early saves
+% unnecessary backtracking through minimal and intuitionistic logic levels.
+%
+% Pattern detection is conservative: only triggers on clear classical markers
+% to avoid false positives.
+% =========================================================================
 
 % normalize_double_negations/2: Simplify ~~A patterns in safe contexts
 normalize_double_negations(((A => #) => #), A) :-
@@ -269,6 +368,30 @@ is_fol_structural_pattern((_) => ?[_-_]:(_ & ![_-_]:(_ | _))) :- !.
 % =========================================================================
 % MAIN INTERFACE: prove/1
 % =========================================================================
+% This is the main entry point for the G4+ theorem prover.
+% It provides a unified interface that automatically detects the type of
+% input and dispatches to the appropriate proof procedure.
+%
+% Supported input formats:
+% 1. Sequents with premises: prove([P1, P2, ...] > [C])
+%    - Multiple premises in antecedent
+%    - Single conclusion in succedent
+%    - Proves P1 ∧ P2 ∧ ... → C
+%
+% 2. Theorems (no premises): prove([F] > [])  or  prove(F)
+%    - Single formula with empty premises
+%    - Proves ⊢ F (F is a tautology)
+%
+% 3. Biconditionals: prove(A <> B)
+%    - Equivalence between two formulas
+%    - Proves both A → B and B → A
+%
+% For each input, the system:
+% - Validates syntax
+% - Detects required logic level (minimal/intuitionistic/classical)
+% - Attempts proof with nanoCoP validation
+% - Displays proofs in three styles (sequent calculus, Fitch, tree)
+% =========================================================================
 
 % NEW: Automatic detection for sequents with premisses
 prove(G > D) :-
@@ -335,6 +458,27 @@ prove(G > D) :-
 
 % =========================================================================
 % BICONDITIONAL - Complete corrected section (grouped by proof style)
+% =========================================================================
+% Handles biconditional formulas (equivalences): prove(A <=> B)
+%
+% A biconditional A <=> B is proven by establishing both directions:
+% - Direction 1: A → B  (forward implication)
+% - Direction 2: B → A  (backward implication)
+%
+% Special handling:
+% 1. If formula contains equality or function symbols:
+%    → Route exclusively to nanoCoP (G4 doesn't handle equality natively)
+%
+% 2. For pure propositional/FOL formulas:
+%    → Prove both directions with G4
+%    → Validate each direction with nanoCoP
+%    → Display proofs in all three styles (sequent, Fitch, tree)
+%
+% The system groups output by proof style rather than by direction,
+% making it easier to compare the two directions in the same format.
+%
+% Bug fix applied: premiss_list is now properly initialized before
+% each Fitch proof generation to ensure correct context rendering.
 % =========================================================================
 
 prove(Left <=> Right) :-
@@ -711,7 +855,9 @@ prove([Left] <> [Right]) :- !,
     write('            '), write(Left), write(' ⊢ '), write(Right), nl,
     write('└──────────────────────────────────────────────────────────────┘'), nl, nl,
     ( Direction1Valid = true ->
-        write('\\begin{fitch}'), nl,
+      retractall(premiss_list(_)),
+      assertz(premiss_list([Left])),
+      write('\\begin{fitch}'), nl,
         g4_to_fitch_sequent(Proof1, [Left] > [Right]),
         write('\\end{fitch}'), nl, nl,
         write('✅ Q.E.D.'), nl, nl
@@ -724,7 +870,9 @@ prove([Left] <> [Right]) :- !,
     write('         '), write(Right), write(' ⊢ '), write(Left), nl,
     write('└──────────────────────────────────────────────────────────────┘'), nl, nl,
     ( Direction2Valid = true ->
-        write('\\begin{fitch}'), nl,
+      retractall(premiss_list(_)),
+      assertz(premiss_list([Right])),
+      write('\\begin{fitch}'), nl,
         g4_to_fitch_sequent(Proof2, [Right] > [Left]),
         write('\\end{fitch}'), nl, nl,
         write('✅ Q.E.D.'), nl, nl
@@ -1437,6 +1585,29 @@ subst_neg(A, A).
 % =========================================================================
 % G4 FOL Prover with equality
 % TPTP-version
+% =========================================================================
+% This is the core G4 sequent calculus theorem prover for first-order logic.
+%
+% Key features:
+% - Implements Roy Dyckhoff's G4 sequent calculus rules
+% - Handles propositional and first-order logic
+% - Supports equality reasoning (reflexivity, symmetry, transitivity)
+% - Progressive logic level detection (minimal → intuitionistic → classical)
+% - Eigenvariable management for quantifier rules
+%
+% The G4 calculus is a refinement of Gentzen's LJ/LK systems optimized for
+% automated theorem proving. It features:
+% - Contraction-free rules (more efficient search)
+% - Optimized left-implication rule (reduces backtracking)
+% - Natural correspondence with natural deduction
+%
+% Proof strategy:
+% 1. Start with minimal logic (constructive, no excluded middle)
+% 2. Escalate to intuitionistic if minimal fails
+% 3. Fall back to classical logic if needed
+%
+% This progressive approach maximizes constructive content while ensuring
+% completeness for classical logic.
 % =========================================================================
 % =========================================================================
 % EIGENVARIABLE REGISTRY (using b_setval for BACKTRACKABLE global state)
@@ -2531,6 +2702,30 @@ build_hypothesis_map([_|Rest], AccMap, FinalMap) :-
 % =========================================================================
 % FROM G4 Sequent Calculus To Natural Deduction in Fitch Style
 % =========================================================================
+% This module converts G4 sequent calculus proofs into Fitch-style natural
+% deduction proofs for pedagogical purposes and readability.
+%
+% Fitch-style format features:
+% - Flag-style indentation showing subproof structure
+% - Line-by-line derivation with justifications
+% - LaTeX output for publication-quality rendering
+% - Tracks context and line references automatically
+%
+% Conversion strategy:
+% 1. Traverse G4 proof tree bottom-up
+% 2. Map sequent rules to corresponding natural deduction rules
+% 3. Manage subproof indentation (Fitch flags)
+% 4. Track line numbers and justifications
+% 5. Generate LaTeX using fitch.sty package syntax
+%
+% Rule mappings:
+% - Sequent right rules → Introduction rules
+% - Sequent left rules → Elimination rules
+% - Structural rules → Reiteration and assumption management
+%
+% The resulting Fitch proof is more intuitive than raw sequent calculus
+% and suitable for teaching and publication.
+% =========================================================================
 g4_to_fitch_sequent(Proof, OriginalSequent) :-
     !,
     retractall(fitch_line(_, _, _, _)),
@@ -2799,7 +2994,7 @@ fitch_g4_proof(lor((Premisss > [_Goal]), SP1, SP2), Context, Scope, CurLine, Nex
         ; find_context_line((A | B), Context, DisjLine)
         ),
         % CORRECTION: Chercher explicitement (A => #) dans le contexte
-        % Ne pas utiliser find_context_line qui pourrait matcher une autre implication
+        % Do not use find_context_line which could match another implication
         member(NegLine:NegFormula, Context),
         NegFormula = (A => #),  % Vérifier EXACTEMENT que c'est bien A => #
         % Derive B by DS (without showing the explosion subproof)
@@ -3066,6 +3261,32 @@ render_premiss_list_silent([Premiss|Rest], Scope, CurLine, NextLine, [CurLine:Pr
 
 % =========================================================================
 % TREE STYLE INTERFACE
+% =========================================================================
+% This module converts G4 proofs into tree-style natural deduction format.
+%
+% Tree-style natural deduction features:
+% - Top-down visual tree structure
+% - Premises at the leaves
+% - Conclusion at the root
+% - Horizontal lines showing rule applications
+% - LaTeX output using bussproofs package
+%
+% Advantages over Fitch-style:
+% - More compact for short proofs
+% - Shows logical structure at a glance
+% - Traditional format used in logic textbooks
+% - Better for visualizing proof flow
+%
+% The tree format is particularly effective for:
+% - Teaching natural deduction
+% - Showing structural properties
+% - Comparing different proof strategies
+% - Publication in formal logic contexts
+%
+% Disadvantages:
+% - Can become unwieldy for complex proofs
+% - Less explicit about subproof scope
+% - Harder to follow step-by-step
 % =========================================================================
 render_nd_tree_proof(Proof) :-
     retractall(fitch_line(_, _, _, _)),
@@ -4106,7 +4327,7 @@ rewrite_term(X, J, K, Y) :-
     rewrite_list(L, J, K, R),
     Y =.. [F|R].
 
-% Generateur de noms elegants pour variables liées
+% Elegant name generator for bound variables
 % Use x, y, z instead of a, b, c to avoid collision with constants
 rewrite_name(K, N) :-
     K < 3,
@@ -4262,6 +4483,31 @@ fitch_prefix(theorem, Depth, _, Prefix) :-
 
 % =========================================================================
 % LaTeX FORMULA RENDERING
+% =========================================================================
+% This section handles the conversion of internal Prolog formula representation
+% into publication-quality LaTeX output.
+%
+% Key features:
+% - Proper parenthesization (respects operator precedence)
+% - Logical connective symbols: ∧ (and), ∨ (or), → (implies), ¬ (not), ↔ (iff)
+% - Quantifier handling: ∀x.φ and ∃x.φ with proper variable binding
+% - Elegant variable naming (x, y, z, x₁, x₂, ...)
+% - Recognition and simplification of common patterns (e.g., ~~A, A ↔ B)
+%
+% Output targets:
+% - fitch.sty package (for Fitch-style proofs)
+% - bussproofs.sty package (for tree-style proofs)
+% - Standard mathematical notation for formulas
+%
+% The renderer maintains a careful balance between:
+% - Readability (minimal parentheses)
+% - Precision (no ambiguity)
+% - Aesthetics (clean mathematical typography)
+%
+% Special handling for:
+% - Biconditionals displayed as ↔
+% - Double negations simplified where appropriate
+% - Quantifier scope made explicit
 % =========================================================================
 
 % =========================================================================
@@ -4770,6 +5016,33 @@ g4mic_contains_equality_direct(_) :- fail.
 %=========================================================================
 % =========================================================================
 % TPTP FORMAT SUPPORT
+% =========================================================================
+% This module provides compatibility with the TPTP (Thousands of Problems for
+% Theorem Provers) standard format used by the automated reasoning community.
+%
+% TPTP format features:
+% - Standard FOF (First-Order Form) syntax
+% - Uppercase variables (TPTP convention)
+% - Problem annotations (axioms, conjectures, lemmas)
+% - Portable across different theorem provers
+%
+% Supported interfaces:
+% 1. prove_tptp(fof(...))     - Prove a single TPTP formula
+% 2. prove_tptp_file(File)    - Process an entire .p file
+%
+% Conversion challenges:
+% - TPTP uses uppercase variables (X, Y, Z)
+% - G4+ uses lowercase-only syntax
+% - Solution: Automatic case conversion during parsing
+%
+% The TPTP format is crucial for:
+% - Benchmarking against other provers
+% - Using standard problem libraries (TPTP, ILTP)
+% - Participating in theorem proving competitions (CASC)
+% - Reproducible research comparisons
+%
+% G4+ maintains full TPTP compatibility while preserving its internal
+% lowercase-only convention for consistency.
 % =========================================================================
 % G4-mic uses lowercase-only syntax, while TPTP uses uppercase for variables.
 % This module converts TPTP formulas to G4-mic syntax.

@@ -10,8 +10,8 @@
 % IMPORTANT: Uncomment ONE of these lines depending on your setup:
 
 % If using the fixed web2 version:
-:- ['o_driver.pl'].
-%:- ['g4mic_nanocop.pl'].
+% :- ['o_driver.pl'].
+:- ['g4mic_nanocop.pl'].
 % :- ['viii_g4mic_nanoCop_driver.pl'].
 
 % If using the original web_en version:
