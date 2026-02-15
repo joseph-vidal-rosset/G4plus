@@ -6,67 +6,35 @@
 % =========================================================================
 % FROM G4 Sequent Calculus To Natural Deduction in Fitch Style
 % =========================================================================
-g4_to_fitch_sequent(Proof, OriginalSequent) :-
-    !,
-    retractall(fitch_line(_, _, _, _)),
-    retractall(abbreviated_line(_)),
-
-    OriginalSequent = (_G > [Conclusion]),
-
-    ( premiss_list(PremList), PremList \= [] ->
-        render_premiss_list(PremList, 0, 1, NextLine, InitialContext),
-        LastPremLine is NextLine - 1  % CORRECTION: last premise line
-    ;
-        _NextLine = 1,
-        LastPremLine = 0,             % CORRECTION: no premises
-        InitialContext = []
-    ),
-
-    % CORRECTION: Scope=1 (indentation), CurLine=LastPremLine (line numbering)
-    fitch_g4_proof(Proof, InitialContext, 1, LastPremLine, LastLine, ResLine, 0, _),
-
-    % DETECT: Has a rule been applied?
-    ( LastLine = LastPremLine ->
-        % No line added → pure axiom → display reiteration
-        write('\\fa '),
-        rewrite(Conclusion, 0, _, LatexConclusion),
-        write(LatexConclusion),
-        format(' &  R ~w\\\\', [ResLine]), nl
-    ;
-        % A rule has already displayed the conclusion → do nothing
-        true
-    ).
-
-% g4_to_fitch_theorem/1 : For theorems (original behavior)
+% This module converts G4 sequent calculus proofs into Fitch-style natural
+% deduction proofs for pedagogical purposes and readability.
+%
+% Fitch-style format features:
+% - Flag-style indentation showing subproof structure
+% - Line-by-line derivation with justifications
+% - LaTeX output for publication-quality rendering
+% - Tracks context and line references automatically
+%
+% Conversion strategy:
+% 1. Traverse G4 proof tree bottom-up
+% 2. Map sequent rules to corresponding natural deduction rules
+% 3. Manage subproof indentation (Fitch flags)
+% 4. Track line numbers and justifications
+% 5. Generate LaTeX using fitch.sty package syntax
+%
+% Rule mappings:
+% - Sequent right rules → Introduction rules
+% - Sequent left rules → Elimination rules
+% - Structural rules → Reiteration and assumption management
+%
+% The resulting Fitch proof is more intuitive than raw sequent calculus
+% and suitable for teaching and publication.
+% =========================================================================
+% g4_to_fitch_theorem/1 : For theorems
 g4_to_fitch_theorem(Proof) :-
     retractall(fitch_line(_, _, _, _)),
     retractall(abbreviated_line(_)),
     fitch_g4_proof(Proof, [], 1, 0, _, _, 0, _).
-% =========================================================================
-% RENDERING PREMISE LIST
-% =========================================================================
-% render_premiss_list/5: Displays a premise list in Fitch style
-render_premiss_list([], _, Line, Line, []) :- !.
-
-render_premiss_list([LastPremiss], Scope, CurLine, NextLine, [CurLine:LastPremiss]) :-
-    !,
-    render_fitch_indent(Scope),
-    write(' \\fj '),
-    rewrite(LastPremiss, 0, _, LatexFormula),
-    write(LatexFormula),
-    write(' &  PR\\\\'), nl,
-    assert_safe_fitch_line(CurLine, LastPremiss, premise, Scope),
-    NextLine is CurLine + 1.
-
-render_premiss_list([Premiss|Rest], Scope, CurLine, NextLine, [CurLine:Premiss|RestContext]) :-
-    render_fitch_indent(Scope),
-    write(' \\fa '),
-    rewrite(Premiss, 0, _, LatexFormula),
-    write(LatexFormula),
-    write(' &  PR\\\\'), nl,
-    assert_safe_fitch_line(CurLine, Premiss, premise, Scope),
-    NextCurLine is CurLine + 1,
-    render_premiss_list(Rest, Scope, NextCurLine, NextLine, RestContext).
 % =========================================================================
 % ASSERTION SÉCURISÉE
 % =========================================================================
@@ -274,7 +242,7 @@ fitch_g4_proof(lor((Premisss > [_Goal]), SP1, SP2), Context, Scope, CurLine, Nex
         ; find_context_line((A | B), Context, DisjLine)
         ),
         % CORRECTION: Chercher explicitement (A => #) dans le contexte
-        % Ne pas utiliser find_context_line qui pourrait matcher une autre implication
+        % Do not use find_context_line which could match another implication
         member(NegLine:NegFormula, Context),
         NegFormula = (A => #),  % Vérifier EXACTEMENT que c'est bien A => #
         % Derive B by DS (without showing the explosion subproof)
@@ -432,7 +400,7 @@ fitch_g4_proof(lex((Premisses > [Goal]), SubProof), Context, Scope, CurLine, Nex
         fitch_g4_proof(SubProof, Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut)
     ; WitLine is CurLine + 1,
       NewScope is Scope + 1,
-      assert_safe_fitch_line(WitLine, Witness, assumption, NewScope),
+      assert_safe_fitch_line(WitLine, Witness, assumption, Scope),
       render_hypo(Scope, Witness, 'AS', CurLine, WitLine, VarIn, V1),
       fitch_g4_proof(SubProof, [WitLine:Witness|Context], NewScope, WitLine, SubEnd, _GoalLine, V1, V2),
       ElimLine is SubEnd + 1,

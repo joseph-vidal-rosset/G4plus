@@ -22,6 +22,32 @@ render_premiss_list_silent([Premiss|Rest], Scope, CurLine, NextLine, [CurLine:Pr
 % =========================================================================
 % TREE STYLE INTERFACE
 % =========================================================================
+% This module converts G4 proofs into tree-style natural deduction format.
+%
+% Tree-style natural deduction features:
+% - Top-down visual tree structure
+% - Premises at the leaves
+% - Conclusion at the root
+% - Horizontal lines showing rule applications
+% - LaTeX output using bussproofs package
+%
+% Advantages over Fitch-style:
+% - More compact for short proofs
+% - Shows logical structure at a glance
+% - Traditional format used in logic textbooks
+% - Better for visualizing proof flow
+%
+% The tree format is particularly effective for:
+% - Teaching natural deduction
+% - Showing structural properties
+% - Comparing different proof strategies
+% - Publication in formal logic contexts
+%
+% Disadvantages:
+% - Can become unwieldy for complex proofs
+% - Less explicit about subproof scope
+% - Harder to follow step-by-step
+% =========================================================================
 render_nd_tree_proof(Proof) :-
     retractall(fitch_line(_, _, _, _)),
     retractall(abbreviated_line(_)),
@@ -514,6 +540,6 @@ tree_contains_assumption(axiom_node(_), _) :- !, fail.
 tree_contains_assumption(premiss_node(_), _) :- !, fail.
 tree_contains_assumption(unknown_node(_, _, _), _) :- !, fail.
 
-% =========================================================================
+%=========================================================================
 %   END OF ND TREE STYLE PRINTER
-% =========================================================================
+%=========================================================================

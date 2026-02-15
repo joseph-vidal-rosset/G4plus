@@ -1,11 +1,67 @@
+% OPERATOR DECLARATIONS - Unified for g4mic + nanoCop + TPTP
+% =========================================================================
+:- use_module(library(lists)).
+:- use_module(library(statistics)).
+:- use_module(library(terms)).
+% -------------------------------------------------------------------------
+% CORE LOGICAL OPERATORS (shared by all)
+% -------------------------------------------------------------------------
+:- op( 500, fy,  ~).              % negation
+:- op(1000, xfy, &).              % conjunction
+:- op(1100, xfy, '|').            % disjunction
+:- op(1110, xfy, =>).             % implication
+:- op(1130, xfy, <=>).            % biconditional (STANDARD: 1130)
+:- op( 500, xfy, :).              % quantifier separator
+% -------------------------------------------------------------------------
+% QUANTIFIERS - Dual syntax (TPTP + internal)
+% -------------------------------------------------------------------------
+:- op( 500, fy,  !).              % universal (TPTP): ![X]:
+:- op( 500, fy,  ?).              % existential (TPTP): ?[X]:
+:- op( 500, fy,  all).            % universal (internal): all X:
+:- op( 500, fy,  ex).             % existential (internal): ex X:
+% -------------------------------------------------------------------------
+% EXTENDED TPTP OPERATORS (from nanocop_tptp)
+% -------------------------------------------------------------------------
+:- op(1130, xfy, <~>).            % negated equivalence
+:- op(1110, xfy, <=).             % reverse implication
+:- op(1100, xfy, '~|').           % negated disjunction (NOR)
+:- op(1000, xfy, ~&).             % negated conjunction (NAND)
+% :- op( 400, xfx, =).              % equality
+:- op( 300, xf,  !).              % negated equality (for !=)
+:- op( 299, fx,  $).              % TPTP constants ($true/$false)
+% =========================================================================
+% g4mic specific
+% =========================================================================
+% Input syntax: sequent turnstile
+% Equivalence operator for sequents (bidirectional provability)
+:- op(800, xfx, <>).
+% =========================================================================
+% LATEX OPERATORS (formatted output)
+% ATTENTION: Respect spaces exactly!
+% =========================================================================
+:- op( 500, fy, ' \\lnot ').     % negation
+:- op(1000, xfy, ' \\land ').    % conjunction
+:- op(1100, xfy, ' \\lor ').     % disjunction
+:- op(1110, xfx, ' \\to ').      % conditional
+:- op(1120, xfx, ' \\leftrightarrow ').  % biconditional
+:- op( 500, fy, ' \\forall ').   % universal quantifier
+:- op( 500, fy, ' \\exists ').   % existential quantifier
+:- op( 500, xfy, ' ').           % space for quantifiers
+:- op(400, fx, ' \\bot ').      % falsity (#)
+% LaTeX syntax: sequent turnstile
+:- op(1150, xfx, ' \\vdash ').
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% End of operators list
 % =========================================================================
 % G4+ : UNIFIED THEOREM PROVER FOR MINIMAL, INTUITIONISTIC AND CLASSICAL LOGIC
 % =========================================================================
-%
+%%=====================================
+% DRIVER
+%%====================================
 % SYSTEM ARCHITECTURE:
 % -------------------
 % G4+ is a hybrid theorem prover combining:
-%   1. G4 sequent calculus (Roy Dyckhoff) - main proof engine
+%   1. G4 calculus (Roy Dyckhoff) - main proof engine
 %   2. nanoCoP connection prover (Jens Otten) - validation & filtering
 %   3. TPTP format support - interoperability standard
 %
@@ -18,7 +74,7 @@
 % OUTPUT FORMATS:
 % --------------
 % Every successful proof is displayed in three styles:
-%   1. Sequent Calculus (bussproofs LaTeX) - direct G4 rules
+%   1. G4 Sequent Calculus (bussproofs LaTeX) - direct G4 rules
 %   2. Fitch-style Natural Deduction - pedagogical format
 %   3. Tree-style Natural Deduction - visual format
 %
@@ -34,7 +90,6 @@
 % MAIN INTERFACES:
 % ---------------
 % prove(Formula)           - Full proof with all styles
-% prove([P1,...,Pn] > [C]) - Sequent with premises
 % prove(A <=> B)           - Biconditional equivalence
 % prove_tptp(fof(...))     - TPTP format
 % decide(Formula)          - Quick validity check
@@ -47,9 +102,8 @@
 % =========================================================================
 % OPERATOR DECLARATIONS - Unified for g4mic + nanocop + TPTP
 % =========================================================================
-% This section loads the necessary Prolog libraries and operator definitions.
 % The system integrates three components:
-% - G4 sequent calculus prover (main system)
+% - G4 calculus prover (main system)
 % - nanoCoP connection prover (validation and filtering)
 % - TPTP format support (standard automated reasoning format)
 %
@@ -57,11 +111,349 @@
 % nanoCoP and G4, allowing nanoCoP to act as both a filter (rejecting
 % invalid formulas early) and a cross-validator (confirming G4 results).
 % =========================================================================
+% :- use_module(library(lists)).
+% :- use_module(library(statistics)).
+% :- use_module(library(terms)).
+% :- [i_operators].
+% :- [ii_minimal_driver].  % To translate nanocop into g4mic and to  use nanocop as filter
+% :- [vii_bis_clean_fitch].
+
+% =========================================================================
+% OPERATOR DECLARATIONS - Unified for g4mic + nanoCop + TPTP
+% =========================================================================
+/*
 :- use_module(library(lists)).
 :- use_module(library(statistics)).
 :- use_module(library(terms)).
 :- [i_operators].
-:- [ii_minimal_driver].  % To translate nanocop into g4mic and to  use nanocop as filter
+:- [ii_prover_bis].
+:- [iii_latex].
+:- [iv_detections].
+:- [v_sc_printer].
+:- [vi_common_nd].
+:- [vii_flag_style].
+:- [viii_tree_style].
+:- [ix_clean_fitch].
+:- [x_tptp].
+*/
+% -------------------------------------------------------------------------
+% CORE LOGICAL OPERATORS (shared by all)
+% -------------------------------------------------------------------------
+:- op( 500, fy,  ~).              % negation
+:- op(1000, xfy, &).              % conjunction
+:- op(1100, xfy, '|').            % disjunction
+:- op(1110, xfy, =>).             % implication
+:- op(1130, xfy, <=>).            % biconditional (STANDARD: 1130)
+:- op( 500, xfy, :).              % quantifier separator
+% -------------------------------------------------------------------------
+% QUANTIFIERS - Dual syntax (TPTP + internal)
+% -------------------------------------------------------------------------
+:- op( 500, fy,  !).              % universal (TPTP): ![X]:
+:- op( 500, fy,  ?).              % existential (TPTP): ?[X]:
+:- op( 500, fy,  all).            % universal (internal): all X:
+:- op( 500, fy,  ex).             % existential (internal): ex X:
+% -------------------------------------------------------------------------
+% EXTENDED TPTP OPERATORS (from nanocop_tptp)
+% -------------------------------------------------------------------------
+:- op(1130, xfy, <~>).            % negated equivalence
+:- op(1110, xfy, <=).             % reverse implication
+:- op(1100, xfy, '~|').           % negated disjunction (NOR)
+:- op(1000, xfy, ~&).             % negated conjunction (NAND)
+% :- op( 400, xfx, =).              % equality
+:- op( 300, xf,  !).              % negated equality (for !=)
+:- op( 299, fx,  $).              % TPTP constants ($true/$false)
+% =========================================================================
+% g4mic specific
+% =========================================================================
+% Input syntax: sequent turnstile
+% Equivalence operator for sequents (bidirectional provability)
+% :- op(800, xfx, <>).
+% =========================================================================
+% LATEX OPERATORS (formatted output)
+% ATTENTION: Respect spaces exactly!
+% =========================================================================
+:- op( 500, fy, ' \\lnot ').     % negation
+:- op(1000, xfy, ' \\land ').    % conjunction
+:- op(1100, xfy, ' \\lor ').     % disjunction
+:- op(1110, xfx, ' \\to ').      % conditional
+:- op(1120, xfx, ' \\leftrightarrow ').  % biconditional
+:- op( 500, fy, ' \\forall ').   % universal quantifier
+:- op( 500, fy, ' \\exists ').   % existential quantifier
+:- op( 500, xfy, ' ').           % space for quantifiers
+:- op(400, fx, ' \\bot ').      % falsity (#)
+% LaTeX syntax: sequent turnstile
+% :- op(1150, xfx, ' \\vdash ').
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% End of operators list
+%% File: minimal_driver_equal.pl  -  Version: 7.3 FINAL (time seulement dans proves)
+
+:-style_check(-singleton).
+
+:-[nanocop20_swi].
+:-[nanocop_proof].
+:-[nanocop_tptp2].
+
+% Activer le format d'explication complète d'Otten
+:-retractall(proof(_)).
+:-assert(proof(readable)).
+
+:-dynamic g4mic_silent_mode/0.
+
+% =========================================================================
+% MAIN INTERFACE
+% =========================================================================
+
+nanocop_proves(Formula) :-
+    % Forcer l'affichage
+    retractall(g4mic_silent_mode),
+
+    % Limite d'inférences avec LOGIQUE CORRECTE
+    call_with_inference_limit(
+        (
+            % Détecter l'égalité AVANT traduction
+            (nanocop_contains_equality(Formula) ->
+                HasEquality = true
+            ;
+                HasEquality = false
+            ),
+
+            translate_formula(Formula, InternalFormula),
+
+            % N'appeler leancop_equal QUE si égalité présente
+            (HasEquality = true ->
+                leancop_equal(InternalFormula, FormulaToProve)
+            ;
+                FormulaToProve = InternalFormula
+            ),
+
+            % IMPORTANT : PAS DE NÉGATION - prove2 gère la réfutation en interne
+            ( time(prove2(FormulaToProve, [cut,comp(7)], Proof)) ->
+              Result='Theorem'
+            ;
+              Result='Non-Theorem'
+            ),
+            bmatrix(FormulaToProve, [cut,comp(7)], Matrix),
+            output_result(Formula, Matrix, Proof, Result),
+            % VÉRIFIER le résultat
+            Result='Theorem'
+        ),
+        2000000,
+        InfResult
+    ),
+    % VÉRIFIER SI LIMITE ATTEINTE
+    ( InfResult == inference_limit_exceeded ->
+        nl,
+        write('❌ INFERENCE LIMIT EXCEEDED (2,000,000 inferences)'), nl,
+        write('   Formula too complex or invalid'), nl,
+        nl,
+        fail
+    ;
+        true
+    ),!.
+
+% =========================================================================
+% nanocop_decides/1 :   Version SILENCIEUSE (avec stats)
+% =========================================================================
+
+nanocop_decides(Formula) :-
+    assertz(g4mic_silent_mode),
+
+    % Détecter l'égalité AVANT traduction
+    (nanocop_contains_equality(Formula) ->
+        HasEquality = true
+    ;
+        HasEquality = false
+    ),
+
+    translate_formula(Formula, InternalFormula),
+
+    % N'appeler leancop_equal QUE si égalité présente
+    (HasEquality = true ->
+        leancop_equal(InternalFormula, FormulaToProve)
+    ;
+        FormulaToProve = InternalFormula
+    ),
+
+    % IMPORTANT : PAS DE NÉGATION - prove2 gère la réfutation en interne
+    prove2(FormulaToProve, [cut,comp(7)], _Proof),
+    retractall(g4mic_silent_mode), !.
+
+% =========================================================================
+% EQUALITY DETECTION (copié de minimal_driver.pl)
+% =========================================================================
+
+nanocop_contains_equality((_ = _)) :- !.
+
+nanocop_contains_equality(~A) :- !,
+    nanocop_contains_equality(A).
+
+nanocop_contains_equality(A & B) :- !,
+    (nanocop_contains_equality(A) ; nanocop_contains_equality(B)).
+
+nanocop_contains_equality(A | B) :- !,
+    (nanocop_contains_equality(A) ; nanocop_contains_equality(B)).
+
+nanocop_contains_equality(A => B) :- !,
+    (nanocop_contains_equality(A) ; nanocop_contains_equality(B)).
+
+nanocop_contains_equality(A <=> B) :- !,
+    (nanocop_contains_equality(A) ; nanocop_contains_equality(B)).
+
+nanocop_contains_equality(![_]: A) :- !,
+    nanocop_contains_equality(A).
+
+nanocop_contains_equality(?[_]:A) :- !,
+    nanocop_contains_equality(A).
+
+nanocop_contains_equality(all _:A) :- !,
+    nanocop_contains_equality(A).
+
+nanocop_contains_equality(ex _:A) :- !,
+    nanocop_contains_equality(A).
+
+% Compound terms (check arguments recursively)
+nanocop_contains_equality(Term) :-
+    compound(Term),
+    Term =.. [_|Args],
+    member(Arg, Args),
+    nanocop_contains_equality(Arg), !.
+
+% Base case: no equality
+nanocop_contains_equality(_) :- fail.
+
+% =========================================================================
+% OUTPUT RESULT
+% =========================================================================
+
+output_result(Formula, Matrix, Proof, Result) :-
+    ( g4mic_silent_mode ->
+        true
+    ;
+        nl,
+        format('╔═══════════════════════════════════════════════════════════════╗~n'),
+        format('                    NANOCOP THEOREM PROVER                       ~n'),
+        format('╚═══════════════════════════════════════════════════════════════╝~n~n'),
+        write('Formula:         '), write(Formula), nl,
+        write('Result:    '), write(Result), nl, nl,
+        ( var(Proof) ->
+            write('No proof found.      '), nl
+        ;
+            write('═══════════════════════════════════════════════════════════'), nl,
+            nanocop_proof(Matrix, Proof),
+            write('═══════════════════════════════════════════════════════════'), nl
+        ), nl
+    ),!.
+
+% =========================================================================
+% FORMULA TRANSLATION - COPIED EXACTLY FROM minimal_driver.pl
+% =========================================================================
+
+%% translate_formula(+InputFormula, -OutputFormula)
+%% Translates from TPTP syntax to nanocop internal syntax
+translate_formula(F, F_out) :-
+    translate_operators(F, F_out).
+
+% =========================================================================
+% OPERATOR TRANSLATION - COPIED EXACTLY FROM minimal_driver.pl
+% =========================================================================
+
+% Bottom/falsum: # is translated to ~(p0 => p0) which represents ⊥
+translate_operators(F, (~(p0 => p0))) :-
+    nonvar(F),
+    (F == '#' ; F == f ; F == bot ; F == bottom ; F == falsum),
+    !.
+
+% Top/verum: t is translated to (p0 => p0) which represents ⊤
+translate_operators(F, (p0 => p0)) :-
+    nonvar(F),
+    (F == t ; F == top ; F == verum),
+    !.
+
+% Atomic formulas
+translate_operators(F, F) :-
+    atomic(F),
+    \+ (F == '#'), \+ (F == f), \+ (F == bot),
+    \+ (F == t), \+ (F == top),
+    !.
+
+% Variables
+translate_operators(F, F) :-
+    var(F), !.
+
+% Negation
+translate_operators(~A, (~A1)) :-
+    !, translate_operators(A, A1).
+
+% Disjunction
+translate_operators(A | B, (A1 ; B1)) :-
+    !, translate_operators(A, A1), translate_operators(B, B1).
+
+% Conjunction
+translate_operators(A & B, (A1 , B1)) :-
+    !, translate_operators(A, A1), translate_operators(B, B1).
+
+% Implication
+translate_operators(A => B, (A1 => B1)) :-
+    !, translate_operators(A, A1), translate_operators(B, B1).
+
+% Biconditional
+translate_operators(A <=> B, (A1 <=> B1)) :-
+    !, translate_operators(A, A1), translate_operators(B, B1).
+
+% Universal quantifier with brackets: ![X]:F
+translate_operators(![Var]:A, (all RealVar:A1)) :-
+    !,
+    substitute_var_in_formula(A, Var, RealVar, A_subst),
+    translate_operators(A_subst, A1).
+
+% Existential quantifier with brackets: ?[X]:F
+translate_operators(?[Var]:A, (ex RealVar:A1)) :-
+    !,
+    substitute_var_in_formula(A, Var, RealVar, A_subst),
+    translate_operators(A_subst, A1).
+
+% Universal quantifier simple syntax: !X:F (alternative)
+translate_operators(!Var:A, (all VarUpper:A1)) :-
+    atom(Var), !,
+    upcase_atom(Var, VarUpper),
+    translate_operators(A, A1).
+
+% Existential quantifier simple syntax: ?X:F (alternative)
+translate_operators(?Var:A, (ex VarUpper:A1)) :-
+    atom(Var), !,
+    upcase_atom(Var, VarUpper),
+    translate_operators(A, A1).
+
+% General compound terms (predicates with arguments)
+translate_operators(Term, Term1) :-
+    compound(Term),
+    Term =.. [F|Args],
+    maplist(translate_operators, Args, Args1),
+    Term1 =.. [F|Args1].
+
+% =========================================================================
+% VARIABLE SUBSTITUTION - COPIED EXACTLY FROM minimal_driver.pl
+% =========================================================================
+
+%% substitute_var_in_formula(+Formula, +OldVar, +NewVar, -NewFormula)
+substitute_var_in_formula(Var, OldVar, NewVar, NewVar) :-
+    atomic(Var), Var == OldVar, !.
+
+substitute_var_in_formula(Atom, _OldVar, _NewVar, Atom) :-
+    atomic(Atom), !.
+
+substitute_var_in_formula(Var, _OldVar, _NewVar, Var) :-
+    var(Var), !.
+
+substitute_var_in_formula(Term, OldVar, NewVar, NewTerm) :-
+    compound(Term), !,
+    Term =.. [F|Args],
+    maplist(substitute_var_in_formula_curry(OldVar, NewVar), Args, NewArgs),
+    NewTerm =.. [F|NewArgs].
+
+substitute_var_in_formula_curry(OldVar, NewVar, Arg, NewArg) :-
+    substitute_var_in_formula(Arg, OldVar, NewVar, NewArg).
+
 
 % =======================================================================================================================
 % NANOCOP WRAPPER - (nanocop as Filter: a formula that is invalid according to nanocop is not submitted to g4mic)
@@ -217,7 +609,8 @@ for(Threshold, M, N) :- M =< N, Threshold = M.
 for(Threshold, M, N) :- M < N, M1 is M+1, for(Threshold, M1, N).
 
 % =========================================================================
-% THEOREM vs SEQUENT DETECTION (simplified)
+% =========================================================================
+% DYNAMIC DECLARATIONS
 % =========================================================================
 
 :- dynamic current_proof_sequent/1.
@@ -369,20 +762,12 @@ is_fol_structural_pattern((_) => ?[_-_]:(_ & ![_-_]:(_ | _))) :- !.
 % MAIN INTERFACE: prove/1
 % =========================================================================
 % This is the main entry point for the G4+ theorem prover.
-% It provides a unified interface that automatically detects the type of
-% input and dispatches to the appropriate proof procedure.
 %
 % Supported input formats:
-% 1. Sequents with premises: prove([P1, P2, ...] > [C])
-%    - Multiple premises in antecedent
-%    - Single conclusion in succedent
-%    - Proves P1 ∧ P2 ∧ ... → C
-%
-% 2. Theorems (no premises): prove([F] > [])  or  prove(F)
-%    - Single formula with empty premises
+% 1. Theorems: prove(F)
 %    - Proves ⊢ F (F is a tautology)
 %
-% 3. Biconditionals: prove(A <> B)
+% 2. Biconditionals: prove(A <=> B)
 %    - Equivalence between two formulas
 %    - Proves both A → B and B → A
 %
@@ -392,68 +777,6 @@ is_fol_structural_pattern((_) => ?[_-_]:(_ & ![_-_]:(_ | _))) :- !.
 % - Attempts proof with nanoCoP validation
 % - Displays proofs in three styles (sequent calculus, Fitch, tree)
 % =========================================================================
-
-% NEW: Automatic detection for sequents with premisses
-prove(G > D) :-
-    G \= [],  % Non-empty premisses = SEQUENT
-    !,
-     %  VALIDATION: Verify premisses and conclusion
-    validate_sequent_formulas(G, D),
-    statistics(runtime, [_T0|_]),
-    write('------------------------------------------'), nl,
-    write('G4 PROOF FOR SEQUENT: '),
-    write_sequent_compact(G, D), nl,
-    write('------------------------------------------'), nl,
-    write('MODE: Sequent '), nl,
-    nl,
-
-    % Store premisses for display
-    retractall(premiss_list(_)),
-    % Prepare formulas BEFORE storing premisses
-    copy_term((G > D), (GCopy > DCopy)),
-    prepare_sequent_formulas(GCopy, DCopy, PrepG, PrepD),
-    % Store PREPARED premisses (with ~z transformed to z => #)
-    assertz(premiss_list(PrepG)),
-    retractall(current_proof_sequent(_)),
-    assertz(current_proof_sequent(G > D)),
-
-    % Detect classical pattern in conclusion
-    ( DCopy = [SingleGoal], is_classical_pattern(SingleGoal) ->
-        write('┌─────────────────────────────────────────────────────────┐'), nl,
-        write('              🔍 CLASSICAL PATTERN DETECTED                '), nl,
-        write('                  → Using classical logic                  '), nl,
-        write('└─────────────────────────────────────────────────────────┘'), nl,
-        time(provable_at_level(PrepG > PrepD, classical, Proof)),
-        Logic = classical,
-        OutputProof = Proof
-    ;
-        write('┌─────────────────────────────────────────────────────────┐'), nl,
-        write('   🔄 PHASE 1: Minimal → Intuitionistic → Classical        '), nl,
-        write('└─────────────────────────────────────────────────────────┘'), nl,
-        ( time(provable_at_level(PrepG > PrepD, minimal, Proof)) ->
-            write('   ✅ Constructive proof found in MINIMAL LOGIC'), nl,
-            Logic = minimal,
-            OutputProof = Proof
-        ; time(provable_at_level(PrepG > PrepD, constructive, Proof)) ->
-            write('   ✅ Constructive proof found'), nl,
-            ( proof_uses_lbot(Proof) ->
-                write('  Constructive proof found in INTUITIONISTIC LOGIC'), nl,
-                Logic = intuitionistic
-            ),
-            OutputProof = Proof
-        ;
-            write('   ⚠️  Constructive logic failed'), nl,
-            write('┌─────────────────────────────────────────────────────────┐'), nl,
-            write('              🎯 TRYING CLASSICAL LOGIC                    '), nl,
-            write('└─────────────────────────────────────────────────────────┘'), nl,
-            time(provable_at_level(PrepG > PrepD, classical, Proof)),
-            !,  % Cut here to prevent backtracking
-            write('    Proof found in CLASSICAL LOGIC '), nl,
-            Logic = classical,
-            OutputProof = Proof
-        )
-    ),
-    output_proof_results(OutputProof, Logic, G > D, sequent).
 
 
 % =========================================================================
@@ -507,25 +830,7 @@ prove(Left <=> Right) :-
 prove(Left <=> Right) :-
     \+ g4mic_needs_nanocop(Left <=> Right),  % Exclude equality and functions
     validate_and_warn(Left <=> Right, _ValidatedFormula),
-    % Check if user meant sequent equivalence (<>) instead of biconditional (<=>)
-    ( (is_list(Left) ; is_list(Right)) ->
-        nl,
-        write('╔═══════════════════════════════════════════════════════════════╗'), nl,
-        write('   ⚠️  SYNTAX ERROR: <=> used with sequents                      '), nl,
-        write('╚═══════════════════════════════════════════════════════════════╝'), nl,
-        nl,
-        write('You wrote: prove('), write(Left <=> Right), write(')'), nl,
-        nl,
-        write('❌ WRONG:   <=>  is for biconditionals between FORMULAS'), nl,
-        write('   Example: prove(p <=> q)'), nl,
-        nl,
-        write('✅ CORRECT: <>  is for equivalence between SEQUENTS'), nl,
-        write('   Example: decide([p] <> [q])'), nl,
-        nl,
-        write('Note: For sequent equivalence, use decide/1, not prove/1'), nl,
-        nl,
-        fail
-    ;
+
         % ═══════════════════════════════════════════════════════════════
         % FILTRE NANOCOP (comme prove(Formula))
         % ═══════════════════════════════════════════════════════════════
@@ -652,9 +957,10 @@ prove(Left <=> Right) :-
         write('                '), write(Left => Right), nl,
         write('└──────────────────────────────────────────────────────────────┘'), nl, nl,
         ( Direction1Valid = true ->
-            write('\\begin{fitch}'), nl,
-            g4_to_fitch_theorem(Proof1),
-            write('\\end{fitch}'), nl, nl,
+            % write('\\begin{fitch}'), nl,
+            % g4_to_fitch_theorem(Proof1),
+            % write('\\end{fitch}'), nl, nl,
+          render_clean_fitch(Proof1),nl,nl,
             write('✅ Q. E.D.'), nl, nl
         ; write('⚠️  FAILED TO PROVE'), nl, nl
         ),
@@ -665,9 +971,10 @@ prove(Left <=> Right) :-
         write('             '), write(Right => Left), nl,
         write('└──────────────────────────────────────────────────────────────┘'), nl, nl,
         ( Direction2Valid = true ->
-            write('\\begin{fitch}'), nl,
-            g4_to_fitch_theorem(Proof2),
-            write('\\end{fitch}'), nl, nl,
+            % write('\\begin{fitch}'), nl,
+            % g4_to_fitch_theorem(Proof2),
+            % write('\\end{fitch}'), nl, nl,
+          render_clean_fitch(Proof2),nl,nl,
             write('✅ Q.E.D. '), nl, nl
         ; write('⚠️  FAILED TO PROVE'), nl, nl
         ),
@@ -736,165 +1043,7 @@ prove(Left <=> Right) :-
         ; G4micResult = invalid, NanoCopResult = valid ->
             write('⚠️  Disagreement: g4mic=false, nanocop=true'), nl
         ),
-        nl, nl, !
-    ).
-
-% =========================================================================
-% SEQUENT EQUIVALENCE (<>) - Complete corrected section (grouped by style)
-% =========================================================================
-
-prove([Left] <> [Right]) :- !,
-    validate_and_warn(Left, _),
-    validate_and_warn(Right, _),
-
-    % Test direction 1: [Left] > [Right]
-    retractall(current_proof_sequent(_)),
-    assertz(current_proof_sequent([Left] > [Right])),
-    ( catch(time((prove_sequent_silent([Left] > [Right], Proof1, Logic1))), _, fail) ->
-        Direction1Valid = true
-    ;
-        Direction1Valid = false, Proof1 = none, Logic1 = none
-    ),
-
-    % Test direction 2: [Right] > [Left]
-    retractall(current_proof_sequent(_)),
-    assertz(current_proof_sequent([Right] > [Left])),
-    ( catch(time((prove_sequent_silent([Right] > [Left], Proof2, Logic2))), _, fail) ->
-        Direction2Valid = true
-    ;
-        Direction2Valid = false, Proof2 = none, Logic2 = none
-    ),
-
-    nl,
-    write('╔══════════════════════════════════════════════════════════════╗'), nl,
-    write('             ↔️   EQUIVALENCE: Proving Both Directions          '), nl,
-    write('╚══════════════════════════════════════════════════════════════╝'), nl, nl,
-
-    % ═══════════════════════════════════════════════════════════════
-    % SEQUENT CALCULUS (both directions)
-    % ═══════════════════════════════════════════════════════════════
-    write('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'), nl,
-    write('📐 Sequent Calculus Proofs'), nl,
-    write('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'), nl, nl,
-
-    % Direction 1 - Sequent
-    write('┌──────────────────────────────────────────────────────────────┐'), nl,
-    write('                    ➡️   DIRECTION 1                            '), nl,
-    write('        '), write(Left), write(' ⊢ '), write(Right), nl,
-    write('└──────────────────────────────────────────────────────────────┘'), nl, nl,
-    ( Direction1Valid = true ->
-        output_logic_label(Logic1), nl, nl,
-        write('\\begin{prooftree}'), nl,
-        render_bussproofs(Proof1, 0, _),
-        write('\\end{prooftree}'), nl, nl,
-        write('✅ Q.E.D.'), nl, nl
-    ; write('⚠️  FAILED TO PROVE'), nl, nl
-    ),
-
-    % Direction 2 - Sequent
-    write('┌──────────────────────────────────────────────────────────────┐'), nl,
-    write('                     ⬅️   DIRECTION 2                           '), nl,
-    write('         '), write(Right), write(' ⊢ '), write(Left), nl,
-    write('└──────────────────────────────────────────────────────────────┘'), nl, nl,
-    ( Direction2Valid = true ->
-        output_logic_label(Logic2), nl, nl,
-        write('\\begin{prooftree}'), nl,
-        render_bussproofs(Proof2, 0, _),
-        write('\\end{prooftree}'), nl, nl,
-        write('✅ Q.E.D.'), nl, nl
-    ; write('⚠️  FAILED TO PROVE'), nl, nl
-    ),
-
-    % ═══════════════════════════════════════════════════════════════
-    % NATURAL DEDUCTION - TREE STYLE (both directions)
-    % ═══════════════════════════════════════════════════════════════
-    write('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'), nl,
-    write('🌳 Natural Deduction - Tree Style'), nl,
-    write('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'), nl, nl,
-
-    % Direction 1 - ND Tree
-    write('┌──────────────────────────────────────────────────────────────┐'), nl,
-    write('                      ➡️   DIRECTION 1                          '), nl,
-    write('        '), write(Left), write(' ⊢ '), write(Right), nl,
-    write('└──────────────────────────────────────────────────────────────┘'), nl, nl,
-    ( Direction1Valid = true ->
-        retractall(current_proof_sequent(_)),
-        assertz(current_proof_sequent([Left] > [Right])),
-        retractall(premiss_list(_)),
-        assertz(premiss_list([Left])),
-        render_nd_tree_proof(Proof1), nl, nl,
-        write('✅ Q.E.D.'), nl, nl
-    ; write('⚠️  FAILED TO PROVE'), nl, nl
-    ),
-
-    % Direction 2 - ND Tree
-    write('┌──────────────────────────────────────────────────────────────┐'), nl,
-    write('                          ⬅️   DIRECTION 2                      '), nl,
-    write('            '), write(Right), write(' ⊢ '), write(Left), nl,
-    write('└──────────────────────────────────────────────────────────────┘'), nl, nl,
-    ( Direction2Valid = true ->
-        retractall(current_proof_sequent(_)),
-        assertz(current_proof_sequent([Right] > [Left])),
-        retractall(premiss_list(_)),
-        assertz(premiss_list([Right])),
-        render_nd_tree_proof(Proof2), nl, nl,
-        write('✅ Q.E.D.'), nl, nl
-    ; write('⚠️  FAILED TO PROVE'), nl, nl
-    ),
-
-    % ═══════════════════════════════════════════════════════════════
-    % NATURAL DEDUCTION - FITCH STYLE (both directions)
-    % ═══════════════════════════════════════════════════════════════
-    write('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'), nl,
-    write('🚩 Natural Deduction - Flag Style'), nl,
-    write('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'), nl, nl,
-
-    % Direction 1 - Fitch
-    write('┌──────────────────────────────────────────────────────────────┐'), nl,
-    write('                      ➡️   DIRECTION 1                          '), nl,
-    write('            '), write(Left), write(' ⊢ '), write(Right), nl,
-    write('└──────────────────────────────────────────────────────────────┘'), nl, nl,
-    ( Direction1Valid = true ->
-      retractall(premiss_list(_)),
-      assertz(premiss_list([Left])),
-      write('\\begin{fitch}'), nl,
-        g4_to_fitch_sequent(Proof1, [Left] > [Right]),
-        write('\\end{fitch}'), nl, nl,
-        write('✅ Q.E.D.'), nl, nl
-    ; write('⚠️  FAILED TO PROVE'), nl, nl
-    ),
-
-    % Direction 2 - Fitch
-    write('┌──────────────────────────────────────────────────────────────┐'), nl,
-    write('                    ⬅️   DIRECTION 2                            '), nl,
-    write('         '), write(Right), write(' ⊢ '), write(Left), nl,
-    write('└──────────────────────────────────────────────────────────────┘'), nl, nl,
-    ( Direction2Valid = true ->
-      retractall(premiss_list(_)),
-      assertz(premiss_list([Right])),
-      write('\\begin{fitch}'), nl,
-        g4_to_fitch_sequent(Proof2, [Right] > [Left]),
-        write('\\end{fitch}'), nl, nl,
-        write('✅ Q.E.D.'), nl, nl
-    ; write('⚠️  FAILED TO PROVE'), nl, nl
-    ),
-
-    % ═══════════════════════════════════════════════════════════════
-    % SUMMARY
-    % ═══════════════════════════════════════════════════════════════
-    write('╔══════════════════════════════════════════════════════════════╗'), nl,
-    write('                       📊 SUMMARY                               '), nl,
-    write('╚══════════════════════════════════════════════════════════════╝'), nl,
-    write('Direction 1 ('), write(Left), write(' ⊢ '), write(Right), write('): '),
-    ( Direction1Valid = true ->
-        write('✅ VALID in '), write(Logic1), write(' logic')
-    ; write('⚠️  FAILED')
-    ), nl,
-    write('Direction 2 ('), write(Right), write(' ⊢ '), write(Left), write('): '),
-    ( Direction2Valid = true ->
-        write('✅ VALID in '), write(Logic2), write(' logic')
-    ; write('⚠️  FAILED')
-    ), nl, nl, !.
+        nl, nl, !.
 
 
 % =========================================================================
@@ -1090,47 +1239,21 @@ prove(Formula) :-
 % =========================================================================
 
 % Prepare a list of formulas
-prepare_sequent_formulas(GIn, DIn, GOut, DOut) :-
-    maplist(prepare_and_subst, GIn, GOut),
-    maplist(prepare_and_subst, DIn, DOut).
-
-prepare_and_subst(F, FOut) :-
-    prepare(F, [], F0),
-    subst_neg(F0, F1),
-    subst_bicond(F1, FOut).
-
-% Compact display of a sequent
-write_sequent_compact([], [D]) :- !, write(' |- '), write(D).
-write_sequent_compact([G], [D]) :- !, write(G), write(' |- '), write(D).
-write_sequent_compact(G, [D]) :-
-    write_list_compact(G),
-    write(' |- '),
-    write(D).
-
-write_list_compact([X]) :- !, write(X).
-write_list_compact([X|Xs]) :- write(X), write(', '), write_list_compact(Xs).
-
-% =========================================================================
-% FORMULA AND SEQUENT VALIDATION
-% =========================================================================
-
-% Validate a sequent (premisses + conclusions)
-validate_sequent_formulas(G, D) :-
-    % Validate all premisses
-    forall(member(Premiss, G), validate_and_warn(Premiss, _)),
-    % Validate all conclusions
-    forall(member(Conclusion, D), validate_and_warn(Conclusion, _)).
-
 % =========================================================================
 % OUTPUT WITH MODE DETECTION
 % =========================================================================
 
-output_proof_results(Proof, LogicType, OriginalFormula, Mode) :-
+output_proof_results(Proof, LogicType, _OriginalFormula, _Mode) :-
     extract_formula_from_proof(Proof, Formula),
     detect_and_set_logic_level(Formula),
     % Store logic level for use in proof rendering (e.g., DS optimization)
     retractall(current_logic_level(_)),
     assertz(current_logic_level(LogicType)),
+
+    % CRITICAL: Save a fresh copy of Proof BEFORE any renderer touches it.
+    % Renderers (bussproofs, tree style) may instantiate variables in Proof,
+    % which corrupts the term for subsequent renderers.
+    copy_term(Proof, FitchProof),
 
     % Display appropriate label
     output_logic_label(LogicType),
@@ -1163,13 +1286,7 @@ output_proof_results(Proof, LogicType, OriginalFormula, Mode) :-
     write('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'), nl,
     write('🚩 Natural Deduction - Flag Style'), nl,
     write('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'), nl, nl,
-    write('\\begin{fitch}'), nl,
-    ( Mode = sequent ->
-        g4_to_fitch_sequent(Proof, OriginalFormula)
-    ;
-        g4_to_fitch_theorem(Proof)
-    ),
-    write('\\end{fitch}'), nl, nl,
+    render_clean_fitch(FitchProof),nl,nl,
     write('✅ Q.E.D.'), nl, nl,
     !.
 
@@ -1235,22 +1352,6 @@ provable_at_level(Sequent, classical, Proof) :-
 % DISPLAY HELPERS
 % =========================================================================
 
-% Helper: prove sequent silently (for <> operator)
-prove_sequent_silent(Sequent, Proof, Logic) :-
-    Sequent = (Gamma > Delta),
-    prepare_sequent_formulas(Gamma, Delta, PrepGamma, PrepDelta),
-    ( member(SingleGoal, PrepDelta), is_classical_pattern(SingleGoal) ->
-        provable_at_level(PrepGamma > PrepDelta, classical, Proof),
-        Logic = classical
-    ; provable_at_level(PrepGamma > PrepDelta, minimal, Proof) ->
-        Logic = minimal
-    ; provable_at_level(PrepGamma > PrepDelta, intuitionistic, Proof) ->
-        Logic = intuitionistic
-    ;
-        provable_at_level(PrepGamma > PrepDelta, classical, Proof),
-        Logic = classical
-    ).
-
 output_logic_label(minimal) :-
     write('G4 proofs in minimal logic'), nl, nl.
 output_logic_label(intuitionistic) :-
@@ -1271,103 +1372,21 @@ proof_uses_lbot(Term) :-
 
 % g4mic_decides/1 for biconditionals
 g4mic_decides(Left <=> Right) :- ! ,
-    % Check if user meant sequent equivalence (<>) instead of biconditional (<=>)
-    ( (is_list(Left) ; is_list(Right)) ->
-        nl,
-        write('╔═══════════════════════════════════════════════════════════════╗'), nl,
-        write('║  ⚠️  SYNTAX ERROR: <=> used with sequents                     ║'), nl,
-        write('╚═══════════════════════════════════════════════════════════════╝'), nl,
-        nl,
-        write('You wrote: '), write(Left <=> Right), nl,
-        nl,
-        write('❌ WRONG:   <=>  is for biconditionals between FORMULAS'), nl,
-        write('   Example: p <=> q'), nl,
-        nl,
-        write('✅ CORRECT: <>  is for equivalence between SEQUENTS'), nl,
-        write('   Example: [p] <> [q]'), nl,
-        nl,
-        write('Please use:  '), write([Left] <> [Right]), nl,
-        nl,
-        fail
-    ;
-        % Normal biconditional processing
-        validate_and_warn(Left, _),
-        validate_and_warn(Right, _),
+    validate_and_warn(Left, _),
+    validate_and_warn(Right, _),
 
-        % Test direction 1: Left => Right
-        time((decide_silent(Left => Right, _Proof1, Logic1))),
-        write('Direction 1 ('), write(Left => Right), write(') is valid in '),
-        write(Logic1), write(' logic'), nl,
+    % Test direction 1: Left => Right
+    time((decide_silent(Left => Right, _Proof1, Logic1))),
+    write('Direction 1 ('), write(Left => Right), write(') is valid in '),
+    write(Logic1), write(' logic'), nl,
 
-        % Test direction 2: Right => Left
-        time((decide_silent(Right => Left, _Proof2, Logic2))),
-        write('Direction 2 ('), write(Right => Left), write(') is valid in '),
-        write(Logic2), write(' logic'), nl,
-        !
-    ).
-
-% g4mic_decides/1 for sequent equivalence (must come before Formula catch-all)
-g4mic_decides([Left] <> [Right]) :- !,
-    % Check if user meant biconditional (<=>) instead of sequent equivalence (<>)
-    ( (\+ is_list(Left) ; \+ is_list(Right)) ->
-        nl,
-        write('╔═══════════════════════════════════════════════════════════════╗'), nl,
-        write('║  ⚠️  SYNTAX ERROR: <> used with formulas                      ║'), nl,
-        write('╚═══════════════════════════════════════════════════════════════╝'), nl,
-        nl,
-        write('You wrote: '), write([Left] <> [Right]), nl,
-        nl,
-        write('❌ WRONG:   <>  is for equivalence between SEQUENTS'), nl,
-        write('   Example: [p] <> [q]'), nl,
-        nl,
-        write('✅ CORRECT: <=>  is for biconditionals between FORMULAS'), nl,
-        write('   Example: p <=> q'), nl,
-        nl,
-        write('Please use:  '), write(Left <=> Right), nl,
-        nl,
-        fail
-    ;
-        % Normal sequent equivalence processing
-        validate_sequent_formulas(Left, Right),
-
-        % Test direction 1: Left > Right
-        time(prove_sequent_silent(Left > Right, _Proof1, Logic1)),
-        write('Direction 1 ('), write(Left), write(' > '), write(Right), write(') is valid in '),
-        write(Logic1), write(' logic'), nl,
-
-        % Test direction 2: Right > Left
-        time(prove_sequent_silent(Right > Left, _Proof2, Logic2)),
-        write('Direction 2 ('), write(Right), write(' > '), write(Left), write(') is valid in '),
-        write(Logic2), write(' logic'), nl,
-        !
-    ).
-
-% g4mic_decides/1 for sequents
-g4mic_decides(G > D) :-
-    G \= [],  % Non-empty premisses = SEQUENT
-    !,
-    validate_sequent_formulas(G, D),
-    copy_term((G > D), (GCopy > DCopy)),
-    prepare_sequent_formulas(GCopy, DCopy, PrepG, PrepD),
-
-    % Check for classical patterns in conclusion
-    ( DCopy = [SingleGoal], is_classical_pattern(SingleGoal) ->
-        write('🔍 Classical pattern detected → Using classical logic'), nl,
-        time(provable_at_level(PrepG > PrepD, classical, _Proof)),
-        write('Valid in classical logic'), nl
-    ;
-        % Normal progression: minimal → intuitionistic → classical
-        ( time(provable_at_level(PrepG > PrepD, minimal, _Proof)) ->
-            write('Valid in minimal logic'), nl
-        ; time(provable_at_level(PrepG > PrepD, intuitionistic, _Proof)) ->
-            write('Valid in intuitionistic logic'), nl
-        ; time(provable_at_level(PrepG > PrepD, classical, _Proof)) ->
-            write('Valid in classical logic'), nl
-        ;
-            write('Failed to prove'), nl, fail
-        )
-    ),
+    % Test direction 2: Right => Left
+    time((decide_silent(Right => Left, _Proof2, Logic2))),
+    write('Direction 2 ('), write(Right => Left), write(') is valid in '),
+    write(Logic2), write(' logic'), nl,
     !.
+
+
 
 % g4mic_decides/1 for theorems (catch-all - must come last)
 g4mic_decides(Formula) :-
@@ -1453,16 +1472,13 @@ help :-
     write('  THEOREMS:'), nl,
     write('    prove(p => p).                    - Identity'), nl,
     write('    prove((p & q) => p).              - Conjunction elimination'), nl,
-    write('  SEQUENTS (syntax of G4 prover):'), nl,
-    write('    prove([p] > [p]).                 - Sequent: P |- P '), nl,
-    write('    prove([p, q] > [p & q]).          - Sequent: P , Q |- P & Q '), nl,
-    write('    prove([p => q, p] > [q]).         - Modus Ponens in sequent form'), nl,
+    write('    prove(~ p | p).                   - Excluded Middle (classical)'), nl,
     write('  BICONDITIONALS:'), nl,
     write('    prove(p <=> ~ ~ p).                - Biconditional of Double Negation '), nl,
-    write('    prove(p <> ~ ~ p).                 - Bi-implication of Double Negation (sequents)'), nl,
+    write('  TPTP:'), nl,
+    write('    prove_tptp(fof(test, conjecture, p => p)).'), nl,
+    write('    prove_tptp_file(\'myfile.p\').'), nl,
     write('## COMMON MISTAKES '), nl,
-    write('   [p] => [p]          - WRONG (use > for sequents)'), nl,
-    write('   [p] > [p]           - CORRECT (sequent syntax)'), nl,
     write('   p > q               - WRONG (use => for conditional)'), nl,
     write('   p => q              - CORRECT (conditional)'), nl,
     write('   x <=> y in FOL      - WRONG (use = for equality)'), nl,
@@ -1478,14 +1494,12 @@ examples :-
     nl,
     write('  % Identity theorem'), nl,
     write('  ?- prove(p => p).'), nl,
-    write('  % Sequent with single premiss'), nl,
-    write('  ?- prove([p] > [p]).'), nl,
-    write('  % Sequent with multiple premisses'), nl,
-    write('  ?- prove([p, q] > [p & q]).'), nl,
-    write('  % Sequent: modus ponens'), nl,
-    write('  ?- prove([p => q, p] > [q]).'), nl,
+    write('  % Conjunction elimination'), nl,
+    write('  ?- prove((p & q) => p).'), nl,
     write('  % Law of Excluded Middle (classical)'), nl,
     write('  ?- prove(~ p | p).'), nl,
+    write('  % Biconditional'), nl,
+    write('  ?- prove(p <=> ~ ~ p).'), nl,
     write('  % Drinker Paradox (classical)'), nl,
     write('  ?- prove(?[y]:(d(y) => ![x]:d(x))).'), nl,
     nl.
@@ -1583,224 +1597,223 @@ subst_neg(A, A).
 % END OF DRIVER
 %=================================
 % =========================================================================
-% G4 FOL Prover with equality
-% TPTP-version
+% G4+ FOL Prover — Core Engine
 % =========================================================================
-% This is the core G4 sequent calculus theorem prover for first-order logic.
+%
+% Sequent calculus theorem prover for first-order logic based on
+% Roy Dyckhoff's G4 calculus with extensions for classical logic.
 %
 % Key features:
-% - Implements Roy Dyckhoff's G4 sequent calculus rules
-% - Handles propositional and first-order logic
-% - Supports equality reasoning (reflexivity, symmetry, transitivity)
-% - Progressive logic level detection (minimal → intuitionistic → classical)
+% - Contraction-free G4 rules (efficient proof search)
+% - Progressive logic detection: minimal → intuitionistic → classical
 % - Eigenvariable management for quantifier rules
+% - Optimized rule ordering for performance
 %
-% The G4 calculus is a refinement of Gentzen's LJ/LK systems optimized for
-% automated theorem proving. It features:
-% - Contraction-free rules (more efficient search)
-% - Optimized left-implication rule (reduces backtracking)
-% - Natural correspondence with natural deduction
+% Rule ordering strategy:
+%   0.  Axiom, L-bot           (immediate closure)
+%   1-5. Deterministic prop.   (no branching, single recursive call)
+%   6.   L->->                 (2 branches, but with cut)
+%   7.   IP                    (classical only, must precede R->)
+%   8.   R->                   (deterministic, right implication)
+%   9.   Lv                    (2 branches, delayed after L->->)
+%   10-11. Rv, R&              (right rules, branching)
+%   12-15. Quantifier rules    (L-exists before L-forall for Skolem guidance)
+%   16-17. CQ rules            (quantifier conversions, last resort)
 %
-% Proof strategy:
-% 1. Start with minimal logic (constructive, no excluded middle)
-% 2. Escalate to intuitionistic if minimal fails
-% 3. Fall back to classical logic if needed
-%
-% This progressive approach maximizes constructive content while ensuring
-% completeness for classical logic.
 % =========================================================================
+
 % =========================================================================
-% EIGENVARIABLE REGISTRY (using b_setval for BACKTRACKABLE global state)
+% EIGENVARIABLE REGISTRY (backtrackable global state)
 % =========================================================================
-% Initialize eigenvariable registry (call before each proof attempt)
-% Using b_setval for BACKTRACKABLE global variable
+
 init_eigenvars :- b_setval(g4_eigenvars, []).
 
-% member_check(Term, List): check if Term is structurally equivalent (=@=) to any member
 member_check(Term, List) :-
     member(Elem, List),
-    Term =@= Elem,
-    !.
+    Term =@= Elem, !.
 
-%==========================================================================
-% AXIOM - SEPARATE PREDICATE (NOT TABLED)
-%==========================================================================
-% Must be tested BEFORE any tabled rules to avoid caching non-axiomatic proofs
+% =========================================================================
+% RULE 0: AXIOM (separate predicate, not tabled)
+% =========================================================================
+
 g4mic_ax(Gamma > Delta, _, _, SkolemIn, SkolemIn, _, ax(Gamma>Delta, ax)) :-
     member(A, Gamma),
-    A\=(_&_),
-    A\=(_|_),
-    A\=(_=>_),
-    A\=(!_),
-    A\=(?_),
+    A \= (_ & _),
+    A \= (_ | _),
+    A \= (_ => _),
+    A \= (! _),
+    A \= (? _),
     Delta = [B],
     unify_with_occurs_check(A, B).
 
-% TABLING: Memoization to avoid redundant computations
-:- table g4mic_proves/7.
+% =========================================================================
+% g4mic_proves/7
+% g4mic_proves(Sequent, FreeVars, Threshold, SkolemIn, SkolemOut,
+%              LogicLevel, Proof)
+% =========================================================================
 
-% g4mic_proves/7 -
-% g4mic_proves(Sequent, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, Proof)
-% LogicLevel: minimal | intuitionistic | classical
-%==========================================================================
-% Entry point: test axiom FIRST (non-tabled), then other rules (tabled)
-%==========================================================================
+% --- Rule 0: Axiom (tested first) ----------------------------------------
 g4mic_proves(Seq, FV, Th, SI, SO, LL, Proof) :-
     g4mic_ax(Seq, FV, Th, SI, SO, LL, Proof), !.
 
-% 0.1 L-bot
-g4mic_proves(Gamma>Delta, _, _, SkolemIn, SkolemIn, LogicLevel, lbot(Gamma>Delta, #)) :-
-    member(LogicLevel, [intuitionistic, classical]),
+% --- Rule 0.1: L-bot -----------------------------------------------------
+g4mic_proves(Gamma>Delta, _, _, SI, SI, LL, lbot(Gamma>Delta, #)) :-
+    member(LL, [intuitionistic, classical]),
     member(#, Gamma), !.
-% =========================================================================
-%  PROPOSITIONAL RULES
-% =========================================================================
-% 1. L&
-g4mic_proves(Gamma>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, land(Gamma>Delta,P)) :-
-    select((A&B),Gamma,G1), !,
-    g4mic_proves([A,B|G1]>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, P).
-% 2. L0->
-g4mic_proves(Gamma>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, l0cond(Gamma>Delta,P)) :-
-    select((A=>B),Gamma,G1),
-    member(A,G1), !,
-    g4mic_proves([B|G1]>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, P).
 
-% 2. L&->
-g4mic_proves(Gamma>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, landto(Gamma>Delta,P)) :-
-    select(((A&B)=>C),Gamma,G1), !,
-    g4mic_proves([(A=>(B => C))|G1]>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, P).
-% 3. TNE : Odd Negation Elimination
-g4mic_proves(Gamma>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, tne(Gamma>Delta, P)) :-
-    Delta = [(A => B)],  % Goal: not-A
-    % Search in Gamma for a formula with more negations
+% =========================================================================
+% PROPOSITIONAL RULES (deterministic, no branching)
+% =========================================================================
+
+% --- Rule 1: L& -----------------------------------------------------------
+g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, land(Gamma>Delta, P)) :-
+    select((A & B), Gamma, G1), !,
+    g4mic_proves([A, B | G1]>Delta, FV, Th, SI, SO, LL, P).
+
+% --- Rule 2: L0-> (modus ponens on context) -------------------------------
+g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, l0cond(Gamma>Delta, P)) :-
+    select((A => B), Gamma, G1),
+    member(A, G1), !,
+    g4mic_proves([B | G1]>Delta, FV, Th, SI, SO, LL, P).
+
+% --- Rule 3: TNE (triple negation elimination) ----------------------------
+g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, tne(Gamma>Delta, P)) :-
+    Delta = [(A => B)],
     member(LongNeg, Gamma),
-    % Verify that LongNeg = not^n(not-A) with n >= 2 (so total >= 3)
     is_nested_negation(LongNeg, A => B, Depth),
-    Depth >= 2,  % At least 2 more negations than the goal
-    !,
-    g4mic_proves([A|Gamma]>[B], FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, P).
-% 7. IP (Indirect Proof - THE classical law).
-g4mic_proves(Gamma>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, classical, ip(Gamma>Delta, P)) :-
-    Delta = [A],  % Any goal A (not just bottom)
-    A \= #,   % Not already bottom
-    \+ member((A => #), Gamma),  % not-A not already in context
-    Threshold > 0,
-    g4mic_proves([(A => #)|Gamma]>[#], FreeVars, Threshold, SkolemIn, SkolemOut, classical, P).
-% 4. Lv-> (OPTIMIZED)
-g4mic_proves(Gamma>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, lorto(Gamma>Delta,P)) :-
-    select(((A|B)=>C),Gamma,G1), !,
-    % Check which disjuncts are present
-    ( member(A, G1), member(B, G1) ->
-        % Both present: keep both (rare case)
-        g4mic_proves([A=>C,B=>C|G1]>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, P)
-    ; member(A, G1) ->
-        % Only A present: keep only A=>C
-        g4mic_proves([A=>C|G1]>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, P)
-    ; member(B, G1) ->
-        % Only B present: keep only B=>C
-        g4mic_proves([B=>C|G1]>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, P)
-    ;
-        % Neither present: keep both (default behavior)
-        g4mic_proves([A=>C,B=>C|G1]>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, P)
-    ).
-% 5. Lv (fallback for all logics including minimal)
-g4mic_proves(Gamma>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, lor(Gamma>Delta, P1,P2)) :-
-    select((A|B),Gamma,G1), !,
-    g4mic_proves([A|G1]>Delta, FreeVars, Threshold, SkolemIn, J1, LogicLevel, P1),
-    g4mic_proves([B|G1]>Delta, FreeVars, Threshold, J1, SkolemOut, LogicLevel, P2).
-% 13. R-forall - with BACKTRACKABLE global eigenvariable registry
-g4mic_proves(Gamma > Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, rall(Gamma>Delta, P)) :-
-    select((![_Z-X]:A), Delta, D1), !,
-    copy_term((X:A,FreeVars), (f_sk(SkolemIn,FreeVars):A1,FreeVars)),
-    % CHECK: f_sk must not be identical to any previously used eigenvariable
-    % Using b_getval for backtrackable global variable
-    (catch(b_getval(g4_eigenvars, UsedVars), _, UsedVars = [])),
-    \+ member_check(f_sk(SkolemIn,FreeVars), UsedVars),
-    % Register this eigenvariable (backtrackable)
-    b_setval(g4_eigenvars, [f_sk(SkolemIn,FreeVars)|UsedVars]),
-    J1 is SkolemIn+1,
-    g4mic_proves(Gamma > [A1|D1], FreeVars, Threshold, J1, SkolemOut, LogicLevel, P).
-% 14. L-forall - WITH OTTEN's LIMITATION
-g4mic_proves(Gamma > Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, lall(Gamma>Delta, P)) :-
-    member((![_Z-X]:A), Gamma),
-    % OTTEN's CHECK: prevent infinite instantiation when threshold is reached
-    % \+ length(FreeVars, Threshold),
-    length(FreeVars, Len), Len =< Threshold,
-    copy_term((X:A,FreeVars), (Y:A1,FreeVars)),
-    g4mic_proves([A1|Gamma] > Delta, [Y|FreeVars], Threshold, SkolemIn, SkolemOut, LogicLevel, P), !.
-% 8. R->
-g4mic_proves(Gamma>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, rcond(Gamma>Delta,P)) :-
-    Delta = [A=>B], !,
-    g4mic_proves([A|Gamma]>[B], FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, P).
-% 6. L->->b
-g4mic_proves(Gamma>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, ltoto(Gamma>Delta,P1,P2)) :-
-    select(((A=>B)=>C),Gamma,G1), !,
-    g4mic_proves([A,(B=>C)|G1]>[B], FreeVars, Threshold, SkolemIn, J1, LogicLevel, P1),
-    g4mic_proves([C|G1]> Delta, FreeVars, Threshold, J1, SkolemOut, LogicLevel, P2).
-% 9 LvExists  (Quantification Rule Exception: must be *before* Rv)
-g4mic_proves(Gamma>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, lex_lor(Gamma>Delta, P1, P2)) :-
-    select((?[_Z-X]:(A|B)), Gamma, G1), !,
-    copy_term((X:(A|B),FreeVars), (f_sk(SkolemIn,FreeVars):(A1|B1),FreeVars)),
-    (catch(b_getval(g4_eigenvars, UsedVars), _, UsedVars = [])),
-    \+ member_check(f_sk(SkolemIn,FreeVars), UsedVars),
-    % Register this eigenvariable (backtrackable)
-    b_setval(g4_eigenvars, [f_sk(SkolemIn,FreeVars)|UsedVars]),
-    J1 is SkolemIn+1,
-    g4mic_proves([A1|G1]>Delta, FreeVars, Threshold, J1, J2, LogicLevel, P1),
-    g4mic_proves([B1|G1]>Delta, FreeVars, Threshold, J2, SkolemOut, LogicLevel, P2).
-% 10. R?
-g4mic_proves(Gamma>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, ror(Gamma>Delta, P)) :-
-    Delta = [(A|B)], !,
-    (   g4mic_proves(Gamma>[A], FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, P)
-    ;   g4mic_proves(Gamma>[B], FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, P)
-    ).
-% 11. R-and : Right conjunction
-g4mic_proves(Gamma>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, rand(Gamma>Delta,P1,P2)) :-
-    Delta = [(A&B)], !,
-    g4mic_proves(Gamma>[A], FreeVars, Threshold, SkolemIn, J1, LogicLevel, P1),
-    g4mic_proves(Gamma>[B], FreeVars, Threshold, J1, SkolemOut, LogicLevel, P2).
- % 12. L-exists - with BACKTRACKABLE global eigenvariable registry
-g4mic_proves(Gamma > Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, lex(Gamma>Delta, P)) :-
-    select((?[_Z-X]:A), Gamma, G1), !,
-    copy_term((X:A,FreeVars), (f_sk(SkolemIn,FreeVars):A1,FreeVars)),
-    % CHECK: f_sk must not be identical to any previously used eigenvariable
-    % Using b_getval for backtrackable global variable - NO ?
-    (catch(b_getval(g4_eigenvars, UsedVars), _, UsedVars = [])),
-    \+ member_check(f_sk(SkolemIn,FreeVars), UsedVars),
-    % Register this eigenvariable (backtrackable)
-    b_setval(g4_eigenvars, [f_sk(SkolemIn,FreeVars)|UsedVars]),
-    J1 is SkolemIn+1,
-    g4mic_proves([A1|G1] > Delta, FreeVars, Threshold, J1, SkolemOut, LogicLevel, P).
-% 15. R-exists
-g4mic_proves(Gamma > Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, rex(Gamma>Delta, P)) :-
-    select((?[_Z-X]:A), Delta, D1), !,
-    length(FreeVars, Len), Len < Threshold,
-    copy_term((X:A,FreeVars), (Y:A1,FreeVars)),
-    g4mic_proves(Gamma > [A1|D1], [Y|FreeVars], Threshold, SkolemIn, SkolemOut, LogicLevel, P), !.
-% 16. CQ_c - Classical rule
-g4mic_proves(Gamma>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, classical, cq_c(Gamma>Delta,P)) :-
-    select((![Z-X]:A) => B, Gamma, G1),
+    Depth >= 2, !,
+    g4mic_proves([A | Gamma]>[B], FV, Th, SI, SO, LL, P).
 
-    % Search for (exists?:?) => B in G1
-    ( member((?[ZTarget-YTarget]:ATarget) => B, G1),
-      % Compare (A => B) with ATargbet
-      \+ \+ ((A => B) = ATarget) ->
-        % Unifiable: use YTarget
-        g4mic_proves([?[ZTarget-YTarget]:ATarget|G1]>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, classical, P)
+% --- Rule 4: L&-> ---------------------------------------------------------
+g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, landto(Gamma>Delta, P)) :-
+    select(((A & B) => C), Gamma, G1), !,
+    g4mic_proves([(A => (B => C)) | G1]>Delta, FV, Th, SI, SO, LL, P).
+
+% --- Rule 5: Lv-> (optimized) --------------------------------------------
+g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, lorto(Gamma>Delta, P)) :-
+    select(((A | B) => C), Gamma, G1), !,
+    ( member(A, G1), member(B, G1) ->
+        g4mic_proves([A=>C, B=>C | G1]>Delta, FV, Th, SI, SO, LL, P)
+    ; member(A, G1) ->
+        g4mic_proves([A=>C | G1]>Delta, FV, Th, SI, SO, LL, P)
+    ; member(B, G1) ->
+        g4mic_proves([B=>C | G1]>Delta, FV, Th, SI, SO, LL, P)
     ;
-        % Otherwise: normal case with X
-        g4mic_proves([?[Z-X]:(A => B)|G1]>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, classical, P)
+        g4mic_proves([A=>C, B=>C | G1]>Delta, FV, Th, SI, SO, LL, P)
     ).
-% 17. CQ_m - Quantifier conversion (VALID IN ALL LOGICS)
-% Critical rule: (?[X]:A => B) → ![X]:(A => B)
-g4mic_proves(Gamma>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, cq_m(Gamma>Delta,P)) :-
-    select((?[Z-X]:A)=>B, Gamma, G1),
-    g4mic_proves([![Z-X]:(A=>B)|G1]>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, P).
+
 % =========================================================================
+% IMPLICATION RULES (with branching)
 % =========================================================================
-% NOTE: Equality is handled exclusively by nanoCoP
+
+% --- Rule 6: L->-> --------------------------------------------------------
+g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, ltoto(Gamma>Delta, P1, P2)) :-
+    select(((A => B) => C), Gamma, G1), !,
+    g4mic_proves([A, (B => C) | G1]>[B], FV, Th, SI, J1, LL, P1),
+    g4mic_proves([C | G1]>Delta, FV, Th, J1, SO, LL, P2).
+
+% --- Rule 7: IP (indirect proof — classical only) -------------------------
+% Must precede R-> : IP needs the goal intact before decomposition
+g4mic_proves(Gamma>Delta, FV, Th, SI, SO, classical, ip(Gamma>Delta, P)) :-
+    Delta = [A],
+    A \= #,
+    \+ member((A => #), Gamma),
+    Th > 0,
+    g4mic_proves([(A => #) | Gamma]>[#], FV, Th, SI, SO, classical, P).
+
+% --- Rule 8: R-> -----------------------------------------------------------
+g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, rcond(Gamma>Delta, P)) :-
+    Delta = [A => B], !,
+    g4mic_proves([A | Gamma]>[B], FV, Th, SI, SO, LL, P).
+
+% --- Rule 9: Lv (left disjunction — delayed after L->->) ------------------
+g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, lor(Gamma>Delta, P1, P2)) :-
+    select((A | B), Gamma, G1), !,
+    g4mic_proves([A | G1]>Delta, FV, Th, SI, J1, LL, P1),
+    g4mic_proves([B | G1]>Delta, FV, Th, J1, SO, LL, P2).
+
 % =========================================================================
-% Helper: verify if Formula = not^n(Target) and return n
+% RIGHT RULES
+% =========================================================================
+
+% --- Rule 10: Rv (right disjunction) --------------------------------------
+g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, ror(Gamma>Delta, P)) :-
+    Delta = [(A | B)], !,
+    (   g4mic_proves(Gamma>[A], FV, Th, SI, SO, LL, P)
+    ;   g4mic_proves(Gamma>[B], FV, Th, SI, SO, LL, P)
+    ).
+
+% --- Rule 11: R& (right conjunction) --------------------------------------
+g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, rand(Gamma>Delta, P1, P2)) :-
+    Delta = [(A & B)], !,
+    g4mic_proves(Gamma>[A], FV, Th, SI, J1, LL, P1),
+    g4mic_proves(Gamma>[B], FV, Th, J1, SO, LL, P2).
+
+% =========================================================================
+% QUANTIFIER RULES
+% L-exists before L-forall: Skolem terms guide universal instantiation
+% =========================================================================
+
+% --- Rule 12: L-exists (eigenvariable introduction) -----------------------
+g4mic_proves(Gamma > Delta, FV, Th, SI, SO, LL, lex(Gamma>Delta, P)) :-
+    select((?[_Z-X]:A), Gamma, G1), !,
+    copy_term((X:A, FV), (f_sk(SI, FV):A1, FV)),
+    (catch(b_getval(g4_eigenvars, UsedVars), _, UsedVars = [])),
+    \+ member_check(f_sk(SI, FV), UsedVars),
+    b_setval(g4_eigenvars, [f_sk(SI, FV) | UsedVars]),
+    J1 is SI + 1,
+    g4mic_proves([A1 | G1] > Delta, FV, Th, J1, SO, LL, P).
+
+% --- Rule 13: R-forall (eigenvariable introduction) -----------------------
+g4mic_proves(Gamma > Delta, FV, Th, SI, SO, LL, rall(Gamma>Delta, P)) :-
+    select((![_Z-X]:A), Delta, D1), !,
+    copy_term((X:A, FV), (f_sk(SI, FV):A1, FV)),
+    (catch(b_getval(g4_eigenvars, UsedVars), _, UsedVars = [])),
+    \+ member_check(f_sk(SI, FV), UsedVars),
+    b_setval(g4_eigenvars, [f_sk(SI, FV) | UsedVars]),
+    J1 is SI + 1,
+    g4mic_proves(Gamma > [A1 | D1], FV, Th, J1, SO, LL, P).
+
+% --- Rule 14: L-forall (universal instantiation, Otten's limitation) ------
+g4mic_proves(Gamma > Delta, FV, Th, SI, SO, LL, lall(Gamma>Delta, P)) :-
+    member((![_Z-X]:A), Gamma),
+    length(FV, Len), Len =< Th,
+    copy_term((X:A, FV), (Y:A1, FV)),
+    g4mic_proves([A1 | Gamma] > Delta, [Y | FV], Th, SI, SO, LL, P), !.
+
+% --- Rule 15: R-exists (existential instantiation) ------------------------
+g4mic_proves(Gamma > Delta, FV, Th, SI, SO, LL, rex(Gamma>Delta, P)) :-
+    select((?[_Z-X]:A), Delta, D1), !,
+    length(FV, Len), Len < Th,
+    copy_term((X:A, FV), (Y:A1, FV)),
+    g4mic_proves(Gamma > [A1 | D1], [Y | FV], Th, SI, SO, LL, P), !.
+
+% =========================================================================
+% QUANTIFIER CONVERSION RULES
+% =========================================================================
+
+% --- Rule 16: CQ_c (classical quantifier shift) ---------------------------
+g4mic_proves(Gamma>Delta, FV, Th, SI, SO, classical, cq_c(Gamma>Delta, P)) :-
+    select((![Z-X]:A) => B, Gamma, G1),
+    ( member((?[ZT-YT]:AT) => B, G1),
+      \+ \+ ((A => B) = AT) ->
+        g4mic_proves([?[ZT-YT]:AT | G1]>Delta, FV, Th, SI, SO, classical, P)
+    ;
+        g4mic_proves([?[Z-X]:(A => B) | G1]>Delta, FV, Th, SI, SO, classical, P)
+    ).
+
+% --- Rule 17: CQ_m (quantifier conversion, all logics) -------------------
+% (?[X]:A => B) → ![X]:(A => B)
+g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, cq_m(Gamma>Delta, P)) :-
+    select((?[Z-X]:A) => B, Gamma, G1),
+    g4mic_proves([![Z-X]:(A => B) | G1]>Delta, FV, Th, SI, SO, LL, P).
+
+% =========================================================================
+% HELPER PREDICATES
+% =========================================================================
+
+% is_nested_negation(Formula, Target, Depth)
+% Checks if Formula = not^Depth(Target)
 is_nested_negation(Target, Target, 0) :- !.
 is_nested_negation((Inner => #), Target, N) :-
     is_nested_negation(Inner, Target, N1),
@@ -1809,6 +1822,1213 @@ is_nested_negation((Inner => #), Target, N) :-
 % =========================================================================
 % END of Prover
 % =========================================================================
+%==========================================================================
+% LATEX  UTILITIES
+%========================================================================
+%========================
+% Fitch section
+% ========================
+
+% =========================================================================
+% RENDERING PRIMITIVES
+% =========================================================================
+
+% render_hypo/7: Display a hypothesis in Fitch style
+
+render_hypo(Scope, Formula, Label, _CurLine, _NextLine, VarIn, VarOut) :-
+    render_fitch_indent(Scope),
+    write(' \\fh '),
+    rewrite(Formula, VarIn, VarOut, LatexFormula),
+    write_formula_with_parens(LatexFormula),
+    write(' &  '),
+    write(Label),
+    write('\\\\'), nl.
+
+
+% render_fitch_indent/1: Genere l'indentation Fitch (\\fa)
+
+render_fitch_indent(0) :- !.
+
+render_fitch_indent(N) :-
+    N > 0,
+    write('\\fa '),
+    N1 is N - 1,
+    render_fitch_indent(N1).
+
+render_have(Scope, Formula, Just, _CurLine, _NextLine, VarIn, VarOut) :-
+    render_fitch_indent(Scope),
+    % Always write \fa at level 0 (for sequents)
+    ( Scope = 0 -> write('\\fa ') ; true ),
+    rewrite(Formula, VarIn, VarOut, LatexFormula),
+    write_formula_with_parens(LatexFormula),
+    write(' &  '),
+    write(Just),
+    write('\\\\'), nl.
+
+% =========================================================================
+% SIMPLE RULE: (Antecedent) => (Consequent) except for atoms
+% =========================================================================
+
+% Test if a formula is atomic
+is_atomic_formula(Formula) :-
+    atomic(Formula).
+
+% -------------------------------------------------------------------------
+% NEW: Test if a formula is a negation (in LaTeX display sense)
+% A negative formula is represented as (' \\lnot ' X) par rewrite/4.
+% We want to consider any formula starting with ' \\lnot ' as
+% "non-parenthesable" - i.e. ne PAS entourer par des parentheses externe.
+% -------------------------------------------------------------------------
+is_negative_formula((' \\lnot ' _)) :- !.
+
+% Helper: treat negative formulas as "atomic-like" for parentheses suppression
+is_atomic_or_negative_formula(F) :-
+    is_atomic_formula(F) ;
+    is_negative_formula(F).
+
+% =========================================================================
+% TEST IF QUANTIFIER BODY NEEDS PARENTHESES
+% =========================================================================
+
+quantifier_body_needs_parens((_ ' \\to ' _)) :- !.
+quantifier_body_needs_parens((_ ' \\land ' _)) :- !.
+quantifier_body_needs_parens((_ ' \\lor ' _)) :- !.
+quantifier_body_needs_parens((_ ' \\leftrightarrow ' _)) :- !.
+quantifier_body_needs_parens(_) :- fail.
+
+% =========================================================================
+% ALL write_formula_with_parens/1 CLAUSES GROUPED
+% =========================================================================
+
+% Writing an implication with smart parentheses
+write_formula_with_parens((A ' \\to ' B)) :-
+    !,
+    write_implication_with_parens(A, B).
+
+write_formula_with_parens('='(A, B)) :- !,
+    write('('), write_formula_with_parens(A), write(' = '), write_formula_with_parens(B), write(')').
+
+% Autres operateurs
+write_formula_with_parens((A ' \\lor ' B)) :-
+    !,
+    write_with_context(A, 'lor_left'),
+    write(' \\lor '),
+    write_with_context(B, 'lor_right').
+
+write_formula_with_parens((A ' \\land ' B)) :-
+    !,
+    write_with_context(A, 'land_left'),
+    write(' \\land '),
+    write_with_context(B, 'land_right').
+
+write_formula_with_parens((A ' \\leftrightarrow ' B)) :-
+    !,
+    write_bicond_component(A),
+    write(' \\leftrightarrow '),
+    write_bicond_component(B).
+
+write_formula_with_parens((' \\lnot ' A)) :-
+    !,
+    write(' \\lnot '),
+    write_with_context(A, 'not').
+
+% QUANTIFIERS WITH SMART PARENTHESES
+write_formula_with_parens((' \\forall ' X ' ' A)) :-
+    !,
+    write(' \\forall '),
+    write(X),
+    write(' '),
+    ( quantifier_body_needs_parens(A) ->
+        write('('),
+        write_formula_with_parens(A),
+        write(')')
+    ;   write_formula_with_parens(A)
+    ).
+
+write_formula_with_parens((' \\exists ' X ' ' A)) :-
+    !,
+    write(' \\exists '),
+    write(X),
+    write(' '),
+    ( quantifier_body_needs_parens(A) ->
+        write('('),
+        write_formula_with_parens(A),
+        write(')')
+    ;   write_formula_with_parens(A)
+    ).
+
+write_formula_with_parens(Other) :-
+    write(Other).
+
+% =========================================================================
+% HELPER PREDICATES FOR BICONDITIONAL FORMATTING
+% =========================================================================
+
+% Helper: write biconditional component with parens if not a literal
+write_bicond_component(A) :-
+    is_latex_literal(A), !,
+    write_formula_with_parens(A).
+write_bicond_component(A ' \\to ' B) :- !,
+    % Implications need parentheses in biconditional context
+    write('('),
+    write_implication_with_parens(A, B),
+    write(')').
+write_bicond_component(A) :-
+    % Any other complex formula gets parentheses
+    write('('),
+    write_formula_with_parens(A),
+    write(')').
+
+% Check if a LaTeX formula is a literal (atom, negated atom, or predicate application)
+is_latex_literal(A) :-
+    atomic(A), !.
+is_latex_literal((' \\lnot ' A)) :-
+    atomic(A), !.
+is_latex_literal((' \\lnot ' (' \\lnot ' A))) :-
+    % Double negation of literal is still considered "atomic-like"
+    is_latex_literal(A), !.
+is_latex_literal(A) :-
+    compound(A),
+    A \= (_ ' \\to ' _),
+    A \= (_ ' \\land ' _),
+    A \= (_ ' \\lor ' _),
+    A \= (_ ' \\leftrightarrow ' _),
+    A \= (' \\lnot ' _),
+    !.
+
+% =========================================================================
+% SPECIALIZED FUNCTION FOR IMPLICATIONS
+% =========================================================================
+
+write_implication_with_parens(Antecedent, Consequent) :-
+    % Antecedent: do not parenthesize if atomic OR negative formula
+    ( is_atomic_or_negative_formula(Antecedent) ->
+        write_formula_with_parens(Antecedent)
+    ;
+        write('('),
+        write_formula_with_parens(Antecedent),
+        write(')')
+    ),
+    write(' \\to '),
+    % Consequent: parenthesize except if atomic OR negative formula
+    % NOTE: we consider any form (' \\lnot ' _) as "negative" even if
+    % it contains several nested negations (~  ~ ~  A).
+    ( is_atomic_or_negative_formula(Consequent) ->
+        write_formula_with_parens(Consequent)
+    ;
+        write('('),
+        write_formula_with_parens(Consequent),
+        write(')')
+    ).
+
+% =========================================================================
+% ALL write_with_context/2 CLAUSES GROUPED
+% =========================================================================
+
+% IMPLICATIONS in all contexts - use write_implication_with_parens
+write_with_context((A ' \\to ' B), 'lor_left') :-
+    !,
+    write('('),
+    write_implication_with_parens(A, B),
+    write(')').
+
+write_with_context((A ' \\to ' B), 'lor_right') :-
+    !,
+    write('('),
+    write_implication_with_parens(A, B),
+    write(')').
+
+write_with_context((A ' \\to ' B), 'land_left') :-
+    !,
+    write('('),
+    write_implication_with_parens(A, B),
+    write(')').
+
+write_with_context((A ' \\to ' B), 'land_right') :-
+    !,
+    write('('),
+    write_implication_with_parens(A, B),
+    write(')').
+
+write_with_context((A ' \\to ' B), 'not') :-
+    !,
+    write('('),
+    write_implication_with_parens(A, B),
+    write(')').
+
+% CONJUNCTIONS in disjunctions
+write_with_context((A ' \\land ' B), 'lor_left') :-
+    !,
+    write('('),
+    write_formula_with_parens(A),
+    write(' \\land '),
+    write_formula_with_parens(B),
+    write(')').
+
+write_with_context((A ' \\land ' B), 'lor_right') :-
+    !,
+    write('('),
+    write_formula_with_parens(A),
+    write(' \\land '),
+    write_formula_with_parens(B),
+    write(')').
+
+% CONJUNCTIONS in negations
+write_with_context((A ' \\land ' B), 'not') :-
+    !,
+    write('('),
+    write_formula_with_parens(A),
+    write(' \\land '),
+    write_formula_with_parens(B),
+    write(')').
+
+% DISJUNCTIONS in negations
+write_with_context((A ' \\lor ' B), 'not') :-
+    !,
+    write('('),
+    write_formula_with_parens(A),
+    write(' \\lor '),
+    write_formula_with_parens(B),
+    write(')').
+
+% DISJUNCTIONS in conjunctions
+write_with_context((A ' \\lor ' B), 'land_left') :-
+    !,
+    write('('),
+    write_formula_with_parens(A),
+    write(' \\lor '),
+    write_formula_with_parens(B),
+    write(')').
+
+write_with_context((A ' \\lor ' B), 'land_right') :-
+    !,
+    write('('),
+    write_formula_with_parens(A),
+    write(' \\lor '),
+    write_formula_with_parens(B),
+    write(')').
+
+% BICONDITIONALS in negations
+write_with_context((A ' \\leftrightarrow ' B), 'not') :-
+    !,
+    write('('),
+    write_bicond_component(A),
+    write(' \\leftrightarrow '),
+    write_bicond_component(B),
+    write(')').
+
+% FALLBACK CLAUSE
+write_with_context(Formula, _Context) :-
+    write_formula_with_parens(Formula).
+
+% =========================================================================
+% ADAPTED  SYSTEM: direct rewrite on formulas with standard operators
+% VERSION WITH ELEGANT PREDICATE SIMPLIFICATION
+% =========================================================================
+
+% rewrite/4 - Adapted version that handles formulas directly
+rewrite(#, J, J, '\\bot') :- !.
+rewrite(# => #, J, J, '\\top') :- !.
+
+% NEW CLAUSE TO HANDLE SKOLEM CONSTANTS
+% Converts f_sk(K) to a simple name like 'a', 'b', etc. (single argument version)
+rewrite(f_sk(K), J, J, Name) :-
+    integer(K),
+    !,
+    rewrite_name(K, Name).
+
+% Converts f_sk(K,_) to a simple name like 'a', 'b', etc. (two arguments version)
+rewrite(f_sk(K,_), J, J, Name) :-
+    !,
+    rewrite_name(K, Name).
+
+% BASE CASE: atomic formulas
+rewrite(A, J, J, A_latex) :-
+    atomic(A),
+    !,
+    toggle(A, A_latex).
+
+% Recognizes ((A => B) & (B => A)) (or reverse order) as A <=> B for LaTeX display
+% Must be placed BEFORE the generic rewrite((A & B), ...) clause
+rewrite((X & Y), J, K, (C ' \\leftrightarrow ' D)) :-
+    % case 1: X = (A => B), Y = (B => A)
+    ( X = (A => B), Y = (B => A)
+    % case 2: reverse order
+    ; X = (B => A), Y = (A => B)
+    ),
+    !,
+    rewrite(A, J, H, C),
+    rewrite(B, H, K, D).
+
+% Conjunction with standard operator &
+rewrite((A & B), J, K, (C ' \\land ' D)) :-
+    !,
+    rewrite(A, J, H, C),
+    rewrite(B, H, K, D).
+
+% Disjunction with standard operator |
+rewrite((A | B), J, K, (C ' \\lor ' D)) :-
+    !,
+    rewrite(A, J, H, C),
+    rewrite(B, H, K, D).
+
+% COSMETIC DISPLAY: A => # becomes ~A
+rewrite((A => #), J, K, (' \\lnot ' C)) :-
+    !,
+    rewrite(A, J, K, C).
+
+
+% Implication with standard operator =>
+rewrite((A => B), J, K, (C ' \\to ' D)) :-
+    !,
+    rewrite(A, J, H, C),
+    rewrite(B, H, K, D).
+
+% Biconditional with standard operator <=>
+rewrite((A <=> B), J, K, (C ' \\leftrightarrow ' D)) :-
+    !,
+    rewrite(A, J, H, C),
+    rewrite(B, H, K, D).
+
+% Negation with standard operator ~
+rewrite((~A), J, K, (' \\lnot ' C)) :-
+    !,
+    rewrite(A, J, K, C).
+
+
+% QUANTIFIERS WITH ASQ ANNOTATIONS: strip asq(...) and use variable name
+% CRITICAL: Replace only the SPECIFIC asq term, not all asq terms
+rewrite((![X-asq(A,B)]:Body), J, K, (' \\forall ' X ' ' C)) :-
+    !,
+    replace_specific_asq(asq(A,B), X, Body, CleanBody),
+    rewrite(CleanBody, J, K, C).
+
+rewrite((?[X-asq(A,B)]:Body), J, K, (' \\exists ' X ' ' C)) :-
+    !,
+    replace_specific_asq(asq(A,B), X, Body, CleanBody),
+    rewrite(CleanBody, J, K, C).
+
+% QUANTIFIERS: X-Y format - generate x, y, z based on counter
+rewrite((![_-_]:A), J, K, (' \\forall ' VarName ' ' C)) :-
+    !,
+    xyz_name(J, VarName),  % Generate x, y, z, x0, y0...
+    J1 is J + 1,
+    rewrite(A, J1, K, C).
+
+rewrite((?[_-_]:A), J, K, (' \\exists ' VarName ' ' C)) :-
+    !,
+    xyz_name(J, VarName),
+    J1 is J + 1,
+    rewrite(A, J1, K, C).
+
+% QUANTIFIERS: Simple X format - generate x, y, z based on counter
+rewrite((![_]:A), J, K, (' \\forall ' VarName ' ' C)) :-
+    !,
+    xyz_name(J, VarName),
+    J1 is J + 1,
+    rewrite(A, J1, K, C).
+
+rewrite((?[_]:A), J, K, (' \\exists ' VarName ' ' C)) :-
+    !,
+    xyz_name(J, VarName),
+    J1 is J + 1,
+    rewrite(A, J1, K, C).
+% =========================================================================
+% ELEGANT PREDICATE SIMPLIFICATION
+% P(x,y,z) -> Pxyz for all predicates
+% =========================================================================
+% --- Replace the previous "concatenate predicate name and args" clause by this safer version.
+% We avoid applying this cosmetic concatenation to equality and other logical operators.
+rewrite(Pred, J, K, SimplePred) :-
+    Pred =.. [F|Args],
+    atom(F),
+    Args \= [],
+    % Do NOT collapse standard logical operators or equality into a single atom:
+    % exclude '=' and the main logical connectives (=>, <=>, &, |, ~)
+    \+ member(F, ['=', '=>', '<=>', '&', '|', '~']),
+    all_simple_terms(Args),
+    !,
+    toggle(F, G),
+    rewrite_args_list(Args, J, K, SimpleArgs),
+    concatenate_all([G|SimpleArgs], SimplePred).
+
+% PREDICATES AND TERMS (general clause)
+rewrite(X, J, K, Y) :-
+    X =.. [F|L],
+    toggle(F, G),
+    rewrite_list(L, J, K, R),
+    Y =.. [G|R].
+
+
+% =========================================================================
+% AUXILIARY PREDICATES FOR SIMPLIFICATION
+% =========================================================================
+
+all_simple_terms([]).
+all_simple_terms([H|T]) :-
+    simple_term(H),
+    all_simple_terms(T).
+
+% A simple term is ONLY: atomic, variable, or internal Skolem function
+% User functions like f(a), g(x,y) are NOT simple terms
+simple_term(X) :-
+    atomic(X), !.
+simple_term(X) :-
+    var(X), !.
+simple_term(f_sk(_)) :-
+    !.
+simple_term(f_sk(_,_)) :-
+    !.
+% No other compound terms are simple - this prevents simplification of user functions
+
+rewrite_args_list([], J, J, []).
+rewrite_args_list([H|T], J, K, [RH|RT]) :-
+    rewrite_term(H, J, TempJ, RH),
+    rewrite_args_list(T, TempJ, K, RT).
+
+concatenate_all([X], X) :-
+    atomic(X), !.
+concatenate_all([H|T], Result) :-
+    length([H|T], Len),
+    Len =< 5,
+    !,
+    concatenate_all_impl([H|T], Result).
+concatenate_all(_, _) :-
+    fail.
+
+concatenate_all_impl([X], X) :-
+    atomic(X), !.
+concatenate_all_impl([X], Result) :-
+    % Handle compound terms: flatten them
+    compound(X),
+    !,
+    flatten_term(X, Flattened),
+    concatenate_all_impl(Flattened, Result).
+concatenate_all_impl([H|T], Result) :-
+    atomic(H),
+    !,
+    concatenate_all_impl(T, TempResult),
+    atom_concat(H, TempResult, Result).
+concatenate_all_impl([H|T], Result) :-
+    % Handle compound terms in list
+    compound(H),
+    !,
+    flatten_term(H, Flattened),
+    append(Flattened, T, NewList),
+    concatenate_all_impl(NewList, Result).
+
+% Helper: flatten a compound term into a list of atoms
+flatten_term(Term, [Atom]) :-
+    atomic(Term),
+    !,
+    term_to_atom(Term, Atom).
+flatten_term(Term, Flattened) :-
+    compound(Term),
+    Term =.. [Functor|Args],
+    atom(Functor),
+    maplist(flatten_term, Args, ArgLists),
+    append(ArgLists, Flattened).
+flatten_term(Var, ['_']) :-
+    var(Var).
+
+% =========================================================================
+% LIST AND TERM PROCESSING
+% =========================================================================
+
+rewrite_list([], J, J, []).
+rewrite_list([X|L], J, K, [Y|R]) :-
+    rewrite_term(X, J, H, Y),
+    rewrite_list(L, H, K, R).
+
+rewrite_term(V, J, K, V) :-
+    var(V),
+    !,
+    rewrite_name(J, V),
+    K is J+1.
+
+rewrite_term(f_sk(K), J, J, N) :-
+    integer(K),
+    !,
+    rewrite_name(K, N).
+
+rewrite_term(f_sk(K,_), J, J, N) :-
+    !,
+    rewrite_name(K, N).
+
+% NEW: If the term is a simple atom (constant), DO NOT capitalize it
+% Because it is an argument of a predicate/function
+rewrite_term(X, J, J, X) :-
+    atomic(X),
+    !.
+
+rewrite_term(X, J, K, Y) :-
+    X =.. [F|L],
+    rewrite_list(L, J, K, R),
+    Y =.. [F|R].
+
+% Generateur de noms elegants pour variables liées
+% Use x, y, z instead of a, b, c to avoid collision with constants
+rewrite_name(K, N) :-
+    K < 3,
+    !,
+    J is K+0'x,  % Generates x, y, z
+    char_code(N, J).
+
+rewrite_name(K, N) :-
+    J is (K mod 3)+0'x,  % For K >= 3, generates x0, y0, z0, x1, y1, z1...
+    H is K div 3,
+    number_codes(H, L),
+    atom_codes(N, [J|L]).
+
+% Toggle majuscules/minuscules
+toggle(X, Y) :-
+    atom_codes(X, L),
+    toggle_list(L, R),
+    atom_codes(Y, R).
+
+toggle_list([], []).
+toggle_list([X|L], [Y|R]) :-
+    toggle_code(X, Y),
+    toggle_list(L, R).
+
+toggle_code(X, Y) :-
+    0'a =< X, X =< 0'z,
+    !,
+    Y is X - 0'a + 0'A.
+
+toggle_code(X, Y) :-
+    0'A =< X, X =< 0'Z,
+    !,
+    Y is X - 0'A + 0'a.
+
+toggle_code(X, X).
+
+% =========================================================================
+% SYSTEME PREPARE
+% =========================================================================
+
+prepare_premisses_list([], []) :- !.
+prepare_premisses_list([H|T], [PreparedH|PreparedT]) :-
+    prepare(H, [], PreparedH),
+    prepare_premisses_list(T, PreparedT).
+
+prepare(#, _, #) :- !.
+
+prepare((A & B), Q, (C & D)) :-
+    !,
+    prepare(A, Q, C),
+    prepare(B, Q, D).
+
+prepare((A | B), Q, (C | D)) :-
+    !,
+    prepare(A, Q, C),
+    prepare(B, Q, D).
+
+prepare((A => B), Q, (C => D)) :-
+    !,
+    prepare(A, Q, C),
+    prepare(B, Q, D).
+
+prepare((A <=> B), Q, (C <=> D)) :-
+    !,
+    prepare(A, Q, C),
+    prepare(B, Q, D).
+
+prepare((~A), Q, (~C)) :-
+    !,
+    prepare(A, Q, C).
+
+prepare((![Z]:A), Q, (![Z-X]:C)) :-
+    !,
+    prepare(A, [Z-X|Q], C).
+
+prepare((?[Z]:A), Q, (?[Z-X]:C)) :-
+    !,
+    prepare(A, [Z-X|Q], C).
+
+prepare(X, _, X) :-
+    var(X),
+    !.
+
+prepare(X, Q, Y) :-
+    X =.. [F|L],
+    prepare_list(L, Q, R),
+    Y =.. [F|R].
+
+prepare_term(X, _, X) :-
+    var(X),
+    !.
+
+prepare_term(X, Q, Y) :-
+    atom(X),
+    member(X-Y, Q),
+    !.
+
+prepare_term(X, Q, Y) :-
+    X =.. [F|L],
+    prepare_list(L, Q, R),
+    Y =.. [F|R].
+
+prepare_list([], _, []).
+prepare_list([X|L], Q, [Y|R]) :-
+    prepare_term(X, Q, Y),
+    prepare_list(L, Q, R).
+
+% Support lambda calculus
+lambda_has(V:_, W) :-
+    V == W.
+
+lambda_has(app(P,_,_,_), W) :-
+    lambda_has(P, W).
+
+lambda_has(app(_,Q,_,_), W) :-
+    lambda_has(Q, W).
+
+lambda_has(lam(V:_,_,_,_), W) :-
+    V == W,
+    !,
+    fail.
+
+lambda_has(lam(_,P,_,_), W) :-
+    lambda_has(P, W).
+
+lambda_has('C'(P,_,_), W) :-
+    lambda_has(P, W).
+
+%%%%%% Sequents
+
+% Determine proof type (theorem or sequent)
+% RENAMED to avoid conflict with proof_type/2 from driver
+% This function analyzes the STRUCTURE of a G4 proof, not the syntax of a formula
+% Generate Fitch commands according to type and position
+fitch_prefix(sequent, LineNum, TotalPremisses, Prefix) :-
+    (   LineNum =< TotalPremisses
+    ->  (   LineNum = TotalPremisses
+        ->  Prefix = '\\fj '  % Big flag for last premiss
+        ;   Prefix = '\\fa '  % Normal line for premisses
+        )
+    ;   Prefix = '\\fa '      % Normal line after premisses
+    ).
+
+fitch_prefix(theorem, Depth, _, Prefix) :-
+    (   Depth > 0
+    ->  Prefix = '\\fa \\fh '  % Small flag for hypotheses
+    ;   Prefix = '\\fa '       % Normal line at level 0
+    ).
+
+% =========================================================================
+% RENDU LATEX BUSSPROOFS
+% =========================================================================
+
+% =========================================================================
+% LaTeX FORMULA RENDERING
+% =========================================================================
+
+% =========================================================================
+% RENDER LATEX FORMULA - Unified with write_formula_with_parens
+% =========================================================================
+% =========================================================================
+% ASQ REPLACEMENT HELPER
+% =========================================================================
+% Replace SPECIFIC asq(A,B) term (not all asq terms) with variable X in formulas
+% Used when rendering quantifiers with asq annotations
+
+% Match the EXACT asq term (using unification with ==)
+replace_specific_asq(AsqTerm, Var, Term, Var) :-
+    Term == AsqTerm, !.
+
+% For compound terms, recurse but skip quantifier structures
+replace_specific_asq(AsqTerm, Var, Term, Result) :-
+    compound(Term),
+    Term \= ![_|_],
+    Term \= ?[_|_],
+    !,
+    Term =.. [F|Args],
+    maplist(replace_specific_asq(AsqTerm, Var), Args, NewArgs),
+    Result =.. [F|NewArgs].
+
+% Atoms and variables pass through
+replace_specific_asq(_, _, Term, Term).
+
+% =========================================================================
+% END OF LATEX UTILITIES FILE
+% =========================================================================
+% =========================================================================
+% VARIOUS DETECTIONS (Logic level detection, equality, etc. )
+% =========================================================================
+
+:- dynamic formula_level/1.
+
+% =========================================================================
+% MAIN DETECTION
+% =========================================================================
+
+detect_and_set_logic_level(Formula) :-
+    retractall(formula_level(_)),
+    ( is_fol_formula(Formula) ->
+        assertz(formula_level(fol))
+    ;
+        assertz(formula_level(propositional))
+    ).
+
+% =========================================================================
+% FOL DETECTION HEURISTICS
+% A formula is FOL if it contains:
+% - Quantifiers (!, ?)
+% - Predicate applications p(t1,...,tn) with n > 0
+% - Equalities between terms
+% - Skolem functions
+% =========================================================================
+
+is_fol_formula(Formula) :-
+    (   contains_quantifier(Formula)
+    ;   contains_predicate_application(Formula)
+    ;   contains_equality(Formula)
+    ;   contains_function_symbol(Formula)
+    ), !.
+
+% =========================================================================
+% DETECTION DES COMPOSANTS
+% =========================================================================
+
+% Quantificateurs
+contains_quantifier(![_-_]:_) :- !.
+contains_quantifier(?[_-_]:_) :- !.
+contains_quantifier(Term) :-
+    compound(Term),
+    Term =.. [_|Args],
+    member(Arg, Args),
+    contains_quantifier(Arg).
+
+
+% Predicate applications (compound terms that are not connectives)
+contains_predicate_application(Term) :-
+    compound(Term),
+    \+ is_logical_connective_structure(Term),
+    Term =.. [_F|Args],
+    Args \= [],  % Must have at least one argument
+    !.
+contains_predicate_application(Term) :-
+    compound(Term),
+    Term =.. [_|Args],
+    member(Arg, Args),
+    contains_predicate_application(Arg).
+
+% Logical connective structures (to exclude)
+is_logical_connective_structure(_ => _).
+is_logical_connective_structure(_ & _).
+is_logical_connective_structure(_ | _).
+is_logical_connective_structure(_ <=> _).
+is_logical_connective_structure(_ = _).  % Equality treated separately
+is_logical_connective_structure(~ _).
+is_logical_connective_structure(#).
+is_logical_connective_structure(![_-_]:_).
+is_logical_connective_structure(?[_-_]:_).
+
+% Equality
+contains_equality(_ = _) :- !.
+contains_equality(Term) :-
+    compound(Term),
+    Term =.. [_|Args],
+    member(Arg, Args),
+    contains_equality(Arg).
+
+% Detect USER function symbols (not internal f_sk Skolem functions)
+% A user function is a compound term with arguments that is not:
+%   - A logical connective
+%   - A quantifier
+%   - An internal Skolem function (f_sk)
+%   - A predicate at top level
+contains_user_function(Term) :-
+    compound(Term),
+    Term \= f_sk(_),
+    Term \= f_sk(_,_),
+    Term \= (_ = _),
+    Term \= (~ _),
+    Term \= (_ & _),
+    Term \= (_ | _),
+    Term \= (_ => _),
+    Term \= (_ <=> _),
+    Term \= (![_]:_),
+    Term \= (?[_]:_),
+    % Now check if Term or its arguments contain functions
+    (   has_function_in_args(Term)
+    ;   Term =.. [_F|Args],
+        Args \= [],
+        member(Arg, Args),
+        contains_user_function(Arg)
+    ).
+
+% Check if a term has function symbols in its arguments
+% This handles cases like p(f(x)) where f(x) is a function inside predicate p
+has_function_in_args(Term) :-
+    compound(Term),
+    Term =.. [_Pred|Args],
+    Args \= [],
+    member(Arg, Args),
+    is_user_function_term(Arg).
+
+% Check if a term itself is a function (not a predicate at top level)
+is_user_function_term(Term) :-
+    compound(Term),
+    Term \= f_sk(_),
+    Term \= f_sk(_,_),
+    Term \= (_ = _),
+    Term \= (~ _),
+    Term \= (_ & _),
+    Term \= (_ | _),
+    Term \= (_ => _),
+    Term \= (_ <=> _),
+    Term \= (![_]:_),
+    Term \= (?[_]:_),
+    Term =.. [_F|Args],
+    Args \= [].
+
+% Keep old name for backward compatibility (Skolem functions only)
+contains_function_symbol(f_sk(_)) :- !.
+contains_function_symbol(f_sk(_,_)) :- !.
+contains_function_symbol(Term) :-
+    compound(Term),
+    Term =.. [_|Args],
+    member(Arg, Args),
+    contains_function_symbol(Arg).
+
+% =========================================================================
+% FORMULA EXTRACTION FROM A G4 PROOF
+% =========================================================================
+
+extract_formula_from_proof(Proof, Formula) :-
+    Proof =.. [_RuleName, Sequent|_],
+    ( Sequent = (_ > [Formula]) ->
+        true
+    ; Sequent = (_ > Goals), Goals = [Formula|_] ->
+        true
+    ;
+        Formula = unknown
+    ).
+% =========================================================================
+% VALIDATION & WARNINGS MODULE
+% Detection of typing errors and misuse of logical operators
+% =========================================================================
+% This module validates formulas before proof attempt and warns about
+% common mistakes, particularly the confusion between:
+%   <=>  biconditional (propositional connective between formulas)
+%   =    equality (relation between terms in FOL)
+% =========================================================================
+
+
+:- use_module(library(lists)).
+
+% =========================================================================
+% VALIDATION MODE CONFIGURATION
+% =========================================================================
+% Modes:
+%   permissive - warn but continue (default)
+%   strict     - reject invalid formulas automatically
+%   silent     - no warnings
+
+:- dynamic validation_mode/1.
+validation_mode(permissive).
+
+% =========================================================================
+% KNOWN PREDICATES REGISTRY
+% =========================================================================
+% Users can register predicate symbols to improve detection accuracy
+
+:- dynamic known_predicate/1.
+
+% Default predicates (common in logic examples)
+known_predicate(p).
+known_predicate(q).
+known_predicate(r).
+known_predicate(s).
+known_predicate(h).
+known_predicate(m).
+
+clear_predicates :-
+    retractall(known_predicate(_)).
+
+% =========================================================================
+% MAIN VALIDATION ENTRY POINT
+% =========================================================================
+
+validate_and_warn(Formula, ValidatedFormula) :-
+    validation_mode(Mode),
+
+    % Check 1: Sequent syntax confusion (ALWAYS check, even in propositional logic)
+    check_sequent_syntax_confusion(Formula, SyntaxWarnings),
+
+    % Check 2: Biconditional misuse (only in FOL context)
+/*
+    detect_fol_context(Formula, IsFOL),
+    (   IsFOL ->
+        check_bicond_misuse(Formula, BicondWarnings)
+    ;   BicondWarnings = []
+    ),
+*/
+    % Combine warnings
+    append(SyntaxWarnings, _BicondWarnings, AllWarnings),
+
+    % Handle combined warnings
+    handle_warnings(AllWarnings, Mode, ValidatedFormula, Formula).
+
+% Handle warnings according to mode
+handle_warnings([], _, Formula, Formula) :- !.
+handle_warnings(_Warnings, silent, Formula, Formula) :- !.
+handle_warnings(Warnings, permissive, Formula, Formula) :-
+    report_warnings(Warnings),
+    prompt_continue.
+handle_warnings(Warnings, strict, _, _) :-
+    report_warnings(Warnings),
+    write('? Validation failed in strict mode. Formula rejected.'), nl,
+    fail.
+
+% Prompt user to continue
+prompt_continue :-
+    write('Continue despite warnings? (y/n): '),
+    read(Response),
+    (   Response = y -> true
+    ;   Response = yes -> true
+    ;   write('? Proof attempt cancelled.'), nl, fail
+    ).
+% =========================================================================
+% FOL CONTEXT DETECTION
+% =========================================================================
+% A formula is in FOL context if it contains:
+%   - Quantifiers (?, ?)
+%   - Predicate applications p(t1,...,tn) with n > 0
+%   - Equality between terms
+%   - Function symbols (including Skolem functions)
+
+detect_fol_context(Formula, true) :-
+    (   contains_quantifier(Formula)
+    ;   contains_predicate_application(Formula)
+    ;   contains_equality(Formula)
+    ;   contains_function_symbol(Formula)
+    ), !.
+detect_fol_context(_, false).
+
+% Logical connective identification
+is_logical_connective(_ => _).
+is_logical_connective(_ & _).
+is_logical_connective(_ | _).
+is_logical_connective(_ <=> _).
+is_logical_connective(~ _).
+is_logical_connective(#).
+is_logical_connective(![_-_]:_).
+is_logical_connective(?[_-_]:_).
+
+% =========================================================================
+% BICONDITIONAL MISUSE DETECTION
+% =========================================================================
+% Detects <=> used between terms instead of formulas
+% Example: (a <=> b) should likely be (a = b) in FOL
+
+check_bicond_misuse(Formula, Warnings) :-
+    findall(Warning, detect_bicond_in_terms(Formula, Warning), Warnings).
+
+% =========================================================================
+% BICONDITIONAL MISUSE DETECTION (IMPROVED)
+% =========================================================================
+% Only warn if <=> appears in a TERM CONTEXT (not formula context)
+
+detect_bicond_in_terms(A <=> B, warning(bicond_between_terms, A, B)) :-
+    % Both sides are clearly terms (constants or function applications)
+    is_definitely_term(A),
+    is_definitely_term(B),
+    !.
+
+detect_bicond_in_terms(Term, Warning) :-
+    compound(Term),
+    Term \= (_ <=> _),  % Don't recurse into biconditionals we already checked
+    Term =.. [_|Args],
+    member(Arg, Args),
+    detect_bicond_in_terms(Arg, Warning).
+
+% =========================================================================
+% DEFINITELY A TERM (not a formula)
+% =========================================================================
+% Conservative: only flag obvious cases
+is_definitely_term(![_]:_) :- !, fail.  % Universal quantification = formula
+is_definitely_term(?[_]:_) :- !, fail.  % Existential quantification = formula
+
+is_definitely_term(X) :-
+    var(X), !.  % Variable (term)
+
+is_definitely_term(X) :-
+    atomic(X),
+    \+ known_predicate(X),  % Constant, not predicate
+    !.
+
+is_definitely_term(f_sk(_)) :- !.  % Skolem function (single arg)
+is_definitely_term(f_sk(_,_)) :- !.  % Skolem function
+
+is_definitely_term(Term) :-
+    compound(Term),
+    \+ is_logical_connective(Term),
+    Term =.. [F|Args],
+    Args \= [],
+    % Must be a KNOWN function symbol (not predicate)
+    is_known_function(F),
+    !.
+
+% =========================================================================
+% KNOWN FUNCTION REGISTRY
+% =========================================================================
+% Users can register function symbols to improve detection
+
+:- dynamic known_function/1.
+
+% Default common function symbols
+known_function(succ).   % Successor
+known_function(plus).
+known_function(times).
+known_function(father).  % father(x) is a term
+known_function(mother).
+
+is_known_function(F) :-
+    known_function(F), !.
+
+% Heuristic fallback: if NOT a known predicate, assume function
+% (This is conservative - avoid false positives)
+is_known_function(F) :-
+    \+ known_predicate(F),
+    \+ member(F, [f, g, h, i, j, k, p, q, r, s]),  % Ambiguous symbols
+    !.
+
+% =========================================================================
+% SEQUENT SYNTAX CONFUSION DETECTION
+% =========================================================================
+% Detects common mistakes:
+%   [P] => [Q]  (WRONG - looks like sequent but uses =>)
+%   P > Q       (WRONG - looks like implication but uses >)
+
+check_sequent_syntax_confusion(Formula, Warnings) :-
+    findall(Warning, detect_sequent_confusion(Formula, Warning), Warnings).
+
+% Case 1: [List] => [List] - user probably meant sequent syntax
+detect_sequent_confusion([_|_] => [_|_], warning(list_implication, 'Use > for sequents, not =>')) :- !.
+detect_sequent_confusion([_|_] => _, warning(list_implication_left, 'Left side is a list - use > for sequents')) :- !.
+detect_sequent_confusion(_ => [_|_], warning(list_implication_right, 'Right side is a list - use > for sequents')) :- !.
+
+% Case 2: Atom > Atom - user probably meant implication
+detect_sequent_confusion(A > B, warning(atom_turnstile, 'Use => for implication, not >')) :-
+    atomic(A),
+    atomic(B),
+    !.
+
+% Case 3: Complex formula > Complex formula - likely implication
+detect_sequent_confusion(A > B, warning(formula_turnstile, 'Use => for implication between formulas, not >')) :-
+    is_formula(A),
+    is_formula(B),
+    !.
+
+% Recursive search
+detect_sequent_confusion(Term, Warning) :-
+    compound(Term),
+    Term \= (_ => _),  % Don't recurse into implications
+    Term \= (_ > _),   % Don't recurse into turnstiles
+    Term =.. [_|Args],
+    member(Arg, Args),
+    detect_sequent_confusion(Arg, Warning).
+
+% Helper: check if something is a formula (not a list or term)
+is_formula(Term) :-
+    compound(Term),
+    (   is_logical_connective(Term)
+    ;   Term =.. [F|Args], Args \= [], known_predicate(F)
+    ).
+
+% Term identification (not a formula)
+% A term is: constant, variable, or function application
+is_term_not_formula(X) :-
+    atomic(X), !.  % Constant or variable
+is_term_not_formula(f_sk(_)) :- !.  % Skolem function (single arg)
+is_term_not_formula(f_sk(_,_)) :- !.  % Skolem function
+is_term_not_formula(Term) :-
+    compound(Term),
+    \+ is_logical_connective(Term),
+    Term =.. [F|Args],
+    Args \= [],
+    \+ known_predicate(F),  % Function, not predicate
+    !.
+
+% =========================================================================
+% WARNING REPORTS
+% =========================================================================
+
+report_warnings([]) :- !.
+report_warnings(Warnings) :-
+    length(Warnings, N),
+    nl,
+    format('?  ~d WARNING(S) DETECTED:~n', [N]),
+    nl,
+    maplist(print_warning, Warnings),
+    nl,
+    write('? TIPS:'), nl,
+    write('   o Theorems:  prove(p => q).        % implication'), nl,
+    write('   o Sequents:  prove([p] > [q]).     % turnstile ?'), nl,
+    write('   o FOL:       use = for equality, <=> for biconditional'), nl,
+    nl.
+
+print_warning(warning(bicond_between_terms, A, B)) :-
+    format('   ?  (~w <=> ~w): biconditional between terms detected.~n', [A, B]),
+    format('      -> Did you mean (~w = ~w)?~n', [A, B]).
+
+% NEW: Sequent syntax warnings
+print_warning(warning(list_implication, Msg)) :-
+    format('   ?  Syntax error: ~w~n', [Msg]),
+    write('      Example: prove([p, q] > [p & q]).  % CORRECT'), nl,
+    write('               prove([p, q] => [p & q]). % WRONG'), nl.
+
+print_warning(warning(list_implication_left, Msg)) :-
+    format('   ?  Syntax error: ~w~n', [Msg]),
+    write('      -> Use [Premisses] > [Conclusion] for sequents'), nl.
+
+print_warning(warning(list_implication_right, Msg)) :-
+    format('   ?  Syntax error: ~w~n', [Msg]),
+    write('      -> Use [Premisses] > [Conclusion] for sequents'), nl.
+
+print_warning(warning(atom_turnstile, Msg)) :-
+    format('   ?  Syntax error: ~w~n', [Msg]),
+    write('      Example: prove(p => q).       % CORRECT (implication)'), nl,
+    write('               prove(p > q).        % WRONG'), nl,
+    write('               prove([p] > [q]).    % CORRECT (sequent)'), nl.
+
+print_warning(warning(formula_turnstile, Msg)) :-
+    format('   ?  Syntax error: ~w~n', [Msg]),
+    write('      -> Use => for implications, > only for sequents'), nl,
+    write('      -> Sequent syntax: [Premisses] > [Conclusions]'), nl.
+
+
+
+% =========================================================================
+% HELPER: DETECTION OF EQUALITY AND FUNCTIONS
+% =========================================================================
+
+% Main predicate: decide if formula needs nanoCoP
+% (due to equality or user-defined function symbols)
+g4mic_needs_nanocop(Formula) :-
+    (   g4mic_contains_equality_direct(Formula)
+    ;   contains_user_function(Formula)
+    ), !.
+
+% Equality detection (only descends through logical connectives)
+g4mic_contains_equality_direct(_ = _) :- !.
+g4mic_contains_equality_direct(~A) :- !, g4mic_contains_equality_direct(A).
+g4mic_contains_equality_direct(A & B) :- !, (g4mic_contains_equality_direct(A) ; g4mic_contains_equality_direct(B)).
+g4mic_contains_equality_direct(A | B) :- !, (g4mic_contains_equality_direct(A) ; g4mic_contains_equality_direct(B)).
+g4mic_contains_equality_direct(A => B) :- !, (g4mic_contains_equality_direct(A) ; g4mic_contains_equality_direct(B)).
+g4mic_contains_equality_direct(A <=> B) :- !, (g4mic_contains_equality_direct(A) ; g4mic_contains_equality_direct(B)).
+g4mic_contains_equality_direct(![_]: A) :- !, g4mic_contains_equality_direct(A).
+g4mic_contains_equality_direct(?[_]:A) :- !, g4mic_contains_equality_direct(A).
+% No recursive descent into arbitrary compound terms - only through logical operators
+g4mic_contains_equality_direct(_) :- fail.
+
+
+%=========================================================================
+% END OF DETECTIONS
+%=========================================================================
 % =========================================================================
 % G4 PRINTER SPECIALIZED FOR BUSSPROOFS
 % Optimized LaTeX rendering for  G4 rules
@@ -2726,67 +3946,11 @@ build_hypothesis_map([_|Rest], AccMap, FinalMap) :-
 % The resulting Fitch proof is more intuitive than raw sequent calculus
 % and suitable for teaching and publication.
 % =========================================================================
-g4_to_fitch_sequent(Proof, OriginalSequent) :-
-    !,
-    retractall(fitch_line(_, _, _, _)),
-    retractall(abbreviated_line(_)),
-
-    OriginalSequent = (_G > [Conclusion]),
-
-    ( premiss_list(PremList), PremList \= [] ->
-        render_premiss_list(PremList, 0, 1, NextLine, InitialContext),
-        LastPremLine is NextLine - 1  % CORRECTION: last premise line
-    ;
-        _NextLine = 1,
-        LastPremLine = 0,             % CORRECTION: no premises
-        InitialContext = []
-    ),
-
-    % CORRECTION: Scope=1 (indentation), CurLine=LastPremLine (line numbering)
-    fitch_g4_proof(Proof, InitialContext, 1, LastPremLine, LastLine, ResLine, 0, _),
-
-    % DETECT: Has a rule been applied?
-    ( LastLine = LastPremLine ->
-        % No line added → pure axiom → display reiteration
-        write('\\fa '),
-        rewrite(Conclusion, 0, _, LatexConclusion),
-        write(LatexConclusion),
-        format(' &  R ~w\\\\', [ResLine]), nl
-    ;
-        % A rule has already displayed the conclusion → do nothing
-        true
-    ).
-
-% g4_to_fitch_theorem/1 : For theorems (original behavior)
+% g4_to_fitch_theorem/1 : For theorems
 g4_to_fitch_theorem(Proof) :-
     retractall(fitch_line(_, _, _, _)),
     retractall(abbreviated_line(_)),
     fitch_g4_proof(Proof, [], 1, 0, _, _, 0, _).
-% =========================================================================
-% RENDERING PREMISE LIST
-% =========================================================================
-% render_premiss_list/5: Displays a premise list in Fitch style
-render_premiss_list([], _, Line, Line, []) :- !.
-
-render_premiss_list([LastPremiss], Scope, CurLine, NextLine, [CurLine:LastPremiss]) :-
-    !,
-    render_fitch_indent(Scope),
-    write(' \\fj '),
-    rewrite(LastPremiss, 0, _, LatexFormula),
-    write(LatexFormula),
-    write(' &  PR\\\\'), nl,
-    assert_safe_fitch_line(CurLine, LastPremiss, premise, Scope),
-    NextLine is CurLine + 1.
-
-render_premiss_list([Premiss|Rest], Scope, CurLine, NextLine, [CurLine:Premiss|RestContext]) :-
-    render_fitch_indent(Scope),
-    write(' \\fa '),
-    rewrite(Premiss, 0, _, LatexFormula),
-    write(LatexFormula),
-    write(' &  PR\\\\'), nl,
-    assert_safe_fitch_line(CurLine, Premiss, premise, Scope),
-    NextCurLine is CurLine + 1,
-    render_premiss_list(Rest, Scope, NextCurLine, NextLine, RestContext).
 % =========================================================================
 % ASSERTION SÉCURISÉE
 % =========================================================================
@@ -3041,8 +4205,8 @@ fitch_g4_proof(lor((Premisss > [Goal]), SP1, SP2), Context, Scope, CurLine, Next
       render_hypo(Scope, B, 'AS', EndA, AssLineB, V2, V3),
       fitch_g4_proof(SP2, [AssLineB:B|Context], NewScope, AssLineB, EndB, GoalB, V3, V4),
       ElimLine is EndB + 1,
-      assert_safe_fitch_line(ElimLine, Goal, lor(DisjLine, AssLineA, AssLineB, GoalA, GoalB), Scope),
-      format(atom(Just), '$ \\lor E $ ~w,~w-~w,~w-~w', [DisjLine, AssLineA, GoalA, AssLineB, GoalB]),
+      assert_safe_fitch_line(ElimLine, Goal, lor(DisjLine, AssLineA, EndA, AssLineB, EndB), Scope),
+      format(atom(Just), '$ \\lor E $ ~w,~w-~w,~w-~w', [DisjLine, AssLineA, EndA, AssLineB, EndB]),
       render_have(Scope, Goal, Just, EndB, ElimLine, V4, VarOut),
       NextLine = ElimLine,
       ResLine = ElimLine
@@ -3152,7 +4316,7 @@ fitch_g4_proof(lex((Premisses > [Goal]), SubProof), Context, Scope, CurLine, Nex
         fitch_g4_proof(SubProof, Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut)
     ; WitLine is CurLine + 1,
       NewScope is Scope + 1,
-      assert_safe_fitch_line(WitLine, Witness, assumption, NewScope),
+      assert_safe_fitch_line(WitLine, Witness, assumption, Scope),
       render_hypo(Scope, Witness, 'AS', CurLine, WitLine, VarIn, V1),
       fitch_g4_proof(SubProof, [WitLine:Witness|Context], NewScope, WitLine, SubEnd, _GoalLine, V1, V2),
       ElimLine is SubEnd + 1,
@@ -3444,12 +4608,12 @@ build_tree_from_just(ror(SubLine), _LineNum, Formula, FitchLines, unary_node(ror
     !, build_buss_tree(SubLine, FitchLines, SubTree).
 
 % L∨ (Elim Or) - Ternary
-build_tree_from_just(lor(DisjLine, HypA, HypB, GoalA, GoalB), _LineNum, Formula, FitchLines,
+build_tree_from_just(lor(DisjLine, HypA, EndA, HypB, EndB), _LineNum, Formula, FitchLines,
                      ternary_node(lor, HypA, HypB, Formula, DisjTree, TreeA, TreeB)) :-
     !,
     build_buss_tree(DisjLine, FitchLines, DisjTree),
-    build_buss_tree(GoalA, FitchLines, TreeA),
-    build_buss_tree(GoalB, FitchLines, TreeB).
+    build_buss_tree(EndA, FitchLines, TreeA),
+    build_buss_tree(EndB, FitchLines, TreeB).
 
 % L∨-> (Left disjunction to conditional)
 build_tree_from_just(lorto(Line), _LineNum, Formula, FitchLines, unary_node(lorto, Formula, SubTree)) :-
@@ -3783,1266 +4947,305 @@ tree_contains_assumption(unknown_node(_, _, _), _) :- !, fail.
 %=========================================================================
 %   END OF ND TREE STYLE PRINTER
 %=========================================================================
-%==========================================================================
-% LATEX  UTILITIES
-%========================================================================
-%========================
-% Fitch section
-% ========================
+% =========================================================================
+% CLEAN FITCH STYLE - Dead line elimination
+% =========================================================================
+% Strategy: After fitch_line/4 facts are generated (silently),
+% collect only the lines that are actually referenced,
+% renumber them, update justification references, then render.
+% =========================================================================
+:- dynamic clean_line/4.   % clean_line(NewNum, Formula, NewJust, Scope)
+:- dynamic renum/2.           % renum(OldNum, NewNum)
 
 % =========================================================================
-% RENDERING PRIMITIVES
+% MAIN ENTRY POINT
 % =========================================================================
-
-% render_hypo/7: Display a hypothesis in Fitch style
-
-render_hypo(Scope, Formula, Label, _CurLine, _NextLine, VarIn, VarOut) :-
-    render_fitch_indent(Scope),
-    write(' \\fh '),
-    rewrite(Formula, VarIn, VarOut, LatexFormula),
-    write_formula_with_parens(LatexFormula),
-    write(' &  '),
-    write(Label),
-    write('\\\\'), nl.
-
-
-% render_fitch_indent/1: Genere l'indentation Fitch (\\fa)
-
-render_fitch_indent(0) :- !.
-
-render_fitch_indent(N) :-
-    N > 0,
-    write('\\fa '),
-    N1 is N - 1,
-    render_fitch_indent(N1).
-
-render_have(Scope, Formula, Just, _CurLine, _NextLine, VarIn, VarOut) :-
-    render_fitch_indent(Scope),
-    % Always write \fa at level 0 (for sequents)
-    ( Scope = 0 -> write('\\fa ') ; true ),
-    rewrite(Formula, VarIn, VarOut, LatexFormula),
-    write_formula_with_parens(LatexFormula),
-    write(' &  '),
-    write(Just),
-    write('\\\\'), nl.
-
-% =========================================================================
-% SIMPLE RULE: (Antecedent) => (Consequent) except for atoms
-% =========================================================================
-
-% Test if a formula is atomic
-is_atomic_formula(Formula) :-
-    atomic(Formula).
-
-% -------------------------------------------------------------------------
-% NEW: Test if a formula is a negation (in LaTeX display sense)
-% A negative formula is represented as (' \\lnot ' X) par rewrite/4.
-% We want to consider any formula starting with ' \\lnot ' as
-% "non-parenthesable" - i.e. ne PAS entourer par des parentheses externe.
-% -------------------------------------------------------------------------
-is_negative_formula((' \\lnot ' _)) :- !.
-
-% Helper: treat negative formulas as "atomic-like" for parentheses suppression
-is_atomic_or_negative_formula(F) :-
-    is_atomic_formula(F) ;
-    is_negative_formula(F).
-
-% =========================================================================
-% TEST IF QUANTIFIER BODY NEEDS PARENTHESES
-% =========================================================================
-
-quantifier_body_needs_parens((_ ' \\to ' _)) :- !.
-quantifier_body_needs_parens((_ ' \\land ' _)) :- !.
-quantifier_body_needs_parens((_ ' \\lor ' _)) :- !.
-quantifier_body_needs_parens((_ ' \\leftrightarrow ' _)) :- !.
-quantifier_body_needs_parens(_) :- fail.
-
-% =========================================================================
-% ALL write_formula_with_parens/1 CLAUSES GROUPED
-% =========================================================================
-
-% Writing an implication with smart parentheses
-write_formula_with_parens((A ' \\to ' B)) :-
-    !,
-    write_implication_with_parens(A, B).
-
-write_formula_with_parens('='(A, B)) :- !,
-    write('('), write_formula_with_parens(A), write(' = '), write_formula_with_parens(B), write(')').
-
-% Autres operateurs
-write_formula_with_parens((A ' \\lor ' B)) :-
-    !,
-    write_with_context(A, 'lor_left'),
-    write(' \\lor '),
-    write_with_context(B, 'lor_right').
-
-write_formula_with_parens((A ' \\land ' B)) :-
-    !,
-    write_with_context(A, 'land_left'),
-    write(' \\land '),
-    write_with_context(B, 'land_right').
-
-write_formula_with_parens((A ' \\leftrightarrow ' B)) :-
-    !,
-    write_bicond_component(A),
-    write(' \\leftrightarrow '),
-    write_bicond_component(B).
-
-write_formula_with_parens((' \\lnot ' A)) :-
-    !,
-    write(' \\lnot '),
-    write_with_context(A, 'not').
-
-% QUANTIFIERS WITH SMART PARENTHESES
-write_formula_with_parens((' \\forall ' X ' ' A)) :-
-    !,
-    write(' \\forall '),
-    write(X),
-    write(' '),
-    ( quantifier_body_needs_parens(A) ->
-        write('('),
-        write_formula_with_parens(A),
-        write(')')
-    ;   write_formula_with_parens(A)
-    ).
-
-write_formula_with_parens((' \\exists ' X ' ' A)) :-
-    !,
-    write(' \\exists '),
-    write(X),
-    write(' '),
-    ( quantifier_body_needs_parens(A) ->
-        write('('),
-        write_formula_with_parens(A),
-        write(')')
-    ;   write_formula_with_parens(A)
-    ).
-
-write_formula_with_parens(Other) :-
-    write(Other).
-
-% =========================================================================
-% HELPER PREDICATES FOR BICONDITIONAL FORMATTING
-% =========================================================================
-
-% Helper: write biconditional component with parens if not a literal
-write_bicond_component(A) :-
-    is_latex_literal(A), !,
-    write_formula_with_parens(A).
-write_bicond_component(A ' \\to ' B) :- !,
-    % Implications need parentheses in biconditional context
-    write('('),
-    write_implication_with_parens(A, B),
-    write(')').
-write_bicond_component(A) :-
-    % Any other complex formula gets parentheses
-    write('('),
-    write_formula_with_parens(A),
-    write(')').
-
-% Check if a LaTeX formula is a literal (atom, negated atom, or predicate application)
-is_latex_literal(A) :-
-    atomic(A), !.
-is_latex_literal((' \\lnot ' A)) :-
-    atomic(A), !.
-is_latex_literal((' \\lnot ' (' \\lnot ' A))) :-
-    % Double negation of literal is still considered "atomic-like"
-    is_latex_literal(A), !.
-is_latex_literal(A) :-
-    compound(A),
-    A \= (_ ' \\to ' _),
-    A \= (_ ' \\land ' _),
-    A \= (_ ' \\lor ' _),
-    A \= (_ ' \\leftrightarrow ' _),
-    A \= (' \\lnot ' _),
-    !.
-
-% =========================================================================
-% SPECIALIZED FUNCTION FOR IMPLICATIONS
-% =========================================================================
-
-write_implication_with_parens(Antecedent, Consequent) :-
-    % Antecedent: do not parenthesize if atomic OR negative formula
-    ( is_atomic_or_negative_formula(Antecedent) ->
-        write_formula_with_parens(Antecedent)
-    ;
-        write('('),
-        write_formula_with_parens(Antecedent),
-        write(')')
-    ),
-    write(' \\to '),
-    % Consequent: parenthesize except if atomic OR negative formula
-    % NOTE: we consider any form (' \\lnot ' _) as "negative" even if
-    % it contains several nested negations (~  ~ ~  A).
-    ( is_atomic_or_negative_formula(Consequent) ->
-        write_formula_with_parens(Consequent)
-    ;
-        write('('),
-        write_formula_with_parens(Consequent),
-        write(')')
-    ).
-
-% =========================================================================
-% ALL write_with_context/2 CLAUSES GROUPED
-% =========================================================================
-
-% IMPLICATIONS in all contexts - use write_implication_with_parens
-write_with_context((A ' \\to ' B), 'lor_left') :-
-    !,
-    write('('),
-    write_implication_with_parens(A, B),
-    write(')').
-
-write_with_context((A ' \\to ' B), 'lor_right') :-
-    !,
-    write('('),
-    write_implication_with_parens(A, B),
-    write(')').
-
-write_with_context((A ' \\to ' B), 'land_left') :-
-    !,
-    write('('),
-    write_implication_with_parens(A, B),
-    write(')').
-
-write_with_context((A ' \\to ' B), 'land_right') :-
-    !,
-    write('('),
-    write_implication_with_parens(A, B),
-    write(')').
-
-write_with_context((A ' \\to ' B), 'not') :-
-    !,
-    write('('),
-    write_implication_with_parens(A, B),
-    write(')').
-
-% CONJUNCTIONS in disjunctions
-write_with_context((A ' \\land ' B), 'lor_left') :-
-    !,
-    write('('),
-    write_formula_with_parens(A),
-    write(' \\land '),
-    write_formula_with_parens(B),
-    write(')').
-
-write_with_context((A ' \\land ' B), 'lor_right') :-
-    !,
-    write('('),
-    write_formula_with_parens(A),
-    write(' \\land '),
-    write_formula_with_parens(B),
-    write(')').
-
-% CONJUNCTIONS in negations
-write_with_context((A ' \\land ' B), 'not') :-
-    !,
-    write('('),
-    write_formula_with_parens(A),
-    write(' \\land '),
-    write_formula_with_parens(B),
-    write(')').
-
-% DISJUNCTIONS in negations
-write_with_context((A ' \\lor ' B), 'not') :-
-    !,
-    write('('),
-    write_formula_with_parens(A),
-    write(' \\lor '),
-    write_formula_with_parens(B),
-    write(')').
-
-% DISJUNCTIONS in conjunctions
-write_with_context((A ' \\lor ' B), 'land_left') :-
-    !,
-    write('('),
-    write_formula_with_parens(A),
-    write(' \\lor '),
-    write_formula_with_parens(B),
-    write(')').
-
-write_with_context((A ' \\lor ' B), 'land_right') :-
-    !,
-    write('('),
-    write_formula_with_parens(A),
-    write(' \\lor '),
-    write_formula_with_parens(B),
-    write(')').
-
-% BICONDITIONALS in negations
-write_with_context((A ' \\leftrightarrow ' B), 'not') :-
-    !,
-    write('('),
-    write_bicond_component(A),
-    write(' \\leftrightarrow '),
-    write_bicond_component(B),
-    write(')').
-
-% FALLBACK CLAUSE
-write_with_context(Formula, _Context) :-
-    write_formula_with_parens(Formula).
-
-% =========================================================================
-% ADAPTED  SYSTEM: direct rewrite on formulas with standard operators
-% VERSION WITH ELEGANT PREDICATE SIMPLIFICATION
-% =========================================================================
-
-% rewrite/4 - Adapted version that handles formulas directly
-rewrite(#, J, J, '\\bot') :- !.
-rewrite(# => #, J, J, '\\top') :- !.
-
-% NEW CLAUSE TO HANDLE SKOLEM CONSTANTS
-% Converts f_sk(K) to a simple name like 'a', 'b', etc. (single argument version)
-rewrite(f_sk(K), J, J, Name) :-
-    integer(K),
-    !,
-    rewrite_name(K, Name).
-
-% Converts f_sk(K,_) to a simple name like 'a', 'b', etc. (two arguments version)
-rewrite(f_sk(K,_), J, J, Name) :-
-    !,
-    rewrite_name(K, Name).
-
-% BASE CASE: atomic formulas
-rewrite(A, J, J, A_latex) :-
-    atomic(A),
-    !,
-    toggle(A, A_latex).
-
-% Recognizes ((A => B) & (B => A)) (or reverse order) as A <=> B for LaTeX display
-% Must be placed BEFORE the generic rewrite((A & B), ...) clause
-rewrite((X & Y), J, K, (C ' \\leftrightarrow ' D)) :-
-    % case 1: X = (A => B), Y = (B => A)
-    ( X = (A => B), Y = (B => A)
-    % case 2: reverse order
-    ; X = (B => A), Y = (A => B)
-    ),
-    !,
-    rewrite(A, J, H, C),
-    rewrite(B, H, K, D).
-
-% Conjunction with standard operator &
-rewrite((A & B), J, K, (C ' \\land ' D)) :-
-    !,
-    rewrite(A, J, H, C),
-    rewrite(B, H, K, D).
-
-% Disjunction with standard operator |
-rewrite((A | B), J, K, (C ' \\lor ' D)) :-
-    !,
-    rewrite(A, J, H, C),
-    rewrite(B, H, K, D).
-
-% COSMETIC DISPLAY: A => # becomes ~A
-rewrite((A => #), J, K, (' \\lnot ' C)) :-
-    !,
-    rewrite(A, J, K, C).
-
-
-% Implication with standard operator =>
-rewrite((A => B), J, K, (C ' \\to ' D)) :-
-    !,
-    rewrite(A, J, H, C),
-    rewrite(B, H, K, D).
-
-% Biconditional with standard operator <=>
-rewrite((A <=> B), J, K, (C ' \\leftrightarrow ' D)) :-
-    !,
-    rewrite(A, J, H, C),
-    rewrite(B, H, K, D).
-
-% Negation with standard operator ~
-rewrite((~A), J, K, (' \\lnot ' C)) :-
-    !,
-    rewrite(A, J, K, C).
-
-
-% QUANTIFIERS WITH ASQ ANNOTATIONS: strip asq(...) and use variable name
-% CRITICAL: Replace only the SPECIFIC asq term, not all asq terms
-rewrite((![X-asq(A,B)]:Body), J, K, (' \\forall ' X ' ' C)) :-
-    !,
-    replace_specific_asq(asq(A,B), X, Body, CleanBody),
-    rewrite(CleanBody, J, K, C).
-
-rewrite((?[X-asq(A,B)]:Body), J, K, (' \\exists ' X ' ' C)) :-
-    !,
-    replace_specific_asq(asq(A,B), X, Body, CleanBody),
-    rewrite(CleanBody, J, K, C).
-
-% QUANTIFIERS: X-Y format - generate x, y, z based on counter
-rewrite((![_-_]:A), J, K, (' \\forall ' VarName ' ' C)) :-
-    !,
-    xyz_name(J, VarName),  % Generate x, y, z, x0, y0...
-    J1 is J + 1,
-    rewrite(A, J1, K, C).
-
-rewrite((?[_-_]:A), J, K, (' \\exists ' VarName ' ' C)) :-
-    !,
-    xyz_name(J, VarName),
-    J1 is J + 1,
-    rewrite(A, J1, K, C).
-
-% QUANTIFIERS: Simple X format - generate x, y, z based on counter
-rewrite((![_]:A), J, K, (' \\forall ' VarName ' ' C)) :-
-    !,
-    xyz_name(J, VarName),
-    J1 is J + 1,
-    rewrite(A, J1, K, C).
-
-rewrite((?[_]:A), J, K, (' \\exists ' VarName ' ' C)) :-
-    !,
-    xyz_name(J, VarName),
-    J1 is J + 1,
-    rewrite(A, J1, K, C).
-% =========================================================================
-% ELEGANT PREDICATE SIMPLIFICATION
-% P(x,y,z) -> Pxyz for all predicates
-% =========================================================================
-% --- Replace the previous "concatenate predicate name and args" clause by this safer version.
-% We avoid applying this cosmetic concatenation to equality and other logical operators.
-rewrite(Pred, J, K, SimplePred) :-
-    Pred =.. [F|Args],
-    atom(F),
-    Args \= [],
-    % Do NOT collapse standard logical operators or equality into a single atom:
-    % exclude '=' and the main logical connectives (=>, <=>, &, |, ~)
-    \+ member(F, ['=', '=>', '<=>', '&', '|', '~']),
-    all_simple_terms(Args),
-    !,
-    toggle(F, G),
-    rewrite_args_list(Args, J, K, SimpleArgs),
-    concatenate_all([G|SimpleArgs], SimplePred).
-
-% PREDICATES AND TERMS (general clause)
-rewrite(X, J, K, Y) :-
-    X =.. [F|L],
-    toggle(F, G),
-    rewrite_list(L, J, K, R),
-    Y =.. [G|R].
-
-
-% =========================================================================
-% AUXILIARY PREDICATES FOR SIMPLIFICATION
-% =========================================================================
-
-all_simple_terms([]).
-all_simple_terms([H|T]) :-
-    simple_term(H),
-    all_simple_terms(T).
-
-% A simple term is ONLY: atomic, variable, or internal Skolem function
-% User functions like f(a), g(x,y) are NOT simple terms
-simple_term(X) :-
-    atomic(X), !.
-simple_term(X) :-
-    var(X), !.
-simple_term(f_sk(_)) :-
-    !.
-simple_term(f_sk(_,_)) :-
-    !.
-% No other compound terms are simple - this prevents simplification of user functions
-
-rewrite_args_list([], J, J, []).
-rewrite_args_list([H|T], J, K, [RH|RT]) :-
-    rewrite_term(H, J, TempJ, RH),
-    rewrite_args_list(T, TempJ, K, RT).
-
-concatenate_all([X], X) :-
-    atomic(X), !.
-concatenate_all([H|T], Result) :-
-    length([H|T], Len),
-    Len =< 5,
-    !,
-    concatenate_all_impl([H|T], Result).
-concatenate_all(_, _) :-
-    fail.
-
-concatenate_all_impl([X], X) :-
-    atomic(X), !.
-concatenate_all_impl([X], Result) :-
-    % Handle compound terms: flatten them
-    compound(X),
-    !,
-    flatten_term(X, Flattened),
-    concatenate_all_impl(Flattened, Result).
-concatenate_all_impl([H|T], Result) :-
-    atomic(H),
-    !,
-    concatenate_all_impl(T, TempResult),
-    atom_concat(H, TempResult, Result).
-concatenate_all_impl([H|T], Result) :-
-    % Handle compound terms in list
-    compound(H),
-    !,
-    flatten_term(H, Flattened),
-    append(Flattened, T, NewList),
-    concatenate_all_impl(NewList, Result).
-
-% Helper: flatten a compound term into a list of atoms
-flatten_term(Term, [Atom]) :-
-    atomic(Term),
-    !,
-    term_to_atom(Term, Atom).
-flatten_term(Term, Flattened) :-
-    compound(Term),
-    Term =.. [Functor|Args],
-    atom(Functor),
-    maplist(flatten_term, Args, ArgLists),
-    append(ArgLists, Flattened).
-flatten_term(Var, ['_']) :-
-    var(Var).
-
-% =========================================================================
-% LIST AND TERM PROCESSING
-% =========================================================================
-
-rewrite_list([], J, J, []).
-rewrite_list([X|L], J, K, [Y|R]) :-
-    rewrite_term(X, J, H, Y),
-    rewrite_list(L, H, K, R).
-
-rewrite_term(V, J, K, V) :-
-    var(V),
-    !,
-    rewrite_name(J, V),
-    K is J+1.
-
-rewrite_term(f_sk(K), J, J, N) :-
-    integer(K),
-    !,
-    rewrite_name(K, N).
-
-rewrite_term(f_sk(K,_), J, J, N) :-
-    !,
-    rewrite_name(K, N).
-
-% NEW: If the term is a simple atom (constant), DO NOT capitalize it
-% Because it is an argument of a predicate/function
-rewrite_term(X, J, J, X) :-
-    atomic(X),
-    !.
-
-rewrite_term(X, J, K, Y) :-
-    X =.. [F|L],
-    rewrite_list(L, J, K, R),
-    Y =.. [F|R].
-
-% Elegant name generator for bound variables
-% Use x, y, z instead of a, b, c to avoid collision with constants
-rewrite_name(K, N) :-
-    K < 3,
-    !,
-    J is K+0'x,  % Generates x, y, z
-    char_code(N, J).
-
-rewrite_name(K, N) :-
-    J is (K mod 3)+0'x,  % For K >= 3, generates x0, y0, z0, x1, y1, z1...
-    H is K div 3,
-    number_codes(H, L),
-    atom_codes(N, [J|L]).
-
-% Toggle majuscules/minuscules
-toggle(X, Y) :-
-    atom_codes(X, L),
-    toggle_list(L, R),
-    atom_codes(Y, R).
-
-toggle_list([], []).
-toggle_list([X|L], [Y|R]) :-
-    toggle_code(X, Y),
-    toggle_list(L, R).
-
-toggle_code(X, Y) :-
-    0'a =< X, X =< 0'z,
-    !,
-    Y is X - 0'a + 0'A.
-
-toggle_code(X, Y) :-
-    0'A =< X, X =< 0'Z,
-    !,
-    Y is X - 0'A + 0'a.
-
-toggle_code(X, X).
-
-% =========================================================================
-% SYSTEME PREPARE
-% =========================================================================
-
-prepare_premisses_list([], []) :- !.
-prepare_premisses_list([H|T], [PreparedH|PreparedT]) :-
-    prepare(H, [], PreparedH),
-    prepare_premisses_list(T, PreparedT).
-
-prepare(#, _, #) :- !.
-
-prepare((A & B), Q, (C & D)) :-
-    !,
-    prepare(A, Q, C),
-    prepare(B, Q, D).
-
-prepare((A | B), Q, (C | D)) :-
-    !,
-    prepare(A, Q, C),
-    prepare(B, Q, D).
-
-prepare((A => B), Q, (C => D)) :-
-    !,
-    prepare(A, Q, C),
-    prepare(B, Q, D).
-
-prepare((A <=> B), Q, (C <=> D)) :-
-    !,
-    prepare(A, Q, C),
-    prepare(B, Q, D).
-
-prepare((~A), Q, (~C)) :-
-    !,
-    prepare(A, Q, C).
-
-prepare((![Z]:A), Q, (![Z-X]:C)) :-
-    !,
-    prepare(A, [Z-X|Q], C).
-
-prepare((?[Z]:A), Q, (?[Z-X]:C)) :-
-    !,
-    prepare(A, [Z-X|Q], C).
-
-prepare(X, _, X) :-
-    var(X),
-    !.
-
-prepare(X, Q, Y) :-
-    X =.. [F|L],
-    prepare_list(L, Q, R),
-    Y =.. [F|R].
-
-prepare_term(X, _, X) :-
-    var(X),
-    !.
-
-prepare_term(X, Q, Y) :-
-    atom(X),
-    member(X-Y, Q),
-    !.
-
-prepare_term(X, Q, Y) :-
-    X =.. [F|L],
-    prepare_list(L, Q, R),
-    Y =.. [F|R].
-
-prepare_list([], _, []).
-prepare_list([X|L], Q, [Y|R]) :-
-    prepare_term(X, Q, Y),
-    prepare_list(L, Q, R).
-
-% Support lambda calculus
-lambda_has(V:_, W) :-
-    V == W.
-
-lambda_has(app(P,_,_,_), W) :-
-    lambda_has(P, W).
-
-lambda_has(app(_,Q,_,_), W) :-
-    lambda_has(Q, W).
-
-lambda_has(lam(V:_,_,_,_), W) :-
-    V == W,
-    !,
-    fail.
-
-lambda_has(lam(_,P,_,_), W) :-
-    lambda_has(P, W).
-
-lambda_has('C'(P,_,_), W) :-
-    lambda_has(P, W).
-
-%%%%%% Sequents
-
-% Determine proof type (theorem or sequent)
-% RENAMED to avoid conflict with proof_type/2 from driver
-% This function analyzes the STRUCTURE of a G4 proof, not the syntax of a formula
-% Generate Fitch commands according to type and position
-fitch_prefix(sequent, LineNum, TotalPremisses, Prefix) :-
-    (   LineNum =< TotalPremisses
-    ->  (   LineNum = TotalPremisses
-        ->  Prefix = '\\fj '  % Big flag for last premiss
-        ;   Prefix = '\\fa '  % Normal line for premisses
+% render_clean_fitch/1: Generate a clean Fitch proof without dead lines.
+%
+% Strategy:
+%   1. Call g4_to_fitch_theorem NORMALLY (it renders AND asserts fitch_line/4)
+%      but capture its output to discard it
+%   2. The fitch_line/4 facts are now correctly asserted (identical to server)
+%   3. Clean: remove dead lines, renumber, re-render
+%
+% CRITICAL: We do NOT use copy_term here. The Proof term may have been
+% partially instantiated by previous renderers (bussproofs, tree style).
+% Instead, we let g4_to_fitch_theorem handle its own copy_term internally
+% if needed, or we accept that it works on the same term.
+% The key insight: g4_to_fitch_theorem asserts fitch_line/4 facts with
+% correct Scope values AS A SIDE EFFECT of rendering. We capture and
+% discard the rendered output, keeping only the asserted facts.
+
+render_clean_fitch(Proof) :-
+    retractall(clean_line(_, _, _, _)),
+    retractall(renum(_, _)),
+
+    % Step 1: Let g4_to_fitch_theorem assert fitch_line/4 facts correctly
+    % Capture (and discard) its LaTeX output
+    with_output_to(atom(_), (
+        write('\\begin{fitch}'), nl,
+        g4_to_fitch_theorem(Proof),
+        write('\\end{fitch}'), nl
+    )),
+
+    % Step 2: Find the root line (highest line number = conclusion)
+    findall(N, fitch_line(N, _, _, _), AllNums),
+    max_list(AllNums, RootLine),
+
+    % Step 3: Collect all lines reachable from root via justifications
+    collect_used_lines(RootLine, UsedSet),
+    sort(UsedSet, SortedUsed),
+
+    % Step 4: Build renumbering map (old -> new, sequential from 1)
+    build_renum_map(SortedUsed, 1),
+
+    % Step 5: Assert clean lines with updated justifications
+    forall(
+        member(OldNum, SortedUsed),
+        (
+            fitch_line(OldNum, Formula, Just, Scope),
+            renumber_just(Just, NewJust),
+            renum(OldNum, NewNum),
+            assertz(clean_line(NewNum, Formula, NewJust, Scope))
         )
-    ;   Prefix = '\\fa '      % Normal line after premisses
-    ).
-
-fitch_prefix(theorem, Depth, _, Prefix) :-
-    (   Depth > 0
-    ->  Prefix = '\\fa \\fh '  % Small flag for hypotheses
-    ;   Prefix = '\\fa '       % Normal line at level 0
-    ).
-
-% =========================================================================
-% RENDU LATEX BUSSPROOFS
-% =========================================================================
-
-% =========================================================================
-% LaTeX FORMULA RENDERING
-% =========================================================================
-% This section handles the conversion of internal Prolog formula representation
-% into publication-quality LaTeX output.
-%
-% Key features:
-% - Proper parenthesization (respects operator precedence)
-% - Logical connective symbols: ∧ (and), ∨ (or), → (implies), ¬ (not), ↔ (iff)
-% - Quantifier handling: ∀x.φ and ∃x.φ with proper variable binding
-% - Elegant variable naming (x, y, z, x₁, x₂, ...)
-% - Recognition and simplification of common patterns (e.g., ~~A, A ↔ B)
-%
-% Output targets:
-% - fitch.sty package (for Fitch-style proofs)
-% - bussproofs.sty package (for tree-style proofs)
-% - Standard mathematical notation for formulas
-%
-% The renderer maintains a careful balance between:
-% - Readability (minimal parentheses)
-% - Precision (no ambiguity)
-% - Aesthetics (clean mathematical typography)
-%
-% Special handling for:
-% - Biconditionals displayed as ↔
-% - Double negations simplified where appropriate
-% - Quantifier scope made explicit
-% =========================================================================
-
-% =========================================================================
-% RENDER LATEX FORMULA - Unified with write_formula_with_parens
-% =========================================================================
-% =========================================================================
-% ASQ REPLACEMENT HELPER
-% =========================================================================
-% Replace SPECIFIC asq(A,B) term (not all asq terms) with variable X in formulas
-% Used when rendering quantifiers with asq annotations
-
-% Match the EXACT asq term (using unification with ==)
-replace_specific_asq(AsqTerm, Var, Term, Var) :-
-    Term == AsqTerm, !.
-
-% For compound terms, recurse but skip quantifier structures
-replace_specific_asq(AsqTerm, Var, Term, Result) :-
-    compound(Term),
-    Term \= ![_|_],
-    Term \= ?[_|_],
-    !,
-    Term =.. [F|Args],
-    maplist(replace_specific_asq(AsqTerm, Var), Args, NewArgs),
-    Result =.. [F|NewArgs].
-
-% Atoms and variables pass through
-replace_specific_asq(_, _, Term, Term).
-
-% =========================================================================
-% END OF LATEX UTILITIES FILE
-% =========================================================================
-% =========================================================================
-% VARIOUS DETECTIONS (Logic level detection, equality, etc. )
-% =========================================================================
-
-:- dynamic formula_level/1.
-
-% =========================================================================
-% MAIN DETECTION
-% =========================================================================
-
-detect_and_set_logic_level(Formula) :-
-    retractall(formula_level(_)),
-    ( is_fol_formula(Formula) ->
-        assertz(formula_level(fol))
-    ;
-        assertz(formula_level(propositional))
-    ).
-
-% =========================================================================
-% FOL DETECTION HEURISTICS
-% A formula is FOL if it contains:
-% - Quantifiers (!, ?)
-% - Predicate applications p(t1,...,tn) with n > 0
-% - Equalities between terms
-% - Skolem functions
-% =========================================================================
-
-is_fol_formula(Formula) :-
-    (   contains_quantifier(Formula)
-    ;   contains_predicate_application(Formula)
-    ;   contains_equality(Formula)
-    ;   contains_function_symbol(Formula)
-    ), !.
-
-% =========================================================================
-% DETECTION DES COMPOSANTS
-% =========================================================================
-
-% Quantificateurs
-contains_quantifier(![_-_]:_) :- !.
-contains_quantifier(?[_-_]:_) :- !.
-contains_quantifier(Term) :-
-    compound(Term),
-    Term =.. [_|Args],
-    member(Arg, Args),
-    contains_quantifier(Arg).
-
-
-% Predicate applications (compound terms that are not connectives)
-contains_predicate_application(Term) :-
-    compound(Term),
-    \+ is_logical_connective_structure(Term),
-    Term =.. [_F|Args],
-    Args \= [],  % Must have at least one argument
-    !.
-contains_predicate_application(Term) :-
-    compound(Term),
-    Term =.. [_|Args],
-    member(Arg, Args),
-    contains_predicate_application(Arg).
-
-% Logical connective structures (to exclude)
-is_logical_connective_structure(_ => _).
-is_logical_connective_structure(_ & _).
-is_logical_connective_structure(_ | _).
-is_logical_connective_structure(_ <=> _).
-is_logical_connective_structure(_ = _).  % Equality treated separately
-is_logical_connective_structure(~ _).
-is_logical_connective_structure(#).
-is_logical_connective_structure(![_-_]:_).
-is_logical_connective_structure(?[_-_]:_).
-
-% Equality
-contains_equality(_ = _) :- !.
-contains_equality(Term) :-
-    compound(Term),
-    Term =.. [_|Args],
-    member(Arg, Args),
-    contains_equality(Arg).
-
-% Detect USER function symbols (not internal f_sk Skolem functions)
-% A user function is a compound term with arguments that is not:
-%   - A logical connective
-%   - A quantifier
-%   - An internal Skolem function (f_sk)
-%   - A predicate at top level
-contains_user_function(Term) :-
-    compound(Term),
-    Term \= f_sk(_),
-    Term \= f_sk(_,_),
-    Term \= (_ = _),
-    Term \= (~ _),
-    Term \= (_ & _),
-    Term \= (_ | _),
-    Term \= (_ => _),
-    Term \= (_ <=> _),
-    Term \= (![_]:_),
-    Term \= (?[_]:_),
-    % Now check if Term or its arguments contain functions
-    (   has_function_in_args(Term)
-    ;   Term =.. [_F|Args],
-        Args \= [],
-        member(Arg, Args),
-        contains_user_function(Arg)
-    ).
-
-% Check if a term has function symbols in its arguments
-% This handles cases like p(f(x)) where f(x) is a function inside predicate p
-has_function_in_args(Term) :-
-    compound(Term),
-    Term =.. [_Pred|Args],
-    Args \= [],
-    member(Arg, Args),
-    is_user_function_term(Arg).
-
-% Check if a term itself is a function (not a predicate at top level)
-is_user_function_term(Term) :-
-    compound(Term),
-    Term \= f_sk(_),
-    Term \= f_sk(_,_),
-    Term \= (_ = _),
-    Term \= (~ _),
-    Term \= (_ & _),
-    Term \= (_ | _),
-    Term \= (_ => _),
-    Term \= (_ <=> _),
-    Term \= (![_]:_),
-    Term \= (?[_]:_),
-    Term =.. [_F|Args],
-    Args \= [].
-
-% Keep old name for backward compatibility (Skolem functions only)
-contains_function_symbol(f_sk(_)) :- !.
-contains_function_symbol(f_sk(_,_)) :- !.
-contains_function_symbol(Term) :-
-    compound(Term),
-    Term =.. [_|Args],
-    member(Arg, Args),
-    contains_function_symbol(Arg).
-
-% =========================================================================
-% FORMULA EXTRACTION FROM A G4 PROOF
-% =========================================================================
-
-extract_formula_from_proof(Proof, Formula) :-
-    Proof =.. [_RuleName, Sequent|_],
-    ( Sequent = (_ > [Formula]) ->
-        true
-    ; Sequent = (_ > Goals), Goals = [Formula|_] ->
-        true
-    ;
-        Formula = unknown
-    ).
-% =========================================================================
-% VALIDATION & WARNINGS MODULE
-% Detection of typing errors and misuse of logical operators
-% =========================================================================
-% This module validates formulas before proof attempt and warns about
-% common mistakes, particularly the confusion between:
-%   <=>  biconditional (propositional connective between formulas)
-%   =    equality (relation between terms in FOL)
-% =========================================================================
-
-
-:- use_module(library(lists)).
-
-% =========================================================================
-% VALIDATION MODE CONFIGURATION
-% =========================================================================
-% Modes:
-%   permissive - warn but continue (default)
-%   strict     - reject invalid formulas automatically
-%   silent     - no warnings
-
-:- dynamic validation_mode/1.
-validation_mode(permissive).
-
-% =========================================================================
-% KNOWN PREDICATES REGISTRY
-% =========================================================================
-% Users can register predicate symbols to improve detection accuracy
-
-:- dynamic known_predicate/1.
-
-% Default predicates (common in logic examples)
-known_predicate(p).
-known_predicate(q).
-known_predicate(r).
-known_predicate(s).
-known_predicate(h).
-known_predicate(m).
-
-clear_predicates :-
-    retractall(known_predicate(_)).
-
-% =========================================================================
-% MAIN VALIDATION ENTRY POINT
-% =========================================================================
-
-validate_and_warn(Formula, ValidatedFormula) :-
-    validation_mode(Mode),
-
-    % Check 1: Sequent syntax confusion (ALWAYS check, even in propositional logic)
-    check_sequent_syntax_confusion(Formula, SyntaxWarnings),
-
-    % Check 2: Biconditional misuse (only in FOL context)
-/*
-    detect_fol_context(Formula, IsFOL),
-    (   IsFOL ->
-        check_bicond_misuse(Formula, BicondWarnings)
-    ;   BicondWarnings = []
     ),
-*/
-    % Combine warnings
-    append(SyntaxWarnings, _BicondWarnings, AllWarnings),
 
-    % Handle combined warnings
-    handle_warnings(AllWarnings, Mode, ValidatedFormula, Formula).
-
-% Handle warnings according to mode
-handle_warnings([], _, Formula, Formula) :- !.
-handle_warnings(_Warnings, silent, Formula, Formula) :- !.
-handle_warnings(Warnings, permissive, Formula, Formula) :-
-    report_warnings(Warnings),
-    prompt_continue.
-handle_warnings(Warnings, strict, _, _) :-
-    report_warnings(Warnings),
-    write('? Validation failed in strict mode. Formula rejected.'), nl,
-    fail.
-
-% Prompt user to continue
-prompt_continue :-
-    write('Continue despite warnings? (y/n): '),
-    read(Response),
-    (   Response = y -> true
-    ;   Response = yes -> true
-    ;   write('? Proof attempt cancelled.'), nl, fail
-    ).
-% =========================================================================
-% FOL CONTEXT DETECTION
-% =========================================================================
-% A formula is in FOL context if it contains:
-%   - Quantifiers (?, ?)
-%   - Predicate applications p(t1,...,tn) with n > 0
-%   - Equality between terms
-%   - Function symbols (including Skolem functions)
-
-detect_fol_context(Formula, true) :-
-    (   contains_quantifier(Formula)
-    ;   contains_predicate_application(Formula)
-    ;   contains_equality(Formula)
-    ;   contains_function_symbol(Formula)
-    ), !.
-detect_fol_context(_, false).
-
-% Logical connective identification
-is_logical_connective(_ => _).
-is_logical_connective(_ & _).
-is_logical_connective(_ | _).
-is_logical_connective(_ <=> _).
-is_logical_connective(~ _).
-is_logical_connective(#).
-is_logical_connective(![_-_]:_).
-is_logical_connective(?[_-_]:_).
+    % Step 6: Render clean output
+    render_clean_output.
 
 % =========================================================================
-% BICONDITIONAL MISUSE DETECTION
+% COLLECT USED LINES (recursive traversal from root)
 % =========================================================================
-% Detects <=> used between terms instead of formulas
-% Example: (a <=> b) should likely be (a = b) in FOL
+% Starting from the root line, follow all justification references
+% to collect the transitive closure of used lines.
 
-check_bicond_misuse(Formula, Warnings) :-
-    findall(Warning, detect_bicond_in_terms(Formula, Warning), Warnings).
+collect_used_lines(RootLine, UsedSet) :-
+    collect_used_acc([RootLine], [], UsedSet).
 
-% =========================================================================
-% BICONDITIONAL MISUSE DETECTION (IMPROVED)
-% =========================================================================
-% Only warn if <=> appears in a TERM CONTEXT (not formula context)
-
-detect_bicond_in_terms(A <=> B, warning(bicond_between_terms, A, B)) :-
-    % Both sides are clearly terms (constants or function applications)
-    is_definitely_term(A),
-    is_definitely_term(B),
-    !.
-
-detect_bicond_in_terms(Term, Warning) :-
-    compound(Term),
-    Term \= (_ <=> _),  % Don't recurse into biconditionals we already checked
-    Term =.. [_|Args],
-    member(Arg, Args),
-    detect_bicond_in_terms(Arg, Warning).
-
-% =========================================================================
-% DEFINITELY A TERM (not a formula)
-% =========================================================================
-% Conservative: only flag obvious cases
-is_definitely_term(![_]:_) :- !, fail.  % Universal quantification = formula
-is_definitely_term(?[_]:_) :- !, fail.  % Existential quantification = formula
-
-is_definitely_term(X) :-
-    var(X), !.  % Variable (term)
-
-is_definitely_term(X) :-
-    atomic(X),
-    \+ known_predicate(X),  % Constant, not predicate
-    !.
-
-is_definitely_term(f_sk(_)) :- !.  % Skolem function (single arg)
-is_definitely_term(f_sk(_,_)) :- !.  % Skolem function
-
-is_definitely_term(Term) :-
-    compound(Term),
-    \+ is_logical_connective(Term),
-    Term =.. [F|Args],
-    Args \= [],
-    % Must be a KNOWN function symbol (not predicate)
-    is_known_function(F),
-    !.
-
-% =========================================================================
-% KNOWN FUNCTION REGISTRY
-% =========================================================================
-% Users can register function symbols to improve detection
-
-:- dynamic known_function/1.
-
-% Default common function symbols
-known_function(succ).   % Successor
-known_function(plus).
-known_function(times).
-known_function(father).  % father(x) is a term
-known_function(mother).
-
-is_known_function(F) :-
-    known_function(F), !.
-
-% Heuristic fallback: if NOT a known predicate, assume function
-% (This is conservative - avoid false positives)
-is_known_function(F) :-
-    \+ known_predicate(F),
-    \+ member(F, [f, g, h, i, j, k, p, q, r, s]),  % Ambiguous symbols
-    !.
-
-% =========================================================================
-% SEQUENT SYNTAX CONFUSION DETECTION
-% =========================================================================
-% Detects common mistakes:
-%   [P] => [Q]  (WRONG - looks like sequent but uses =>)
-%   P > Q       (WRONG - looks like implication but uses >)
-
-check_sequent_syntax_confusion(Formula, Warnings) :-
-    findall(Warning, detect_sequent_confusion(Formula, Warning), Warnings).
-
-% Case 1: [List] => [List] - user probably meant sequent syntax
-detect_sequent_confusion([_|_] => [_|_], warning(list_implication, 'Use > for sequents, not =>')) :- !.
-detect_sequent_confusion([_|_] => _, warning(list_implication_left, 'Left side is a list - use > for sequents')) :- !.
-detect_sequent_confusion(_ => [_|_], warning(list_implication_right, 'Right side is a list - use > for sequents')) :- !.
-
-% Case 2: Atom > Atom - user probably meant implication
-detect_sequent_confusion(A > B, warning(atom_turnstile, 'Use => for implication, not >')) :-
-    atomic(A),
-    atomic(B),
-    !.
-
-% Case 3: Complex formula > Complex formula - likely implication
-detect_sequent_confusion(A > B, warning(formula_turnstile, 'Use => for implication between formulas, not >')) :-
-    is_formula(A),
-    is_formula(B),
-    !.
-
-% Recursive search
-detect_sequent_confusion(Term, Warning) :-
-    compound(Term),
-    Term \= (_ => _),  % Don't recurse into implications
-    Term \= (_ > _),   % Don't recurse into turnstiles
-    Term =.. [_|Args],
-    member(Arg, Args),
-    detect_sequent_confusion(Arg, Warning).
-
-% Helper: check if something is a formula (not a list or term)
-is_formula(Term) :-
-    compound(Term),
-    (   is_logical_connective(Term)
-    ;   Term =.. [F|Args], Args \= [], known_predicate(F)
+collect_used_acc([], Acc, Acc).
+collect_used_acc([Line|Rest], Acc, Result) :-
+    ( member(Line, Acc) ->
+        % Already visited
+        collect_used_acc(Rest, Acc, Result)
+    ; fitch_line(Line, _, Just, _) ->
+        % Add this line to accumulator, extract its references
+        just_refs(Just, Refs),
+        append(Refs, Rest, NewWork),
+        collect_used_acc(NewWork, [Line|Acc], Result)
+    ;
+        % Line not found (shouldn't happen), skip
+        collect_used_acc(Rest, Acc, Result)
     ).
 
-% Term identification (not a formula)
-% A term is: constant, variable, or function application
-is_term_not_formula(X) :-
-    atomic(X), !.  % Constant or variable
-is_term_not_formula(f_sk(_)) :- !.  % Skolem function (single arg)
-is_term_not_formula(f_sk(_,_)) :- !.  % Skolem function
-is_term_not_formula(Term) :-
-    compound(Term),
-    \+ is_logical_connective(Term),
-    Term =.. [F|Args],
-    Args \= [],
-    \+ known_predicate(F),  % Function, not predicate
-    !.
+% =========================================================================
+% EXTRACT LINE REFERENCES FROM JUSTIFICATIONS
+% =========================================================================
+% For each justification type, return the list of line numbers it references.
+
+% Leaves (no references)
+just_refs(premise, []).
+just_refs(premiss, []).
+just_refs(assumption, []).
+just_refs(axiom, []).
+
+% Unary references
+just_refs(reiteration(N), [N]).
+just_refs(lbot(N), [N]).
+just_refs(ror(N), [N]).
+just_refs(land(N), [N]).
+just_refs(land(N, _Which), [N]).
+just_refs(ltoto(N), [N]).
+just_refs(landto(N), [N]).
+just_refs(lorto(N), [N]).
+just_refs(lall(N), [N]).
+just_refs(rall(N), [N]).
+just_refs(rex(N), [N]).
+just_refs(cq_c(N), [N]).
+just_refs(cq_m(N), [N]).
+
+% Binary references
+just_refs(l0cond(N1, N2), [N1, N2]).
+% rcond(HypLine, GoalLine): the GoalLine's justification will pull in
+% what it needs transitively. We must also include HypLine (assumption).
+just_refs(rcond(N1, N2), [N1, N2]).
+just_refs(rand(N1, N2), [N1, N2]).
+just_refs(ds(N1, N2), [N1, N2]).
+just_refs(ip(N1, N2), [N1, N2]).
+
+% Ternary+ references
+just_refs(lex(ExistLine, WitLine, GoalLine), [ExistLine, WitLine, GoalLine]).
+
+just_refs(lor(DisjLine, AssA, EndA, AssB, EndB),
+          [DisjLine, AssA, EndA, AssB, EndB]).
+
+% Fallback: try to extract numeric arguments
+just_refs(Just, Refs) :-
+    nonvar(Just),
+    Just =.. [_|Args],
+    include(integer, Args, Refs).
+% Ultimate fallback: no references
+just_refs(_, []).
 
 % =========================================================================
-% WARNING REPORTS
+% BUILD RENUMBERING MAP
 % =========================================================================
-
-report_warnings([]) :- !.
-report_warnings(Warnings) :-
-    length(Warnings, N),
-    nl,
-    format('?  ~d WARNING(S) DETECTED:~n', [N]),
-    nl,
-    maplist(print_warning, Warnings),
-    nl,
-    write('? TIPS:'), nl,
-    write('   o Theorems:  prove(p => q).        % implication'), nl,
-    write('   o Sequents:  prove([p] > [q]).     % turnstile ?'), nl,
-    write('   o FOL:       use = for equality, <=> for biconditional'), nl,
-    nl.
-
-print_warning(warning(bicond_between_terms, A, B)) :-
-    format('   ?  (~w <=> ~w): biconditional between terms detected.~n', [A, B]),
-    format('      -> Did you mean (~w = ~w)?~n', [A, B]).
-
-% NEW: Sequent syntax warnings
-print_warning(warning(list_implication, Msg)) :-
-    format('   ?  Syntax error: ~w~n', [Msg]),
-    write('      Example: prove([p, q] > [p & q]).  % CORRECT'), nl,
-    write('               prove([p, q] => [p & q]). % WRONG'), nl.
-
-print_warning(warning(list_implication_left, Msg)) :-
-    format('   ?  Syntax error: ~w~n', [Msg]),
-    write('      -> Use [Premisses] > [Conclusion] for sequents'), nl.
-
-print_warning(warning(list_implication_right, Msg)) :-
-    format('   ?  Syntax error: ~w~n', [Msg]),
-    write('      -> Use [Premisses] > [Conclusion] for sequents'), nl.
-
-print_warning(warning(atom_turnstile, Msg)) :-
-    format('   ?  Syntax error: ~w~n', [Msg]),
-    write('      Example: prove(p => q).       % CORRECT (implication)'), nl,
-    write('               prove(p > q).        % WRONG'), nl,
-    write('               prove([p] > [q]).    % CORRECT (sequent)'), nl.
-
-print_warning(warning(formula_turnstile, Msg)) :-
-    format('   ?  Syntax error: ~w~n', [Msg]),
-    write('      -> Use => for implications, > only for sequents'), nl,
-    write('      -> Sequent syntax: [Premisses] > [Conclusions]'), nl.
-
-
+build_renum_map([], _).
+build_renum_map([Old|Rest], New) :-
+    assertz(renum(Old, New)),
+    New1 is New + 1,
+    build_renum_map(Rest, New1).
 
 % =========================================================================
-% HELPER: DETECTION OF EQUALITY AND FUNCTIONS
+% RENUMBER JUSTIFICATIONS
 % =========================================================================
+% Replace all old line numbers with new ones in justifications.
 
-% Main predicate: decide if formula needs nanoCoP
-% (due to equality or user-defined function symbols)
-g4mic_needs_nanocop(Formula) :-
-    (   g4mic_contains_equality_direct(Formula)
-    ;   contains_user_function(Formula)
-    ), !.
+renumber_just(premise, premise).
+renumber_just(premiss, premiss).
+renumber_just(assumption, assumption).
+renumber_just(axiom, axiom).
 
-% Equality detection (only descends through logical connectives)
-g4mic_contains_equality_direct(_ = _) :- !.
-g4mic_contains_equality_direct(~A) :- !, g4mic_contains_equality_direct(A).
-g4mic_contains_equality_direct(A & B) :- !, (g4mic_contains_equality_direct(A) ; g4mic_contains_equality_direct(B)).
-g4mic_contains_equality_direct(A | B) :- !, (g4mic_contains_equality_direct(A) ; g4mic_contains_equality_direct(B)).
-g4mic_contains_equality_direct(A => B) :- !, (g4mic_contains_equality_direct(A) ; g4mic_contains_equality_direct(B)).
-g4mic_contains_equality_direct(A <=> B) :- !, (g4mic_contains_equality_direct(A) ; g4mic_contains_equality_direct(B)).
-g4mic_contains_equality_direct(![_]: A) :- !, g4mic_contains_equality_direct(A).
-g4mic_contains_equality_direct(?[_]:A) :- !, g4mic_contains_equality_direct(A).
-% No recursive descent into arbitrary compound terms - only through logical operators
-g4mic_contains_equality_direct(_) :- fail.
+renumber_just(reiteration(N), reiteration(N1)) :- rn(N, N1).
+renumber_just(lbot(N), lbot(N1)) :- rn(N, N1).
+renumber_just(ror(N), ror(N1)) :- rn(N, N1).
+renumber_just(land(N), land(N1)) :- rn(N, N1).
+renumber_just(land(N, W), land(N1, W)) :- rn(N, N1).
+renumber_just(ltoto(N), ltoto(N1)) :- rn(N, N1).
+renumber_just(landto(N), landto(N1)) :- rn(N, N1).
+renumber_just(lorto(N), lorto(N1)) :- rn(N, N1).
+renumber_just(lall(N), lall(N1)) :- rn(N, N1).
+renumber_just(rall(N), rall(N1)) :- rn(N, N1).
+renumber_just(rex(N), rex(N1)) :- rn(N, N1).
+renumber_just(cq_c(N), cq_c(N1)) :- rn(N, N1).
+renumber_just(cq_m(N), cq_m(N1)) :- rn(N, N1).
 
-%=========================================================================
-% END OF DETECTIONS
-%=========================================================================
+renumber_just(l0cond(N1, N2), l0cond(M1, M2)) :- rn(N1, M1), rn(N2, M2).
+renumber_just(rcond(N1, N2), rcond(M1, M2)) :- rn(N1, M1), rn(N2, M2).
+renumber_just(rand(N1, N2), rand(M1, M2)) :- rn(N1, M1), rn(N2, M2).
+renumber_just(ds(N1, N2), ds(M1, M2)) :- rn(N1, M1), rn(N2, M2).
+renumber_just(ip(N1, N2), ip(M1, M2)) :- rn(N1, M1), rn(N2, M2).
+
+renumber_just(lex(N1, N2, N3), lex(M1, M2, M3)) :- rn(N1, M1), rn(N2, M2), rn(N3, M3).
+renumber_just(lor(N1, N2, N3, N4, N5), lor(M1, M2, M3, M4, M5)) :-
+    rn(N1, M1), rn(N2, M2), rn(N3, M3), rn(N4, M4), rn(N5, M5).
+
+% Fallback: keep as-is
+renumber_just(X, X).
+
+% Helper: renumber with fallback
+rn(Old, New) :- renum(Old, New), !.
+rn(X, X).  % fallback: keep unchanged if not in map
+
+% =========================================================================
+% RENDER CLEAN FITCH OUTPUT
+% =========================================================================
+render_clean_output :-
+    write('\\begin{fitch}'), nl,
+    findall(N, clean_line(N, _, _, _), AllNums),
+    sort(AllNums, Sorted),
+    render_clean_lines(Sorted),
+    write('\\end{fitch}'), nl.
+
+render_clean_lines([]).
+render_clean_lines([N|Rest]) :-
+    clean_line(N, Formula, Just, Scope),
+    render_one_clean_line(Formula, Just, Scope),
+    render_clean_lines(Rest).
+
+% render_one_clean_line: MUST exactly match the LaTeX output of
+% render_hypo (for assumptions) and render_have (for derived lines).
+% Any divergence will break fitch.sty scope rendering.
+
+render_one_clean_line(Formula, Just, Scope) :-
+    ( Just = assumption ->
+        % MATCH render_hypo(Scope, Formula, 'AS', ...):
+        %   render_fitch_indent(Scope), write(' \\fh '), Formula, write(' &  AS\\\\')
+        render_fitch_indent(Scope),
+        write(' \\fh '),
+        rewrite(Formula, 0, _, LatexFormula),
+        write_formula_with_parens(LatexFormula),
+        write(' &  AS\\\\'), nl
+    ; Just = premise ->
+        render_fitch_indent(Scope),
+        write(' \\fj '),
+        rewrite(Formula, 0, _, LatexFormula),
+        write_formula_with_parens(LatexFormula),
+        write(' &  PR\\\\'), nl
+    ; Just = premiss ->
+        render_fitch_indent(Scope),
+        write(' \\fj '),
+        rewrite(Formula, 0, _, LatexFormula),
+        write_formula_with_parens(LatexFormula),
+        write(' &  PR\\\\'), nl
+    ;
+        % MATCH render_have(Scope, Formula, Just, ...):
+        %   render_fitch_indent(Scope), (Scope=0 -> write('\\fa ') ; true), Formula, write(' &  Just\\\\')
+        render_fitch_indent(Scope),
+        ( Scope = 0 -> write('\\fa ') ; true ),
+        rewrite(Formula, 0, _, LatexFormula),
+        write_formula_with_parens(LatexFormula),
+        write(' &  '),
+        render_clean_just(Just),
+        write('\\\\'), nl
+    ).
+
+% =========================================================================
+% RENDER JUSTIFICATIONS WITH NEW LINE NUMBERS
+% =========================================================================
+render_clean_just(reiteration(N)) :-
+    format(' R ~w', [N]).
+render_clean_just(l0cond(Maj, Min)) :-
+    format(' $ \\to E $ ~w,~w', [Maj, Min]).
+render_clean_just(lbot(N)) :-
+    format(' $ \\bot E $ ~w', [N]).
+render_clean_just(ror(N)) :-
+    format(' $ \\lor I $ ~w', [N]).
+render_clean_just(land(N)) :-
+    format(' $ \\land E $ ~w', [N]).
+render_clean_just(land(N, _)) :-
+    format(' $ \\land E $ ~w', [N]).
+render_clean_just(rand(N1, N2)) :-
+    format(' $ \\land I $ ~w,~w', [N1, N2]).
+render_clean_just(rcond(Hyp, Goal)) :-
+    format(' $ \\to I $ ~w-~w', [Hyp, Goal]).
+render_clean_just(ip(Hyp, Bot)) :-
+    ( clean_line(Hyp, ((_ => #) => #), _, _) ->
+        format(' DNE_m ~w-~w', [Hyp, Bot])
+    ;
+        format(' IP ~w-~w', [Hyp, Bot])
+    ).
+render_clean_just(ds(Disj, Neg)) :-
+    format(' $ DS $ ~w,~w', [Disj, Neg]).
+render_clean_just(lor(Disj, AssA, GoalA, AssB, GoalB)) :-
+    format(' $ \\lor E $ ~w,~w-~w,~w-~w', [Disj, AssA, GoalA, AssB, GoalB]).
+render_clean_just(ltoto(N)) :-
+    format(' L$ \\to \\to $ ~w', [N]).
+render_clean_just(landto(N)) :-
+    format(' L$ \\land \\to $ ~w', [N]).
+render_clean_just(lorto(N)) :-
+    format(' L$ \\lor \\to $ ~w', [N]).
+render_clean_just(lall(N)) :-
+    format(' $ \\forall E $ ~w', [N]).
+render_clean_just(rall(N)) :-
+    format(' $ \\forall I $ ~w', [N]).
+render_clean_just(rex(N)) :-
+    format(' $ \\exists I $ ~w', [N]).
+render_clean_just(lex(Exist, Wit, Goal)) :-
+    format(' $ \\exists E $ ~w,~w-~w', [Exist, Wit, Goal]).
+render_clean_just(cq_c(N)) :-
+    format(' $ CQ_{c} $ ~w', [N]).
+render_clean_just(cq_m(N)) :-
+    format(' $ CQ_{m} $ ~w', [N]).
+
+% Fallback
+render_clean_just(Just) :-
+    format(' ~w', [Just]).
+
+% =========================================================================
+% END OF CLEAN FITCH MODULE
+% =========================================================================
 % =========================================================================
 % TPTP FORMAT SUPPORT
-% =========================================================================
-% This module provides compatibility with the TPTP (Thousands of Problems for
-% Theorem Provers) standard format used by the automated reasoning community.
-%
-% TPTP format features:
-% - Standard FOF (First-Order Form) syntax
-% - Uppercase variables (TPTP convention)
-% - Problem annotations (axioms, conjectures, lemmas)
-% - Portable across different theorem provers
-%
-% Supported interfaces:
-% 1. prove_tptp(fof(...))     - Prove a single TPTP formula
-% 2. prove_tptp_file(File)    - Process an entire .p file
-%
-% Conversion challenges:
-% - TPTP uses uppercase variables (X, Y, Z)
-% - G4+ uses lowercase-only syntax
-% - Solution: Automatic case conversion during parsing
-%
-% The TPTP format is crucial for:
-% - Benchmarking against other provers
-% - Using standard problem libraries (TPTP, ILTP)
-% - Participating in theorem proving competitions (CASC)
-% - Reproducible research comparisons
-%
-% G4+ maintains full TPTP compatibility while preserving its internal
-% lowercase-only convention for consistency.
 % =========================================================================
 % G4-mic uses lowercase-only syntax, while TPTP uses uppercase for variables.
 % This module converts TPTP formulas to G4-mic syntax.
