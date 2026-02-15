@@ -126,8 +126,8 @@ just_refs(ip(N1, N2), [N1, N2]).
 % Ternary+ references
 just_refs(lex(ExistLine, WitLine, GoalLine), [ExistLine, WitLine, GoalLine]).
 
-just_refs(lor(DisjLine, AssA, AssB, GoalA, GoalB),
-          [DisjLine, AssA, GoalA, AssB, GoalB]).
+just_refs(lor(DisjLine, AssA, EndA, AssB, EndB),
+          [DisjLine, AssA, EndA, AssB, EndB]).
 
 % Fallback: try to extract numeric arguments
 just_refs(Just, Refs) :-
@@ -270,11 +270,11 @@ render_clean_just(ds(Disj, Neg)) :-
 render_clean_just(lor(Disj, AssA, GoalA, AssB, GoalB)) :-
     format(' $ \\lor E $ ~w,~w-~w,~w-~w', [Disj, AssA, GoalA, AssB, GoalB]).
 render_clean_just(ltoto(N)) :-
-    format(' L$ \\to \\to $ ~w', [N]).
+    format('$ \\to \\to E $ ~w', [N]).
 render_clean_just(landto(N)) :-
-    format(' L$ \\land \\to $ ~w', [N]).
+    format('$ \\land \\to E $ ~w', [N]).
 render_clean_just(lorto(N)) :-
-    format(' L$ \\lor \\to $ ~w', [N]).
+    format('$ \\lor \\to E $ ~w', [N]).
 render_clean_just(lall(N)) :-
     format(' $ \\forall E $ ~w', [N]).
 render_clean_just(rall(N)) :-

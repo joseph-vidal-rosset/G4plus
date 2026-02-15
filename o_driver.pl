@@ -71,7 +71,7 @@
 :- use_module(library(statistics)).
 :- use_module(library(terms)).
 :- [i_operators].
-:- [ii_prover_bis].
+:- [ii_prover].
 :- [iii_latex].
 :- [iv_detections].
 :- [v_sc_printer].

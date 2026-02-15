@@ -104,7 +104,7 @@ fitch_g4_proof(landto((Premisses > _), SubProof), Context, Scope, CurLine, NextL
     extract_new_formula(Premisses, SubProof, NewFormula),
     select(((A & B) => C), Premisses, _),
     once(member(ImpLine:((A & B) => C), Context)),
-    derive_and_continue(Scope, NewFormula, 'L$ \\land \\to $ ~w', [ImpLine],
+    derive_and_continue(Scope, NewFormula, '$ \\land \\to E $ ~w', [ImpLine],
                        landto(ImpLine), SubProof, Context, CurLine, NextLine, ResLine, VarIn, VarOut).
 
 % L∨→ : Disjunction to implications
@@ -118,12 +118,12 @@ fitch_g4_proof(lorto((Premisses > _), SubProof), Context, Scope, CurLine, NextLi
         Line2 is CurLine + 2,
         assert_safe_fitch_line(Line1, F1, lorto(ImpLine), Scope),
         assert_safe_fitch_line(Line2, F2, lorto(ImpLine), Scope),
-        format(atom(Just), 'L$ \\lor \\to $ ~w', [ImpLine]),
+        format(atom(Just), '$ \\lor \\to E $ ~w', [ImpLine]),
         render_have(Scope, F1, Just, CurLine, Line1, VarIn, V1),
         render_have(Scope, F2, Just, Line1, Line2, V1, V2),
         fitch_g4_proof(SubProof, [Line2:F2, Line1:F1|Context], Scope, Line2, NextLine, ResLine, V2, VarOut)
     ; NewFormulas = [F1] ->
-        derive_and_continue(Scope, F1, 'L$ \\lor \\to $ ~w', [ImpLine],
+        derive_and_continue(Scope, F1, '$ \\lor \\to E $ ~w', [ImpLine],
                            lorto(ImpLine), SubProof, Context, CurLine, NextLine, ResLine, VarIn, VarOut)
     ;
         fitch_g4_proof(SubProof, Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut)
@@ -283,14 +283,14 @@ fitch_g4_proof(lor((Premisss > [Goal]), SP1, SP2), Context, Scope, CurLine, Next
       assert_safe_fitch_line(AssLineA, A, assumption, Scope),
       render_hypo(Scope, A, 'AS', CurLine, AssLineA, VarIn, V1),
       NewScope is Scope + 1,
-      fitch_g4_proof(SP1, [AssLineA:A|Context], NewScope, AssLineA, EndA, GoalA, V1, V2),
+      fitch_g4_proof(SP1, [AssLineA:A|Context], NewScope, AssLineA, EndA, _GoalA, V1, V2),
       AssLineB is EndA + 1,
       assert_safe_fitch_line(AssLineB, B, assumption, Scope),
       render_hypo(Scope, B, 'AS', EndA, AssLineB, V2, V3),
-      fitch_g4_proof(SP2, [AssLineB:B|Context], NewScope, AssLineB, EndB, GoalB, V3, V4),
+      fitch_g4_proof(SP2, [AssLineB:B|Context], NewScope, AssLineB, EndB, _GoalB, V3, V4),
       ElimLine is EndB + 1,
-      assert_safe_fitch_line(ElimLine, Goal, lor(DisjLine, AssLineA, AssLineB, GoalA, GoalB), Scope),
-      format(atom(Just), '$ \\lor E $ ~w,~w-~w,~w-~w', [DisjLine, AssLineA, GoalA, AssLineB, GoalB]),
+      assert_safe_fitch_line(ElimLine, Goal, lor(DisjLine, AssLineA, EndA, AssLineB, EndB), Scope),
+      format(atom(Just), '$ \\lor E $ ~w,~w-~w,~w-~w', [DisjLine, AssLineA, EndA, AssLineB, EndB]),
       render_have(Scope, Goal, Just, EndB, ElimLine, V4, VarOut),
       NextLine = ElimLine,
       ResLine = ElimLine
@@ -317,7 +317,7 @@ fitch_g4_proof(ltoto((Premisses > _), SP1, SP2), Context, Scope, CurLine, NextLi
 
     % STEP 1: Derive (Inter => Cons) by L→→
     ExtractLine is CurLine + 1,
-    format(atom(ExtractJust), 'L$ \\to \\to $ ~w', [ComplexLine]),
+    format(atom(ExtractJust), '\\to \\to E $ ~w', [ComplexLine]),
     render_have(Scope, (Inter => Cons), ExtractJust, CurLine, ExtractLine, VarIn, V1),
     assert_safe_fitch_line(ExtractLine, (Inter => Cons), ltoto(ComplexLine), Scope),
 

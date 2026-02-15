@@ -159,7 +159,7 @@
     <a href="https://www.swi-prolog.org" target="_blank">SWI-Prolog</a> running inside your browser</div>
   <div>Please consult our <a href="https://github.com/SWI-Prolog/tinker/wiki" target="_blank">Wiki for help</a></div>
   <div style="font-size: 11px; color: #666; margin-top: 5px; font-style: italic;">
-    Last update: January 29, 2026
+      Last update: February 15, 2026
   </div>
  <a href="http://vidal-rosset.net" id="owl-link" title="Back to https://vidal-rosset.net">
   <img id="owl-logo" alt="Owl" src="owl.png" style="width:40px !important; height:40px !important; display:block !important; visibility:visible !important; opacity:1 !important;">
@@ -568,12 +568,12 @@ function shareURL() {
     function parseFitchLine(line) {
       line = line.trim();
       if (!line || line === '') return null;
-      
+
       // Ignorer les lignes qui n'ont ni \fa ni \fh ni \fj
       if (!line.includes('\\fa') && !line.includes('\\fh') && !line.includes('\\fj')) {
         return null;
       }
-      
+
       // Compter TOUTES les lignes verticales (\fa + \fh + \fj)
       const faMatches = line.match(/\\fa/g);
       const fhMatches = line.match(/\\fh/g);
@@ -582,42 +582,42 @@ function shareURL() {
       const fhCount = fhMatches ? fhMatches.length : 0;
       const fjCount = fjMatches ? fjMatches.length : 0;
       const indentLevel = faCount + fhCount + fjCount;  // Total des vlines
-      
+
       // \fh indique une hypothèse avec drapeau
       const hasFlag = fhCount > 0;
-      
+
       // \fj indique la dernière prémisse (avec drapeau de fermeture)
       const isPremise = fjCount > 0;
-      
+
       let content = line
         .replace(/\\fa/g, '')
         .replace(/\\fh/g, '')
         .replace(/\\fj/g, '')
         .trim();
-      
+
       const parts = content.split('&');
       let formula = parts[0].trim();
       let justification = parts[1] ? parts[1].trim() : '';
-      
+
       // GARDER le LaTeX original pour MathJax
       formula = formula.replace(/\\\\/g, '').trim();
-      
+
       // Nettoyer les justifications
       justification = justification
         .replace(/\$/g, '')
         .replace(/\\\\/g, '')
         .trim();
-      
+
       return { indentLevel, hasFlag, isPremise, formula, justification };
     }
-    
+
     function parseFitchProof(latexCode) {
       const match = latexCode.match(/\\begin\{fitch\}([\s\S]*?)\\end\{fitch\}/);
       if (!match) return null;
-      
+
       const content = match[1];
       const lines = content.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-      
+
       const parsedLines = [];
       for (let i = 0; i < lines.length; i++) {
         const parsed = parseFitchLine(lines[i]);
@@ -628,13 +628,13 @@ function shareURL() {
       }
       return parsedLines;
     }
-    
+
     function generateFitchSVG(lines) {
       if (!lines || lines.length === 0) return '';
-      
+
       const X_NUM = 30, X_START = 60, INDENT_WIDTH = 20;
       const Y_START = 30, LINE_HEIGHT = 35, FLAG_WIDTH = 30;
-      
+
       // Calculer la position X_JUSTIF dynamiquement
       // En fonction de la longueur maximale des formules + leur indentation
       const maxIndent = Math.max(...lines.map(l => l.indentLevel));
@@ -643,7 +643,7 @@ function shareURL() {
       // MathJax compresse beaucoup, surtout les longues formules
       const formulaWidth = X_START + (maxIndent * INDENT_WIDTH) + (maxFormulaLength * 5);
       const X_JUSTIF = Math.max(290, formulaWidth + 15); // Au moins 290, marge confortable de 15px
-      
+
       // Calculer les espaces supplémentaires pour estimer la hauteur
       let estimatedExtraSpace = 0;
       for (let i = 1; i < lines.length; i++) {
@@ -657,20 +657,20 @@ function shareURL() {
           }
         }
       }
-      
+
       const svgHeight = Y_START + (lines.length * LINE_HEIGHT) + estimatedExtraSpace + 50;
       const svgWidth = Math.max(650, X_JUSTIF + 200); // Au moins 650, ou assez pour les justifications
-      
+
       let svg = `<svg width="${svgWidth}" height="${svgHeight}" xmlns="http://www.w3.org/2000/svg">`;
       svg += `<defs><style>
         .line-num { font-family: 'Times New Roman', serif; font-size: 14px; fill: #666; }
         .justif { font-family: 'Times New Roman', serif; font-size: 14px; fill: #555; }
       </style></defs>`;
-      
+
       // CALCULER D'ABORD LES POSITIONS Y DE CHAQUE LIGNE (avec espaces)
       const lineYPositions = [];
       let cumulativeSpace = 0;
-      
+
       for (let i = 0; i < lines.length; i++) {
         // Détecter gaps entre sous-preuves de même niveau
         if (i > 0 && lines[i].hasFlag && lines[i-1].indentLevel >= lines[i].indentLevel) {
@@ -683,21 +683,21 @@ function shareURL() {
         }
         lineYPositions[i] = Y_START + (i * LINE_HEIGHT) + cumulativeSpace;
       }
-      
+
       // DESSIN DES LIGNES VERTICALES avec gaps pour sous-preuves
       // maxIndent déjà calculé ligne 640
       for (let level = 1; level <= maxIndent; level++) {
         const x = X_START + ((level - 1) * INDENT_WIDTH);
         let segmentStart = null;
-        
+
         for (let i = 0; i < lines.length; i++) {
           const hasThisLevel = lines[i].indentLevel >= level;
           // Détecter si on doit créer un gap (nouvelle sous-preuve au même niveau)
-          const shouldBreak = i > 0 && 
-                             lines[i].hasFlag && 
+          const shouldBreak = i > 0 &&
+                             lines[i].hasFlag &&
                              lines[i].indentLevel === level &&
                              lines[i-1].indentLevel >= level;
-          
+
           if (hasThisLevel && !shouldBreak) {
             if (segmentStart === null) segmentStart = i;
           } else {
@@ -712,31 +712,31 @@ function shareURL() {
             }
           }
         }
-        
+
         if (segmentStart !== null) {
           const y1 = lineYPositions[segmentStart] - 15;
           const y2 = lineYPositions[lines.length - 1];
           svg += `<line x1="${x}" y1="${y1}" x2="${x}" y2="${y2}" stroke="black" stroke-width="1"/>`;
         }
       }
-      
+
       // DESSIN DU TEXTE, DRAPEAUX ET FORMULES
       lines.forEach((line, index) => {
         const y = lineYPositions[index];
         const xBase = X_START + (line.indentLevel * INDENT_WIDTH);
-        
+
         // Numéro de ligne
         svg += `<text x="${X_NUM}" y="${y}" class="line-num">${line.lineNumber}</text>`;
-        
+
         // Drapeau pour hypothèse (\fh) OU dernière prémisse (\fj)
         const shouldDrawFlag = line.hasFlag || line.isPremise;
-        
+
         if (shouldDrawFlag) {
           const x = X_START + ((line.indentLevel - 1) * INDENT_WIDTH);
           // Drapeau à position fixe y+5 (juste en-dessous de la ligne de référence)
           svg += `<line x1="${x}" y1="${y + 5}" x2="${x + FLAG_WIDTH}" y2="${y + 5}" stroke="black" stroke-width="1"/>`;
         }
-        
+
         // FORMULE avec MathJax via foreignObject
         const xFormula = xBase;  // Directement sur xBase, pas de décalage
         // Largeur dynamique pour accommoder les longues formules
@@ -745,7 +745,7 @@ function shareURL() {
         svg += `<foreignObject x="${xFormula}" y="${y - 20}" width="${formulaBoxWidth}" height="25">
           <div xmlns="http://www.w3.org/1999/xhtml" style="font-size: 16px;">\\(${line.formula}\\)</div>
         </foreignObject>`;
-        
+
         // JUSTIFICATION
         if (line.justification) {
           let cleanJustif = line.justification
@@ -754,18 +754,18 @@ function shareURL() {
             .replace(/E\s+/g, 'E\\,')
             .replace(/I\s+/g, 'I\\,')
             .replace(/DS\s+/g, 'DS\\,');
-          
+
           svg += `<foreignObject x="${X_JUSTIF}" y="${y - 20}" width="150" height="25">
             <div xmlns="http://www.w3.org/1999/xhtml" style="font-size: 14px; color: #555;">\\(${cleanJustif}\\)</div>
           </foreignObject>`;
         }
       });
-      
+
       svg += '</svg>';
       return svg;
     }
     // ===== FIN FITCH PARSER =====
-    
+
     function renderBussproofsWithMathJax() {
       if (isRendering) return;
 
@@ -895,7 +895,7 @@ function shareURL() {
             });
 
             fitchContainer.innerHTML = fitchContent;
-            
+
             // IMPORTANT: Appeler MathJax pour renderer les formules dans les foreignObject
             MathJax.typesetPromise([fitchContainer]).then(() => {
               fitchContainer.style.transition = 'opacity 0.3s ease-in';
@@ -1552,15 +1552,15 @@ function initTPTPHandler() {
   const btn = document.getElementById('prove-tptp-btn');
   const uploadBtn = document.getElementById('tptp-upload-btn');
   const fileInput = document.getElementById('tptp-file-input');
-  
+
   if (!btn || !uploadBtn || !fileInput) return;
-  
+
   // Clic sur le bouton upload déclenche le file input
   uploadBtn.addEventListener('click', function(e) {
     e.preventDefault();
     fileInput.click();
   });
-  
+
   // Quand un fichier est sélectionné, montrer le bouton Prove
   fileInput.addEventListener('change', function() {
     if (fileInput.files.length > 0) {
@@ -1570,25 +1570,25 @@ function initTPTPHandler() {
       btn.style.display = 'none';
     }
   });
-  
+
   btn.addEventListener('click', function() {
     if (processingTPTP) {
       alert('Already processing a TPTP file. Please wait...');
       return;
     }
-    
+
     const fileInput = document.getElementById('tptp-file-input');
     const file = fileInput.files[0];
-    
+
     if (!file) {
       alert('Please select a TPTP .p file first');
       return;
     }
-    
+
     processingTPTP = true;
     btn.disabled = true;
     btn.textContent = 'Processing...';
-    
+
     const reader = new FileReader();
     reader.onload = function(e) {
       processTPTPFile(file.name, e.target.result);
@@ -1599,38 +1599,38 @@ function initTPTPHandler() {
     };
     reader.readAsText(file);
   });
-  
+
   function processTPTPFile(filename, content) {
     if (!window.tinker || !window.Prolog || !window.Module) {
       setTimeout(() => processTPTPFile(filename, content), 500);
       return;
     }
-    
+
     try {
       const tempFilename = '/tmp/problem.p';
       window.Module.FS.writeFile(tempFilename, content);
-      
+
       // Afficher un message dans la console
       window.tinker.console.print(`\n📄 Processing TPTP file: ${filename}`, 'query');
-      
+
       // Exécuter la preuve - l'output ira directement dans la console
       const success = window.Prolog.call(`prove_tptp_file('${tempFilename}')`);
-      
+
       if (!success) {
         window.tinker.console.print('\n❌ No proof found or invalid formula', 'error');
       }
-      
+
     } catch (error) {
       window.tinker.console.print(`\n❌ Error: ${error.message}`, 'error');
     } finally {
       resetTPTPButton();
     }
   }
-  
+
   function showTPTPError(message) {
     window.tinker.console.print(`\n❌ ${message}`, 'error');
   }
-  
+
   function resetTPTPButton() {
     processingTPTP = false;
     btn.disabled = false;
