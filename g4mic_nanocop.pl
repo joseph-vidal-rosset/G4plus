@@ -4020,7 +4020,7 @@ fitch_g4_proof(landto((Premisses > _), SubProof), Context, Scope, CurLine, NextL
     extract_new_formula(Premisses, SubProof, NewFormula),
     select(((A & B) => C), Premisses, _),
     once(member(ImpLine:((A & B) => C), Context)),
-    derive_and_continue(Scope, NewFormula, 'L$ \\land \\to $ ~w', [ImpLine],
+    derive_and_continue(Scope, NewFormula, '$ \\land \\to E $ ~w', [ImpLine],
                        landto(ImpLine), SubProof, Context, CurLine, NextLine, ResLine, VarIn, VarOut).
 
 % L∨→ : Disjunction to implications
@@ -4034,12 +4034,12 @@ fitch_g4_proof(lorto((Premisses > _), SubProof), Context, Scope, CurLine, NextLi
         Line2 is CurLine + 2,
         assert_safe_fitch_line(Line1, F1, lorto(ImpLine), Scope),
         assert_safe_fitch_line(Line2, F2, lorto(ImpLine), Scope),
-        format(atom(Just), 'L$ \\lor \\to $ ~w', [ImpLine]),
+        format(atom(Just), '$ \\lor \\to E $ ~w', [ImpLine]),
         render_have(Scope, F1, Just, CurLine, Line1, VarIn, V1),
         render_have(Scope, F2, Just, Line1, Line2, V1, V2),
         fitch_g4_proof(SubProof, [Line2:F2, Line1:F1|Context], Scope, Line2, NextLine, ResLine, V2, VarOut)
     ; NewFormulas = [F1] ->
-        derive_and_continue(Scope, F1, 'L$ \\lor \\to $ ~w', [ImpLine],
+        derive_and_continue(Scope, F1, '$ \\lor \\to E $ ~w', [ImpLine],
                            lorto(ImpLine), SubProof, Context, CurLine, NextLine, ResLine, VarIn, VarOut)
     ;
         fitch_g4_proof(SubProof, Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut)
@@ -4233,7 +4233,7 @@ fitch_g4_proof(ltoto((Premisses > _), SP1, SP2), Context, Scope, CurLine, NextLi
 
     % STEP 1: Derive (Inter => Cons) by L→→
     ExtractLine is CurLine + 1,
-    format(atom(ExtractJust), 'L$ \\to \\to $ ~w', [ComplexLine]),
+    format(atom(ExtractJust), '\\to \\to E $ ~w', [ComplexLine]),
     render_have(Scope, (Inter => Cons), ExtractJust, CurLine, ExtractLine, VarIn, V1),
     assert_safe_fitch_line(ExtractLine, (Inter => Cons), ltoto(ComplexLine), Scope),
 
@@ -5219,11 +5219,11 @@ render_clean_just(ds(Disj, Neg)) :-
 render_clean_just(lor(Disj, AssA, GoalA, AssB, GoalB)) :-
     format(' $ \\lor E $ ~w,~w-~w,~w-~w', [Disj, AssA, GoalA, AssB, GoalB]).
 render_clean_just(ltoto(N)) :-
-    format(' L$ \\to \\to $ ~w', [N]).
+    format('$ \\to \\to E $ ~w', [N]).
 render_clean_just(landto(N)) :-
-    format(' L$ \\land \\to $ ~w', [N]).
+    format('$ \\land \\to E $ ~w', [N]).
 render_clean_just(lorto(N)) :-
-    format(' L$ \\lor \\to $ ~w', [N]).
+    format('$ \\lor \\to E $ ~w', [N]).
 render_clean_just(lall(N)) :-
     format(' $ \\forall E $ ~w', [N]).
 render_clean_just(rall(N)) :-
