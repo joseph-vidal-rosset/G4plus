@@ -11,16 +11,6 @@
 % - Eigenvariable management for quantifier rules
 % - Optimized rule ordering for performance
 %
-% Rule ordering strategy:
-%   0.  Axiom, L-bot           (immediate closure)
-%   1-5. Deterministic prop.   (no branching, single recursive call)
-%   6.   L->->                 (2 branches, but with cut)
-%   7.   IP                    (classical only, must precede R->)
-%   8.   R->                   (deterministic, right implication)
-%   9.   Lv                    (2 branches, delayed after L->->)
-%   10-11. Rv, R&              (right rules, branching)
-%   12-15. Quantifier rules    (L-exists before L-forall for Skolem guidance)
-%   16-17. CQ rules            (quantifier conversions, last resort)
 %
 % =========================================================================
 
@@ -105,16 +95,9 @@ g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, lorto(Gamma>Delta, P)) :-
     ).
 
 % =========================================================================
-% IMPLICATION RULES (with branching)
+% IMPLICATION RULES
 % =========================================================================
-
-% --- Rule 6: L->-> --------------------------------------------------------
-g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, ltoto(Gamma>Delta, P1, P2)) :-
-    select(((A => B) => C), Gamma, G1), !,
-    g4mic_proves([A, (B => C) | G1]>[B], FV, Th, SI, J1, LL, P1),
-    g4mic_proves([C | G1]>Delta, FV, Th, J1, SO, LL, P2).
-
-% --- Rule 7: IP (indirect proof — classical only) -------------------------
+% --- Rule 6 IP (indirect proof — classical only) -------------------------
 % Must precede R-> : IP needs the goal intact before decomposition
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, classical, ip(Gamma>Delta, P)) :-
     Delta = [A],
@@ -123,10 +106,20 @@ g4mic_proves(Gamma>Delta, FV, Th, SI, SO, classical, ip(Gamma>Delta, P)) :-
     Th > 0,
     g4mic_proves([(A => #) | Gamma]>[#], FV, Th, SI, SO, classical, P).
 
-% --- Rule 8: R-> -----------------------------------------------------------
+% --- Rule 7: R-> -----------------------------------------------------------
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, rcond(Gamma>Delta, P)) :-
     Delta = [A => B], !,
     g4mic_proves([A | Gamma]>[B], FV, Th, SI, SO, LL, P).
+
+% =========================================================================
+% BRANCHING RULES
+% =========================================================================
+
+% --- Rule 8: L->-> --------------------------------------------------------
+g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, ltoto(Gamma>Delta, P1, P2)) :-
+    select(((A => B) => C), Gamma, G1), !,
+    g4mic_proves([A, (B => C) | G1]>[B], FV, Th, SI, J1, LL, P1),
+    g4mic_proves([C | G1]>Delta, FV, Th, J1, SO, LL, P2).
 
 % --- Rule 9: Lv (left disjunction — delayed after L->->) ------------------
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, lor(Gamma>Delta, P1, P2)) :-
