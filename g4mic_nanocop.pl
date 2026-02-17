@@ -1253,7 +1253,8 @@ output_proof_results(Proof, LogicType, _OriginalFormula, _Mode) :-
     % CRITICAL: Save a fresh copy of Proof BEFORE any renderer touches it.
     % Renderers (bussproofs, tree style) may instantiate variables in Proof,
     % which corrupts the term for subsequent renderers.
-    copy_term(Proof, FitchProof),
+    % copy_term(Proof, FitchProof),  % NO LONGER NEEDED: Fitch now uses Proof
+    %                                % after bussproofs has instantiated variables
 
     % Display appropriate label
     output_logic_label(LogicType),
@@ -1286,7 +1287,7 @@ output_proof_results(Proof, LogicType, _OriginalFormula, _Mode) :-
     write('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'), nl,
     write('🚩 Natural Deduction - Flag Style'), nl,
     write('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'), nl, nl,
-    render_clean_fitch(FitchProof),nl,nl,
+    render_clean_fitch(Proof),nl,nl,
     write('✅ Q.E.D.'), nl, nl,
     !.
 
@@ -1828,14 +1829,18 @@ is_nested_negation((Inner => #), Target, N) :-
 
 % render_hypo/7: Display a hypothesis in Fitch style
 
-render_hypo(Scope, Formula, Label, _CurLine, _NextLine, VarIn, VarOut) :-
-    render_fitch_indent(Scope),
-    write(' \\fh '),
-    rewrite(Formula, VarIn, VarOut, LatexFormula),
-    write_formula_with_parens(LatexFormula),
-    write(' &  '),
-    write(Label),
-    write('\\\\'), nl.
+render_hypo(Scope, Formula, Label, _CurLine, NextLine, VarIn, VarOut) :-
+    with_output_to(atom(LatexLine), (
+        render_fitch_indent(Scope),
+        write(' \\fh '),
+        rewrite(Formula, VarIn, VarOut, LatexFormula),
+        write_formula_with_parens(LatexFormula),
+        write(' &  '),
+        write(Label),
+        write('\\\\'), nl
+    )),
+    write(LatexLine),
+    ( integer(NextLine) -> assertz(fitch_line_latex(NextLine, LatexLine)) ; true ).
 
 
 % render_fitch_indent/1: Genere l'indentation Fitch (\\fa)
@@ -1848,15 +1853,18 @@ render_fitch_indent(N) :-
     N1 is N - 1,
     render_fitch_indent(N1).
 
-render_have(Scope, Formula, Just, _CurLine, _NextLine, VarIn, VarOut) :-
-    render_fitch_indent(Scope),
-    % Always write \fa at level 0 (for sequents)
-    ( Scope = 0 -> write('\\fa ') ; true ),
-    rewrite(Formula, VarIn, VarOut, LatexFormula),
-    write_formula_with_parens(LatexFormula),
-    write(' &  '),
-    write(Just),
-    write('\\\\'), nl.
+render_have(Scope, Formula, Just, _CurLine, NextLine, VarIn, VarOut) :-
+    with_output_to(atom(LatexLine), (
+        render_fitch_indent(Scope),
+        ( Scope = 0 -> write('\\fa ') ; true ),
+        rewrite(Formula, VarIn, VarOut, LatexFormula),
+        write_formula_with_parens(LatexFormula),
+        write(' &  '),
+        write(Just),
+        write('\\\\'), nl
+    )),
+    write(LatexLine),
+    ( integer(NextLine) -> assertz(fitch_line_latex(NextLine, LatexLine)) ; true ).
 
 % =========================================================================
 % SIMPLE RULE: (Antecedent) => (Consequent) except for atoms
@@ -2128,12 +2136,12 @@ rewrite(# => #, J, J, '\\top') :- !.
 rewrite(f_sk(K), J, J, Name) :-
     integer(K),
     !,
-    rewrite_name(K, Name).
+    constant_name(K, Name).
 
 % Converts f_sk(K,_) to a simple name like 'a', 'b', etc. (two arguments version)
 rewrite(f_sk(K,_), J, J, Name) :-
     !,
-    rewrite_name(K, Name).
+    constant_name(K, Name).
 
 % BASE CASE: atomic formulas
 rewrite(A, J, J, A_latex) :-
@@ -2336,17 +2344,17 @@ rewrite_list([X|L], J, K, [Y|R]) :-
 rewrite_term(V, J, K, V) :-
     var(V),
     !,
-    rewrite_name(J, V),
+    constant_name(J, V),
     K is J+1.
 
 rewrite_term(f_sk(K), J, J, N) :-
     integer(K),
     !,
-    rewrite_name(K, N).
+    constant_name(K, N).
 
 rewrite_term(f_sk(K,_), J, J, N) :-
     !,
-    rewrite_name(K, N).
+    constant_name(K, N).
 
 % NEW: If the term is a simple atom (constant), DO NOT capitalize it
 % Because it is an argument of a predicate/function
@@ -2372,6 +2380,21 @@ rewrite_name(K, N) :-
     H is K div 3,
     number_codes(H, L),
     atom_codes(N, [J|L]).
+
+% =========================================================================
+% CONSTANT NAME GENERATOR
+% For instantiation terms (eigenvariables and gamma-rule witnesses)
+% Generates a, b, c, d, ..., w, a1, b1, c1, ... (skipping x, y, z)
+% =========================================================================
+constant_name(K, N) :-
+    Index is K mod 23,
+    Suffix is K div 23,
+    Code is Index + 0'a,
+    char_code(Base, Code),
+    (   Suffix =:= 0 ->
+        N = Base
+    ;   atom_concat(Base, Suffix, N)
+    ).
 
 % Toggle majuscules/minuscules
 toggle(X, Y) :-
@@ -3911,6 +3934,7 @@ build_hypothesis_map([_|Rest], AccMap, FinalMap) :-
 % NATURAL DEDUCTION PRINTER IN FLAG STYLE
 % =========================================================================
 :- dynamic fitch_line/4.
+:- dynamic fitch_line_latex/2.
 :- dynamic abbreviated_line/1.
 % =========================================================================
 % FROM G4 Sequent Calculus To Natural Deduction in Fitch Style
@@ -3942,6 +3966,7 @@ build_hypothesis_map([_|Rest], AccMap, FinalMap) :-
 % g4_to_fitch_theorem/1 : For theorems
 g4_to_fitch_theorem(Proof) :-
     retractall(fitch_line(_, _, _, _)),
+    retractall(fitch_line_latex(_, _)),
     retractall(abbreviated_line(_)),
     fitch_g4_proof(Proof, [], 1, 0, _, _, 0, _).
 % =========================================================================
@@ -4399,6 +4424,7 @@ fitch_g4_proof(UnknownRule, _Context, _Scope, CurLine, CurLine, CurLine, VarIn, 
 % NATURAL DEDUCTION PRINTER IN TREE STYLE
 % =========================================================================
 :- dynamic fitch_line/4.
+:- dynamic fitch_line_latex/2.
 :- dynamic abbreviated_line/1.
 % =========================================================================
 % DISPLAY PREMISS LIST FOR TREE STYLE
@@ -5131,6 +5157,9 @@ rn(X, X).  % fallback: keep unchanged if not in map
 
 % =========================================================================
 % RENDER CLEAN FITCH OUTPUT
+% Uses the LaTeX lines captured during pass 1 (fitch_line_latex/2).
+% For each live line, keeps the formula part (before &) from pass 1
+% and only replaces the justification part (after &) with renumbered refs.
 % =========================================================================
 render_clean_output :-
     write('\\begin{fitch}'), nl,
@@ -5141,46 +5170,34 @@ render_clean_output :-
 
 render_clean_lines([]).
 render_clean_lines([N|Rest]) :-
-    clean_line(N, Formula, Just, Scope),
-    render_one_clean_line(Formula, Just, Scope),
+    clean_line(N, _, Just, _),
+    renum(OldN, N),
+    ( fitch_line_latex(OldN, LatexLine) ->
+        atom_string(LatexLine, LatexStr),
+        ( split_on_ampersand(LatexStr, FormulaPart, _) ->
+            write(FormulaPart),
+            write(' &  '),
+            ( Just = assumption -> write('AS')
+            ; Just = premise -> write('PR')
+            ; Just = premiss -> write('PR')
+            ; render_clean_just(Just)
+            ),
+            write('\\\\'), nl
+        ;
+            write(LatexLine)
+        )
+    ;
+        write('% ERROR: missing fitch_line_latex for line '), write(OldN), nl
+    ),
     render_clean_lines(Rest).
 
-% render_one_clean_line: MUST exactly match the LaTeX output of
-% render_hypo (for assumptions) and render_have (for derived lines).
-% Any divergence will break fitch.sty scope rendering.
-
-render_one_clean_line(Formula, Just, Scope) :-
-    ( Just = assumption ->
-        % MATCH render_hypo(Scope, Formula, 'AS', ...):
-        %   render_fitch_indent(Scope), write(' \\fh '), Formula, write(' &  AS\\\\')
-        render_fitch_indent(Scope),
-        write(' \\fh '),
-        rewrite(Formula, 0, _, LatexFormula),
-        write_formula_with_parens(LatexFormula),
-        write(' &  AS\\\\'), nl
-    ; Just = premise ->
-        render_fitch_indent(Scope),
-        write(' \\fj '),
-        rewrite(Formula, 0, _, LatexFormula),
-        write_formula_with_parens(LatexFormula),
-        write(' &  PR\\\\'), nl
-    ; Just = premiss ->
-        render_fitch_indent(Scope),
-        write(' \\fj '),
-        rewrite(Formula, 0, _, LatexFormula),
-        write_formula_with_parens(LatexFormula),
-        write(' &  PR\\\\'), nl
-    ;
-        % MATCH render_have(Scope, Formula, Just, ...):
-        %   render_fitch_indent(Scope), (Scope=0 -> write('\\fa ') ; true), Formula, write(' &  Just\\\\')
-        render_fitch_indent(Scope),
-        ( Scope = 0 -> write('\\fa ') ; true ),
-        rewrite(Formula, 0, _, LatexFormula),
-        write_formula_with_parens(LatexFormula),
-        write(' &  '),
-        render_clean_just(Just),
-        write('\\\\'), nl
-    ).
+% Split a string on the first occurrence of ' & '
+split_on_ampersand(Str, Before, After) :-
+    sub_string(Str, Pos, 3, _, " & "),
+    !,
+    sub_string(Str, 0, Pos, _, Before),
+    Pos3 is Pos + 3,
+    sub_string(Str, Pos3, _, 0, After).
 
 % =========================================================================
 % RENDER JUSTIFICATIONS WITH NEW LINE NUMBERS
