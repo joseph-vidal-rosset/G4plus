@@ -1,9 +1,4 @@
 % =========================================================================
-% OPERATOR DECLARATIONS - Unified for g4mic + nanoCop + TPTP
-% =========================================================================
-:- use_module(library(lists)).
-:- use_module(library(statistics)).
-:- use_module(library(terms)).
 % -------------------------------------------------------------------------
 % CORE LOGICAL OPERATORS (shared by all)
 % -------------------------------------------------------------------------
@@ -35,7 +30,7 @@
 % =========================================================================
 % Input syntax: sequent turnstile
 % Equivalence operator for sequents (bidirectional provability)
-:- op(800, xfx, <>).
+% :- op(800, xfx, <>).
 % =========================================================================
 % LATEX OPERATORS (formatted output)
 % ATTENTION: Respect spaces exactly!
@@ -50,6 +45,5 @@
 :- op( 500, xfy, ' ').           % space for quantifiers
 :- op(400, fx, ' \\bot ').      % falsity (#)
 % LaTeX syntax: sequent turnstile
-:- op(1150, xfx, ' \\vdash ').
+% :- op(1150, xfx, ' \\vdash ').
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% End of operators list

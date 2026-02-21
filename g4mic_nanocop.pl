@@ -1,58 +1,3 @@
-% OPERATOR DECLARATIONS - Unified for g4mic + nanoCop + TPTP
-% =========================================================================
-:- use_module(library(lists)).
-:- use_module(library(statistics)).
-:- use_module(library(terms)).
-% -------------------------------------------------------------------------
-% CORE LOGICAL OPERATORS (shared by all)
-% -------------------------------------------------------------------------
-:- op( 500, fy,  ~).              % negation
-:- op(1000, xfy, &).              % conjunction
-:- op(1100, xfy, '|').            % disjunction
-:- op(1110, xfy, =>).             % implication
-:- op(1130, xfy, <=>).            % biconditional (STANDARD: 1130)
-:- op( 500, xfy, :).              % quantifier separator
-% -------------------------------------------------------------------------
-% QUANTIFIERS - Dual syntax (TPTP + internal)
-% -------------------------------------------------------------------------
-:- op( 500, fy,  !).              % universal (TPTP): ![X]:
-:- op( 500, fy,  ?).              % existential (TPTP): ?[X]:
-:- op( 500, fy,  all).            % universal (internal): all X:
-:- op( 500, fy,  ex).             % existential (internal): ex X:
-% -------------------------------------------------------------------------
-% EXTENDED TPTP OPERATORS (from nanocop_tptp)
-% -------------------------------------------------------------------------
-:- op(1130, xfy, <~>).            % negated equivalence
-:- op(1110, xfy, <=).             % reverse implication
-:- op(1100, xfy, '~|').           % negated disjunction (NOR)
-:- op(1000, xfy, ~&).             % negated conjunction (NAND)
-% :- op( 400, xfx, =).              % equality
-:- op( 300, xf,  !).              % negated equality (for !=)
-:- op( 299, fx,  $).              % TPTP constants ($true/$false)
-% =========================================================================
-% g4mic specific
-% =========================================================================
-% Input syntax: sequent turnstile
-% Equivalence operator for sequents (bidirectional provability)
-:- op(800, xfx, <>).
-% =========================================================================
-% LATEX OPERATORS (formatted output)
-% ATTENTION: Respect spaces exactly!
-% =========================================================================
-:- op( 500, fy, ' \\lnot ').     % negation
-:- op(1000, xfy, ' \\land ').    % conjunction
-:- op(1100, xfy, ' \\lor ').     % disjunction
-:- op(1110, xfx, ' \\to ').      % conditional
-:- op(1120, xfx, ' \\leftrightarrow ').  % biconditional
-:- op( 500, fy, ' \\forall ').   % universal quantifier
-:- op( 500, fy, ' \\exists ').   % existential quantifier
-:- op( 500, xfy, ' ').           % space for quantifiers
-:- op(400, fx, ' \\bot ').      % falsity (#)
-% LaTeX syntax: sequent turnstile
-:- op(1150, xfx, ' \\vdash ').
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% End of operators list
-% =========================================================================
 % G4+ : UNIFIED THEOREM PROVER FOR MINIMAL, INTUITIONISTIC AND CLASSICAL LOGIC
 % =========================================================================
 %%=====================================
@@ -68,7 +13,7 @@
 % PROOF STRATEGY:
 % --------------
 % Progressive logic escalation:
-%   Minimal → Intuitionistic → Classical
+%   Minimal -> Intuitionistic -> Classical
 % This maximizes constructive content while ensuring classical completeness.
 %
 % OUTPUT FORMATS:
@@ -96,46 +41,10 @@
 %
 % AUTHORS:
 % -------
-% Joseph Vidal-Rosset (Université de Lorraine)
+% Joseph Vidal-Rosset (Universite de Lorraine)
 % Built upon: G4 (Roy Dyckhoff), nanoCoP (Jens Otten), leanSeq (Jens Otten)
 %
 % =========================================================================
-% OPERATOR DECLARATIONS - Unified for g4mic + nanocop + TPTP
-% =========================================================================
-% The system integrates three components:
-% - G4 calculus prover (main system)
-% - nanoCoP connection prover (validation and filtering)
-% - TPTP format support (standard automated reasoning format)
-%
-% The minimal_driver (ii_minimal_driver) provides the bridge between
-% nanoCoP and G4, allowing nanoCoP to act as both a filter (rejecting
-% invalid formulas early) and a cross-validator (confirming G4 results).
-% =========================================================================
-% :- use_module(library(lists)).
-% :- use_module(library(statistics)).
-% :- use_module(library(terms)).
-% :- [i_operators].
-% :- [ii_minimal_driver].  % To translate nanocop into g4mic and to  use nanocop as filter
-% :- [vii_bis_clean_fitch].
-
-% =========================================================================
-% OPERATOR DECLARATIONS - Unified for g4mic + nanoCop + TPTP
-% =========================================================================
-/*
-:- use_module(library(lists)).
-:- use_module(library(statistics)).
-:- use_module(library(terms)).
-:- [i_operators].
-:- [ii_prover_bis].
-:- [iii_latex].
-:- [iv_detections].
-:- [v_sc_printer].
-:- [vi_common_nd].
-:- [vii_flag_style].
-:- [viii_tree_style].
-:- [ix_clean_fitch].
-:- [x_tptp].
-*/
 % -------------------------------------------------------------------------
 % CORE LOGICAL OPERATORS (shared by all)
 % -------------------------------------------------------------------------
@@ -193,7 +102,7 @@
 :-[nanocop_proof].
 :-[nanocop_tptp2].
 
-% Activer le format d'explication complète d'Otten
+% Activer le format d'explication complete d'Otten
 :-retractall(proof(_)).
 :-assert(proof(readable)).
 
@@ -207,10 +116,10 @@ nanocop_proves(Formula) :-
     % Forcer l'affichage
     retractall(g4mic_silent_mode),
 
-    % Limite d'inférences avec LOGIQUE CORRECTE
+    % Limite d'inferences avec LOGIQUE CORRECTE
     call_with_inference_limit(
         (
-            % Détecter l'égalité AVANT traduction
+            % Detecter l'egalite AVANT traduction
             (nanocop_contains_equality(Formula) ->
                 HasEquality = true
             ;
@@ -219,14 +128,14 @@ nanocop_proves(Formula) :-
 
             translate_formula(Formula, InternalFormula),
 
-            % N'appeler leancop_equal QUE si égalité présente
+            % N'appeler leancop_equal QUE si egalite presente
             (HasEquality = true ->
                 leancop_equal(InternalFormula, FormulaToProve)
             ;
                 FormulaToProve = InternalFormula
             ),
 
-            % IMPORTANT : PAS DE NÉGATION - prove2 gère la réfutation en interne
+            % IMPORTANT : PAS DE NEGATION - prove2 gere la refutation en interne
             ( time(prove2(FormulaToProve, [cut,comp(7)], Proof)) ->
               Result='Theorem'
             ;
@@ -234,22 +143,13 @@ nanocop_proves(Formula) :-
             ),
             bmatrix(FormulaToProve, [cut,comp(7)], Matrix),
             output_result(Formula, Matrix, Proof, Result),
-            % VÉRIFIER le résultat
+            % VERIFIER le resultat
             Result='Theorem'
         ),
         2000000,
         InfResult
     ),
-    % VÉRIFIER SI LIMITE ATTEINTE
-    ( InfResult == inference_limit_exceeded ->
-        nl,
-        write('❌ INFERENCE LIMIT EXCEEDED (2,000,000 inferences)'), nl,
-        write('   Formula too complex or invalid'), nl,
-        nl,
-        fail
-    ;
-        true
-    ),!.
+    ( InfResult == inference_limit_exceeded -> fail ; true ),!.
 
 % =========================================================================
 % nanocop_decides/1 :   Version SILENCIEUSE (avec stats)
@@ -258,7 +158,7 @@ nanocop_proves(Formula) :-
 nanocop_decides(Formula) :-
     assertz(g4mic_silent_mode),
 
-    % Détecter l'égalité AVANT traduction
+    % Detecter l'egalite AVANT traduction
     (nanocop_contains_equality(Formula) ->
         HasEquality = true
     ;
@@ -267,19 +167,19 @@ nanocop_decides(Formula) :-
 
     translate_formula(Formula, InternalFormula),
 
-    % N'appeler leancop_equal QUE si égalité présente
+    % N'appeler leancop_equal QUE si egalite presente
     (HasEquality = true ->
         leancop_equal(InternalFormula, FormulaToProve)
     ;
         FormulaToProve = InternalFormula
     ),
 
-    % IMPORTANT : PAS DE NÉGATION - prove2 gère la réfutation en interne
+    % IMPORTANT : PAS DE NEGATION - prove2 gere la refutation en interne
     prove2(FormulaToProve, [cut,comp(7)], _Proof),
     retractall(g4mic_silent_mode), !.
 
 % =========================================================================
-% EQUALITY DETECTION (copié de minimal_driver.pl)
+% EQUALITY DETECTION (copie de minimal_driver.pl)
 % =========================================================================
 
 nanocop_contains_equality((_ = _)) :- !.
@@ -330,17 +230,17 @@ output_result(Formula, Matrix, Proof, Result) :-
         true
     ;
         nl,
-        format('╔═══════════════════════════════════════════════════════════════╗~n'),
-        format('                    NANOCOP THEOREM PROVER                       ~n'),
-        format('╚═══════════════════════════════════════════════════════════════╝~n~n'),
+        format('================================================================~n'),
+        format('                     NANOCOP THEOREM PROVER~n'),
+        format('================================================================~n~n'),
         write('Formula:         '), write(Formula), nl,
         write('Result:    '), write(Result), nl, nl,
         ( var(Proof) ->
             write('No proof found.      '), nl
         ;
-            write('═══════════════════════════════════════════════════════════'), nl,
+            write('==========================================================='), nl,
             nanocop_proof(Matrix, Proof),
-            write('═══════════════════════════════════════════════════════════'), nl
+            write('==========================================================='), nl
         ), nl
     ),!.
 
@@ -357,13 +257,13 @@ translate_formula(F, F_out) :-
 % OPERATOR TRANSLATION - COPIED EXACTLY FROM minimal_driver.pl
 % =========================================================================
 
-% Bottom/falsum: # is translated to ~(p0 => p0) which represents ⊥
+% Bottom/falsum: # is translated to ~(p0 => p0) which represents _|_
 translate_operators(F, (~(p0 => p0))) :-
     nonvar(F),
     (F == '#' ; F == f ; F == bot ; F == bottom ; F == falsum),
     !.
 
-% Top/verum: t is translated to (p0 => p0) which represents ⊤
+% Top/verum: t is translated to (p0 => p0) which represents T
 translate_operators(F, (p0 => p0)) :-
     nonvar(F),
     (F == t ; F == top ; F == verum),
@@ -499,58 +399,6 @@ nanocop_decides_silent(Formula) :-
 % - Teaching purposes (showing why a formula doesn't hold)
 % =========================================================================
 
-% Analyze and display nanoCoP refutation
-nanocop_refutation_analysis(Formula) :-
-    nl,
-    write('❌ INVALID (nanoCoP).'), nl,
-
-    % Build the matrix
-    translate_formula(Formula, InternalFormula),
-    Problem1 = (~InternalFormula),
-    leancop_equal(Problem1, Problem2),
-
-    % Try to prove (will fail)
-    \+ prove2(Problem2, [cut,comp(7)], _Proof),
-
-    % Display the matrix
-    bmatrix(Problem2, [cut,comp(7)], Matrix),
-    write(' === RAW MATRIX CONSTRUCTION ==='), nl,
-    write('    '), portray_clause(Matrix), nl, nl,
-
-    % Analyze open path (counter-model)
-    extract_open_path(Matrix, OpenPath),
-    write(' === RAW OPEN PATH ==='), nl,
-    write('    '), portray_clause(OpenPath), nl, nl,
-
-    % Display premises for refutation
-    write(' 🎯 PREMISS FOR REFUTATION :'), nl, nl,
-    extract_and_display_assignments(OpenPath),
-    nl.
-
-% Extract an open path from the matrix
-extract_open_path(Matrix, OpenPath) :-
-    findall(Lit, (member((_^_)^_: Literals, Matrix), member(Lit, Literals)), AllLits),
-    include(is_negative_literal, AllLits, OpenPath).
-
-is_negative_literal(- _).
-is_negative_literal((_ => #)).
-
-% Extract and display assignments
-extract_and_display_assignments(OpenPath) :-
-    findall(Atom=Value, literal_to_assignment(OpenPath, Atom, Value), Assignments),
-    ( Assignments \= [] ->
-        forall(member(A=V, Assignments),
-               format('     ~w = ~w~n', [A, V]))
-    ;
-        write('     (no direct assignments found)'), nl
-    ).
-
-% Convert a literal to an assignment
-literal_to_assignment([- A|_], A, '⊤') :- atomic(A), !.
-literal_to_assignment([(A => #)|_], A, '⊤') :- atomic(A), !.
-literal_to_assignment([_|Rest], Atom, Value) :-
-    literal_to_assignment(Rest, Atom, Value).
-% =========================================================================
 % STARTUP BANNER
 % =========================================================================
 % Disable automatic SWI-Prolog banner
@@ -561,34 +409,26 @@ literal_to_assignment([_|Rest], Atom, Value) :-
 
 show_banner :-
     current_prolog_flag(version_data, swi(Major, Minor, Patch, _)),
-   format('Welcome to ~w (32 bits, version ~w.~w.~w)~n',
-       ['\e]8;;https://www.swi-prolog.org\e\\SWI-Prolog\e]8;;\e\\',
-        Major, Minor, Patch]),
-    write('╔═══════════════════════════════════════════════════════════════════╗'), nl,
-    write('║                                                                   ║'), nl,
-    write('🎓🎓🎓                     𝐆𝟒+                                 🎓🎓🎓'), nl,
-    write('🎓🎓🎓    A Unified Prover for Minimal, Intuitionistic and     🎓🎓🎓'), nl,
-    write('🎓🎓🎓       Classical First-Order Logic (G4 + nanoCoP)        🎓🎓🎓'), nl,
-    write('║                                                                   ║'), nl,
-    write('╠═══════════════════════════════════════════════════════════════════╣'), nl,
-    write('║                                                                   ║'), nl,
-    write('⚠️⚠️   Your formula MUST follow the correct syntax (type help.)  ⚠️⚠️ '), nl,
-    write('║                                                                   ║'), nl,
-    write('╠═══════════════════════════════════════════════════════════════════╣'), nl,
-    write('║                                                                   ║'), nl,
-    write('║   📝  Usage:                                                      ║'), nl,
-    write('║     • prove(Formula).          → proof in 3 styles + validation   ║'), nl,
-    write('║     • decide(Formula)          → concise mode                     ║'), nl,
-    write('║     • prove_tptp(fof(...)).    → TPTP format support              ║'), nl,
-    write('║     • prove_tptp_file(File).   → process TPTP .p file             ║'), nl,
-    write('║     • nanocop_proves(Formula)  → nanoCoP only - verbose mode      ║'), nl,
-    write('║     • nanocop_decides(Formula) → nanoCoP only - concise mode      ║'), nl,
-    write('║     • help.                    → show detailed help               ║'), nl,
-    write('║     • examples.                → show formula examples            ║'), nl,
-    write('║                                                                   ║'), nl,
-    write('║   💡  Remember: End each request with a dot!                      ║'), nl,
-    write('║                                                                   ║'), nl,
-    write('╚═══════════════════════════════════════════════════════════════════╝'), nl,
+    format('SWI-Prolog version ~w.~w.~w~n', [Major, Minor, Patch]),
+    nl,
+    write('================================================================'), nl,
+    write('  G4+  --  Unified Prover for Minimal, Intuitionistic and'), nl,
+    write('           Classical First-Order Logic (G4 + nanoCoP)'), nl,
+    write('================================================================'), nl,
+    write('  NOTE: Your formula must follow the correct syntax.'), nl,
+    write('        Type  help.  for details.'), nl,
+    write('----------------------------------------------------------------'), nl,
+    write('  prove(Formula).           full proof with validation'), nl,
+    write('  decide(Formula).          concise validity check'), nl,
+    write('  prove_tptp(fof(...)).     TPTP format support'), nl,
+    write('  prove_tptp_file(File).    process a TPTP .p file'), nl,
+    write('  nanocop_proves(Formula).  nanoCoP engine, verbose'), nl,
+    write('  nanocop_decides(Formula). nanoCoP engine, concise'), nl,
+    write('  help.                     detailed help'), nl,
+    write('  examples.                 formula examples'), nl,
+    write('----------------------------------------------------------------'), nl,
+    write('  End each query with a dot.'), nl,
+    write('================================================================'), nl,
     nl.
 
 % =========================================================================
@@ -597,7 +437,7 @@ show_banner :-
 
 logic_iteration_limit(constructive, 3).
 logic_iteration_limit(classical, 4).
-logic_iteration_limit(minimal, 3).
+logic_iteration_limit(minimal, 5).
 logic_iteration_limit(intuitionistic, 3).
 logic_iteration_limit(fol, 4).
 
@@ -624,18 +464,18 @@ for(Threshold, M, N) :- M < N, M1 is M+1, for(Threshold, M1, N).
 % to optimize proof search strategy.
 %
 % Key optimizations:
-% 1. Double negation elimination: ~~A → A (in safe contexts)
-% 2. Excluded middle detection: A ∨ ¬A patterns
+% 1. Double negation elimination: ~~A -> A (in safe contexts)
+% 2. Excluded middle detection: A \/ ~A patterns
 % 3. DNE (Double Negation Elimination) presence checking
-% 4. Peirce's law detection: ((A → B) → A) → A
+% 4. Peirce's law detection: ((A -> B) -> A) -> A
 %
 % Strategy:
-% - If classical patterns detected early → skip minimal/intuitionistic attempts
+% - If classical patterns detected early -> skip minimal/intuitionistic attempts
 % - Start directly with classical logic rules
 % - Avoid wasting time on constructive proof attempts for inherently classical formulas
 %
-% This is a significant performance optimization: formulas like ~~A → A or
-% A ∨ ¬A cannot be proven constructively, so detecting them early saves
+% This is a significant performance optimization: formulas like ~~A -> A or
+% A \/ ~A cannot be proven constructively, so detecting them early saves
 % unnecessary backtracking through minimal and intuitionistic logic levels.
 %
 % Pattern detection is conservative: only triggers on clear classical markers
@@ -765,11 +605,11 @@ is_fol_structural_pattern((_) => ?[_-_]:(_ & ![_-_]:(_ | _))) :- !.
 %
 % Supported input formats:
 % 1. Theorems: prove(F)
-%    - Proves ⊢ F (F is a tautology)
+%    - Proves |- F (F is a tautology)
 %
 % 2. Biconditionals: prove(A <=> B)
 %    - Equivalence between two formulas
-%    - Proves both A → B and B → A
+%    - Proves both A -> B and B -> A
 %
 % For each input, the system:
 % - Validates syntax
@@ -785,17 +625,17 @@ is_fol_structural_pattern((_) => ?[_-_]:(_ & ![_-_]:(_ | _))) :- !.
 % Handles biconditional formulas (equivalences): prove(A <=> B)
 %
 % A biconditional A <=> B is proven by establishing both directions:
-% - Direction 1: A → B  (forward implication)
-% - Direction 2: B → A  (backward implication)
+% - Direction 1: A -> B  (forward implication)
+% - Direction 2: B -> A  (backward implication)
 %
 % Special handling:
 % 1. If formula contains equality or function symbols:
-%    → Route exclusively to nanoCoP (G4 doesn't handle equality natively)
+%    -> Route exclusively to nanoCoP (G4 doesn't handle equality natively)
 %
 % 2. For pure propositional/FOL formulas:
-%    → Prove both directions with G4
-%    → Validate each direction with nanoCoP
-%    → Display proofs in all three styles (sequent, Fitch, tree)
+%    -> Prove both directions with G4
+%    -> Validate each direction with nanoCoP
+%    -> Display proofs in all three styles (sequent, Fitch, tree)
 %
 % The system groups output by proof style rather than by direction,
 % making it easier to compare the two directions in the same format.
@@ -810,20 +650,20 @@ prove(Left <=> Right) :-
     !,
 
     nl,
-    write('╔═══════════════════════════════════════════════════════════╗'), nl,
-    write('    🔍 EQUALITY/FUNCTIONS DETECTED → USING NANOCOP ENGINE    '), nl,
-    write('╚═══════════════════════════════════════════════════════════╝'), nl,
+    write('============================================================='), nl,
+    write('    - EQUALITY/FUNCTIONS DETECTED -> USING NANOCOP ENGINE    '), nl,
+    write('============================================================='), nl,
     nl,
 
     validate_and_warn(Left <=> Right, _),
 
-    write('🔄 Calling nanoCoP prover...'), nl, nl,
+    write('Calling nanoCoP...'), nl, nl,
 
     % DIRECT CALL to nanocop_proves/1 - THAT'S ALL!
     nanocop_proves(Left <=> Right),
 
-    write('═══════════════════════════════════════════════════════════════'), nl,
-    write('✅ Q.E.D.  '), nl, nl,!.
+    write('==============================================================='), nl,
+    write('Q.E.D.'), nl, nl,!.
 
 %  ALTERNATIVE Clause - no equality/functions: g4mic
 
@@ -831,9 +671,9 @@ prove(Left <=> Right) :-
     \+ g4mic_needs_nanocop(Left <=> Right),  % Exclude equality and functions
     validate_and_warn(Left <=> Right, _ValidatedFormula),
 
-        % ═══════════════════════════════════════════════════════════════
+        % ===============================================================
         % FILTRE NANOCOP (comme prove(Formula))
-        % ═══════════════════════════════════════════════════════════════
+        % ===============================================================
         validate_and_warn(Left, _),
         validate_and_warn(Right, _),
 
@@ -851,12 +691,13 @@ prove(Left <=> Right) :-
           ) ->
           true
         ;
-        nl, !, fail
+        szs_disproved_status(Left <=> Right, DisprStatus694),
+        format('% SZS status ~w~n', [DisprStatus694]), !, fail
         ),
 
-        % ═══════════════════════════════════════════════════════════════
+        % ===============================================================
         % PHASE 1 & 2: g4mic PROOF SEARCH (both directions)
-        % ═══════════════════════════════════════════════════════════════
+        % ===============================================================
         % Test direction 1
         retractall(current_proof_sequent(_)),
         assertz(current_proof_sequent(Left => Right)),
@@ -876,172 +717,151 @@ prove(Left <=> Right) :-
         ),
 
         nl,
-        write('╔══════════════════════════════════════════════════════════════╗'), nl,
-        write('           ↔️  BICONDITIONAL:  Proving Both Directions           '), nl,
-        write('╚══════════════════════════════════════════════════════════════╝'), nl, nl,
+        write('================================================================'), nl,
+        write('           <->  BICONDITIONAL:  Proving Both Directions           '), nl,
+        write('================================================================'), nl, nl,
 
-        % ═══════════════════════════════════════════════════════════════
+        % ===============================================================
         % SEQUENT CALCULUS (both directions)
-        % ═══════════════════════════════════════════════════════════════
-        write('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'), nl,
-        write('📐 Sequent Calculus Proofs'), nl,
-        write('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'), nl, nl,
+        % ===============================================================
+        write('--- Sequent Calculus Proofs ---'), nl, nl,
 
         % Direction 1 - Sequent
-        write('┌──────────────────────────────────────────────────────────────┐'), nl,
-        write('                ➡️   DIRECTION 1                                '), nl,
+        write('----------------------------------------------------------------'), nl,
+        write('                ->   DIRECTION 1                                '), nl,
         write('           '), write(Left => Right), nl,
-        write('└──────────────────────────────────────────────────────────────┘'), nl, nl,
+        write('----------------------------------------------------------------'), nl, nl,
         ( Direction1Valid = true ->
             output_logic_label(Logic1), nl, nl,
             write('\\begin{prooftree}'), nl,
             render_bussproofs(Proof1, 0, _),
             write('\\end{prooftree}'), nl, nl,
-            write('✅ Q. E.D. '), nl, nl
-        ; write('⚠️  FAILED TO PROVE'), nl, nl
+            write('Q.E.D.'), nl, nl
+        ; write('  failed'), nl, nl
         ),
 
         % Direction 2 - Sequent
-        write('┌──────────────────────────────────────────────────────────────┐'), nl,
-        write('                    ⬅️   DIRECTION 2                            '), nl,
+        write('----------------------------------------------------------------'), nl,
+        write('                    <-   DIRECTION 2                            '), nl,
         write('               '), write(Right => Left), nl,
-        write('└──────────────────────────────────────────────────────────────┘'), nl, nl,
+        write('----------------------------------------------------------------'), nl, nl,
         ( Direction2Valid = true ->
             output_logic_label(Logic2), nl, nl,
             write('\\begin{prooftree}'), nl,
             render_bussproofs(Proof2, 0, _),
             write('\\end{prooftree}'), nl, nl,
-            write('✅ Q.E.D.'), nl, nl
-        ; write('⚠️  FAILED TO PROVE'), nl, nl
+            write('Q.E.D.'), nl, nl
+        ; write('  failed'), nl, nl
         ),
 
-        % ═══════════════════════════════════════════════════════════════
+        % ===============================================================
         % NATURAL DEDUCTION - TREE STYLE (both directions)
-        % ═══════════════════════════════════════════════════════════════
-        write('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'), nl,
-        write('🌳 Natural Deduction - Tree Style'), nl,
-        write('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'), nl, nl,
+        % ===============================================================
+        write('--- Natural Deduction (tree style) ---'), nl, nl,
 
         % Direction 1 - ND Tree
-        write('┌──────────────────────────────────────────────────────────────┐'), nl,
-        write('                     ➡️   DIRECTION 1                            '), nl,
+        write('----------------------------------------------------------------'), nl,
+        write('                     ->   DIRECTION 1                            '), nl,
         write('                '), write(Left => Right), nl,
-        write('└──────────────────────────────────────────────────────────────┘'), nl, nl,
+        write('----------------------------------------------------------------'), nl, nl,
         ( Direction1Valid = true ->
             render_nd_tree_proof(Proof1), nl, nl,
-            write('✅ Q.E.D. '), nl, nl
-        ; write('⚠️  FAILED TO PROVE'), nl, nl
+            write('Q.E.D.'), nl, nl
+        ; write('  failed'), nl, nl
         ),
 
         % Direction 2 - ND Tree
-        write('┌──────────────────────────────────────────────────────────────┐'), nl,
-        write('                   ⬅️   DIRECTION 2                              '), nl,
+        write('----------------------------------------------------------------'), nl,
+        write('                   <-   DIRECTION 2                              '), nl,
         write('                 '), write(Right => Left), nl,
-        write('└──────────────────────────────────────────────────────────────┘'), nl, nl,
+        write('----------------------------------------------------------------'), nl, nl,
         ( Direction2Valid = true ->
             render_nd_tree_proof(Proof2), nl, nl,
-            write('✅ Q.E.D.'), nl, nl
-        ; write('⚠️  FAILED TO PROVE'), nl, nl
+            write('Q.E.D.'), nl, nl
+        ; write('  failed'), nl, nl
         ),
 
-        % ═══════════════════════════════════════════════════════════════
+        % ===============================================================
         % NATURAL DEDUCTION - FITCH STYLE (both directions)
-        % ═══════════════════════════════════════════════════════════════
-        write('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'), nl,
-        write('🚩 Natural Deduction - Flag Style'), nl,
-        write('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'), nl, nl,
+        % ===============================================================
+        write('--- Natural Deduction (flag style) ---'), nl, nl,
 
         % Direction 1 - Fitch
-        write('┌──────────────────────────────────────────────────────────────┐'), nl,
-        write('                     ➡️   DIRECTION 1                           '), nl,
+        write('----------------------------------------------------------------'), nl,
+        write('                     ->   DIRECTION 1                           '), nl,
         write('                '), write(Left => Right), nl,
-        write('└──────────────────────────────────────────────────────────────┘'), nl, nl,
+        write('----------------------------------------------------------------'), nl, nl,
         ( Direction1Valid = true ->
             % write('\\begin{fitch}'), nl,
             % g4_to_fitch_theorem(Proof1),
             % write('\\end{fitch}'), nl, nl,
           render_clean_fitch(Proof1),nl,nl,
-            write('✅ Q. E.D.'), nl, nl
-        ; write('⚠️  FAILED TO PROVE'), nl, nl
+            write('Q.E.D.'), nl, nl
+        ; write('  failed'), nl, nl
         ),
 
         % Direction 2 - Fitch
-        write('┌──────────────────────────────────────────────────────────────┐'), nl,
-        write('              ⬅️   DIRECTION 2                                   '), nl,
+        write('----------------------------------------------------------------'), nl,
+        write('              <-   DIRECTION 2                                   '), nl,
         write('             '), write(Right => Left), nl,
-        write('└──────────────────────────────────────────────────────────────┘'), nl, nl,
+        write('----------------------------------------------------------------'), nl, nl,
         ( Direction2Valid = true ->
             % write('\\begin{fitch}'), nl,
             % g4_to_fitch_theorem(Proof2),
             % write('\\end{fitch}'), nl, nl,
           render_clean_fitch(Proof2),nl,nl,
-            write('✅ Q.E.D. '), nl, nl
-        ; write('⚠️  FAILED TO PROVE'), nl, nl
+            write('Q.E.D.'), nl, nl
+        ; write('  failed'), nl, nl
         ),
 
-        % ═══════════════════════════════════════════════════════════════
+        % ===============================================================
         % SUMMARY
-        % ═══════════════════════════════════════════════════════════════
-        write('╔══════════════════════════════════════════════════════════════╗'), nl,
-        write('                          📊 SUMMARY                             '), nl,
-        write('╚══════════════════════════════════════════════════════════════╝'), nl,
+        % ===============================================================
+        write('================================================================'), nl,
+        write('                          - SUMMARY                             '), nl,
+        write('================================================================'), nl,
         write('Direction 1 ('), write(Left => Right), write('): '),
         ( Direction1Valid = true ->
-            write('✅ VALID in '), write(Logic1), write(' logic')
-        ; write('⚠️  FAILED')
+            write('  valid in '), write(Logic1), write(' logic')
+        ; write('  failed')
         ), nl,
         write('Direction 2 ('), write(Right => Left), write('): '),
         ( Direction2Valid = true ->
-            write('✅ VALID in '), write(Logic2), write(' logic')
-        ; write('⚠️  FAILED')
+            write('  valid in '), write(Logic2), write(' logic')
+        ; write('  failed')
         ), nl, nl,
 
-        % ═══════════════════════════════════════════════════════════════
-        % PHASE 3: EXTERNAL VALIDATION (g4mic FIRST, THEN NANOCOP)
-        % ═══════════════════════════════════════════════════════════════
-        write('╔══════════════════════════════════════════════════════════════╗'), nl,
-        write('                  🔍 PHASE 3: VALIDATION                         '), nl,
-        write('╚══════════════════════════════════════════════════════════════╝'), nl,
+        % Validation
         nl,
-
-        % g4mic VALIDATION (PRIMARY PROVER)
-        write('═══════════════════════════════════════════════════════════════'), nl,
-        write('🔍 g4mic_decides output'), nl,
-        write('═══════════════════════════════════════════════════════════════'), nl,
+        write('--- Validation ---'), nl,
+        nl,
+        write('g4mic_decides:   '),
         ( catch(g4mic_decides(Left <=> Right), _, fail) ->
-            write('true.'), nl,
+            write('true'), nl,
             G4micResult = valid
         ;
-            write('false.'), nl,
+            write('false'), nl,
             G4micResult = invalid
         ),
-        nl,
-
-        % NANOCOP VALIDATION (EXTERNAL VALIDATION)
-        write('═══════════════════════════════════════════════════════════════'), nl,
-        write('🔍 nanocop_decides output'), nl,
-        write('═══════════════════════════════════════════════════════════════'), nl,
+        write('nanocop_decides: '),
         ( catch(time(nanocop_decides(Left <=> Right)), _, fail) ->
-            write('true. '), nl,
+            write('true'), nl,
             NanoCopResult = valid
         ;
-            write('false.'), nl,
+            write('false'), nl,
             NanoCopResult = invalid
         ),
         nl,
-
-        % VALIDATION SUMMARY
-        write('═══════════════════════════════════════════════════════════════'), nl,
-        write('📊 Validation Summary'), nl,
-        write('═══════════════════════════════════════════════════════════════'), nl,
         ( G4micResult = valid, NanoCopResult = valid ->
-            write('✅ Both provers agree: '), write('true'), nl
+            write('Both provers agree: valid.'), nl
         ; G4micResult = invalid, NanoCopResult = invalid ->
-            write('✅ Both provers agree: '), write('false'), nl
+            write('Both provers agree: invalid.'), nl
         ; G4micResult = valid, NanoCopResult = invalid ->
-            write('⚠️  Disagreement: g4mic=true, nanocop=false'), nl
+            write('[!] SOUNDNESS BUG: g4mic=true, nanoCoP=false'), nl,
+            write('    Please report to: joseph@vidal-rosset.net'), nl
         ; G4micResult = invalid, NanoCopResult = valid ->
-            write('⚠️  Disagreement: g4mic=false, nanocop=true'), nl
+            write('[!] COMPLETENESS ISSUE: g4mic=false, nanoCoP=true'), nl,
+            write('    Please report to: joseph@vidal-rosset.net'), nl
         ),
         nl, nl, !.
 
@@ -1058,28 +878,28 @@ prove(Formula) :-
     !,
 
     nl,
-    write('╔═══════════════════════════════════════════════════════════╗'), nl,
-    write('    🔍 EQUALITY/FUNCTIONS DETECTED → USING NANOCOP ENGINE    '), nl,
-    write('╚═══════════════════════════════════════════════════════════╝'), nl,
+    write('============================================================='), nl,
+    write('    - EQUALITY/FUNCTIONS DETECTED -> USING NANOCOP ENGINE    '), nl,
+    write('============================================================='), nl,
     nl,
 
     validate_and_warn(Formula, _),
 
-    write('🔄 Calling nanoCoP prover...'), nl, nl,
+    write('Calling nanoCoP...'), nl, nl,
 
     % DIRECT CALL to nanocop_proves/1 - THAT'S ALL!
     nanocop_proves(Formula),
 
-    write('═══════════════════════════════════════════════════════════════'), nl,
-    write('✅ Q.E.D.  '), nl, nl,!.
+    write('==============================================================='), nl,
+    write('Q.E.D.'), nl, nl,!.
 
-% ALTERNATIVE CLAUSE: No equality/functions → normal g4mic flow
+% ALTERNATIVE CLAUSE: No equality/functions -> normal g4mic flow
 prove(Formula) :-
     \+ g4mic_needs_nanocop(Formula),  % Exclude equality and functions
     validate_and_warn(Formula, _ValidatedFormula),
-    % ═══════════════════════════════════════════════════════════════
+    % ===============================================================
     % NANOCOP FILTER (negative only)
-    % ═══════════════════════════════════════════════════════════════
+    % ===============================================================
     % NANOCOP FILTER (WASM version)
     current_prolog_flag(occurs_check, OriginalFlag),
     ( catch(
@@ -1094,15 +914,15 @@ prove(Formula) :-
       ) ->
       true
     ;
-    nl, !, fail
+    szs_disproved_status(Formula, DisprStatus),
+    format('% SZS status ~w~n', [DisprStatus]), !, fail
     ),
 
-    % ═══════════════════════════════════════════════════════════════
+    % ===============================================================
     % g4mic PROOF
-    % ═══════════════════════════════════════════════════════════════
-    write('═══════════════════════════════════════════════════════════'), nl,
-    write('  🎯 G4 PROOF FOR: '), write(Formula), nl,
-    write('═══════════════════════════════════════════════════════════'), nl,
+    % ===============================================================
+    write('--- G4 Proof for: '), write(Formula), nl,
+    write('-----------------------------------------------------------'), nl,
     nl,
 
     retractall(premiss_list(_)),
@@ -1116,37 +936,29 @@ prove(Formula) :-
     statistics(walltime, [Start|_]),
 
     ( provable_at_level([] > [F2], minimal, Proof) ->
-        write('┌─────────────────────────────────────────────────────────┐'), nl,
-        write('              ✅ MINIMAL LOGIC                            '), nl,
-        write('└─────────────────────────────────────────────────────────┘'), nl,
+        write('--- Minimal logic ---'), nl,
         Logic = minimal,
         OutputProof = Proof
 
     ; provable_at_level([] > [F2], constructive, Proof) ->
-        write('┌─────────────────────────────────────────────────────────┐'), nl,
-        write('              ✅ INTUITIONISTIC LOGIC                      '), nl,
-        write('└─────────────────────────────────────────────────────────┘'), nl,
+        write('--- Intuitionistic logic ---'), nl,
         Logic = intuitionistic,
         OutputProof = Proof
 
     ; provable_at_level([] > [F2], classical, Proof) ->
-        write('┌─────────────────────────────────────────────────────────┐'), nl,
-        write('              ✅ CLASSICAL LOGIC                           '), nl,
-        write('└─────────────────────────────────────────────────────────┘'), nl,
+        write('--- Classical logic ---'), nl,
         Logic = classical,
         OutputProof = Proof
 
     ;
         nl,
-        write('═════════════════════════════════════════════════════════════'), nl,
-        write('⚠️  UNEXPECTED: g4mic failed but nanoCoP validated!'), nl,
-        write('═════════════════════════════════════════════════════════════'), nl,
+        write('[!] UNEXPECTED: g4mic failed but nanoCoP validated!'), nl,
         nl,
         write('This is likely a BUG in G4-mic.'), nl,
         write('Please help improve G4-mic by reporting this issue:'), nl,
         nl,
-        write('  📧  Email: joseph@vidal-rosset.net'), nl,
-        write('  📝  Include: the formula and this error message'), nl,
+        write('  *  Email: joseph@vidal-rosset.net'), nl,
+        write('  -  Include: the formula and this error message'), nl,
         nl,
         write('Thank you for your contribution!'), nl,
         nl,
@@ -1157,25 +969,25 @@ prove(Formula) :-
     Time is (End - Start) / 1000,
 
     nl,
-    format('⏱️  G4mic time: ~3f seconds~n', [Time]),
+    format('G4mic time: ~3f seconds~n', [Time]),
     nl,
-    output_proof_results(OutputProof, Logic, Formula, theorem),
+    format("% SZS status Theorem~n"), nl, output_proof_results(OutputProof, Logic, Formula),
     !,
 
 
-    % ═══════════════════════════════════════════════════════════════
+    % ===============================================================
     % PHASE 3: EXTERNAL VALIDATION (displayed)
-    % ═══════════════════════════════════════════════════════════════
+    % ===============================================================
     nl,
-    write('╔══════════════════════════════════════════════════════════════╗'), nl,
-    write('                  🔍 PHASE 3: VALIDATION                         '), nl,
-    write('╚══════════════════════════════════════════════════════════════╝'), nl,
+    write('================================================================'), nl,
+    write('                  - PHASE 3: VALIDATION                         '), nl,
+    write('================================================================'), nl,
     nl,
 
     % g4mic VALIDATION
-    write('═══════════════════════════════════════════════════════════════'), nl,
-    write('🔍 g4mic_decides output'), nl,
-    write('═══════════════════════════════════════════════════════════════'), nl,
+    write('==============================================================='), nl,
+    write('- g4mic_decides output'), nl,
+    write('==============================================================='), nl,
     ( catch(g4mic_decides(Formula), _, fail) ->
         write('true.'), nl,
         G4micResult = valid
@@ -1186,9 +998,9 @@ prove(Formula) :-
     nl,
 
     % NANOCOP VALIDATION (SILENCIEUX mais avec time/1)
-    write('═══════════════════════════════════════════════════════════════'), nl,
-    write('🔍 nanocop_decides output'), nl,
-    write('═══════════════════════════════════════════════════════════════'), nl,
+    write('==============================================================='), nl,
+    write('- nanocop_decides output'), nl,
+    write('==============================================================='), nl,
     ( catch(time(nanocop_decides(Formula)), _, fail) ->
         write('true.'), nl,
         NanoCopResult = valid
@@ -1199,38 +1011,38 @@ prove(Formula) :-
     nl,
 
     % VALIDATION SUMMARY
-    write('═══════════════════════════════════════════════════════════════'), nl,
-    write('📊 Validation Summary'), nl,
-    write('═══════════════════════════════════════════════════════════════'), nl,
+    write('==============================================================='), nl,
+    write('- Validation Summary'), nl,
+    write('==============================================================='), nl,
     ( G4micResult = valid, NanoCopResult = valid ->
-        write('✅ Both provers agree: '), write('true'), nl
+        write('  Both provers agree: '), write('true'), nl
     ; G4micResult = invalid, NanoCopResult = invalid ->
-        write('✅ Both provers agree: '), write('false'), nl
+        write('  Both provers agree: '), write('false'), nl
     ; G4micResult = valid, NanoCopResult = invalid ->
         nl,
-        write('═════════════════════════════════════════════════════════════'), nl,
-        write('⚠️  CRITICAL DISAGREEMENT: g4mic=true, nanoCoP=false'), nl,
-        write('═════════════════════════════════════════════════════════════'), nl,
+        write('============================================================='), nl,
+        write('  DISAGREEMENT: g4mic=true, nanoCoP=false'), nl,
+        write('============================================================='), nl,
         nl,
         write('This is a SOUNDNESS BUG in G4-mic (false positive).'), nl,
         write('G4-mic proved an invalid formula!'), nl,
         nl,
         write('URGENT: Please report this issue immediately:'), nl,
-        write('  📧  Email: joseph@vidal-rosset.net'), nl,
-        write('  📝  Include: the formula and full output'), nl,
+        write('  *  Email: joseph@vidal-rosset.net'), nl,
+        write('  -  Include: the formula and full output'), nl,
         nl
     ; G4micResult = invalid, NanoCopResult = valid ->
         nl,
-        write('═════════════════════════════════════════════════════════════'), nl,
-        write('⚠️  DISAGREEMENT: g4mic=false, nanoCoP=true'), nl,
-        write('═════════════════════════════════════════════════════════════'), nl,
+        write('============================================================='), nl,
+        write('  DISAGREEMENT: g4mic=false, nanoCoP=true'), nl,
+        write('============================================================='), nl,
         nl,
         write('This is a COMPLETENESS issue in G4-mic (false negative).'), nl,
         write('G4-mic failed to prove a valid formula.'), nl,
         nl,
         write('Please help improve G4-mic by reporting this:'), nl,
-        write('  📧  Email: joseph@vidal-rosset.net'), nl,
-        write('  📝  Include: the formula and validation output'), nl,
+        write('  *  Email: joseph@vidal-rosset.net'), nl,
+        write('  -  Include: the formula and validation output'), nl,
         nl
     ),
     nl, nl.
@@ -1243,52 +1055,28 @@ prove(Formula) :-
 % OUTPUT WITH MODE DETECTION
 % =========================================================================
 
-output_proof_results(Proof, LogicType, _OriginalFormula, _Mode) :-
+output_proof_results(Proof, LogicType, _OriginalFormula) :-
     extract_formula_from_proof(Proof, Formula),
     detect_and_set_logic_level(Formula),
-    % Store logic level for use in proof rendering (e.g., DS optimization)
     retractall(current_logic_level(_)),
     assertz(current_logic_level(LogicType)),
 
-    % CRITICAL: Save a fresh copy of Proof BEFORE any renderer touches it.
-    % Renderers (bussproofs, tree style) may instantiate variables in Proof,
-    % which corrupts the term for subsequent renderers.
-    % copy_term(Proof, FitchProof),  % NO LONGER NEEDED: Fitch now uses Proof
-    %                                % after bussproofs has instantiated variables
-
-    % Display appropriate label
+    % Display logic label
     output_logic_label(LogicType),
 
-    % ADDED: Display raw Prolog proof term
-    nl, write('=== RAW PROLOG PROOF TERM ==='), nl,
-    write('    '), portray_clause(Proof), nl, nl,
-    ( catch(
-          (copy_term(Proof, ProofCopy),
-           numbervars(ProofCopy, 0, _),
-           nl, nl),
-          error(cyclic_term, _),
-          (write('%% WARNING: Cannot represent proof term due to cyclic_term.'), nl, nl)
-      ) -> true ; true ),
-
     % Sequent Calculus
-    write('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'), nl,
-    write('📐 Sequent Calculus Proof'), nl,
-    write('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'), nl, nl,
+    write('--- Sequent Calculus Proof ---'), nl, nl,
     write('\\begin{prooftree}'), nl,
     render_bussproofs(Proof, 0, _),
     write('\\end{prooftree}'), nl, nl,
-    write('✅ Q.E.D.'), nl, nl,
+    write('Q.E.D.'), nl, nl,
 
-    write('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'), nl,
-    write('🌳 Natural Deduction - Tree Style'), nl,
-    write('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'), nl, nl,
+    write('--- Natural Deduction (tree style) ---'), nl, nl,
     render_nd_tree_proof(Proof), nl, nl,
-    write('✅ Q.E.D.'), nl, nl,
-    write('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'), nl,
-    write('🚩 Natural Deduction - Flag Style'), nl,
-    write('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'), nl, nl,
+    write('Q.E.D.'), nl, nl,
+    write('--- Natural Deduction (flag style) ---'), nl, nl,
     render_clean_fitch(Proof),nl,nl,
-    write('✅ Q.E.D.'), nl, nl,
+    write('Q.E.D.'), nl, nl,
     !.
 
 % =========================================================================
@@ -1399,7 +1187,7 @@ g4mic_decides(Formula) :-
     % Follow the same logic progression as prove/1
     (   F2 = ((A => #) => #), A \= (_ => #)  ->
         % Double negation detected - try constructive first
-        write('🔍 Double negation detected → Trying constructive logic first'), nl,
+        write('- Double negation detected -> Trying constructive logic first'), nl,
         ((time(provable_at_level([] > [F2], constructive, Proof1))) ->
             ((time(provable_at_level([] > [F2], minimal, _))) ->
                 write('Valid in minimal logic'), nl
@@ -1416,7 +1204,7 @@ g4mic_decides(Formula) :-
         )
     ; is_classical_pattern(F2) ->
         % Classical pattern detected - but still try constructive first!
-        write('🔍 Classical pattern detected → Trying constructive logic first'), nl,
+        write('- Classical pattern detected -> Trying constructive logic first'), nl,
         ((time(provable_at_level([] > [F2], constructive, Proof2))) ->
             ((time(provable_at_level([] > [F2], minimal, _))) ->
                 write('Valid in minimal logic'), nl
@@ -1432,7 +1220,7 @@ g4mic_decides(Formula) :-
             write('Valid in classical logic'), nl
         )
     ;
-        % Normal progression: minimal → intuitionistic → classical
+        % Normal progression: minimal -> intuitionistic -> classical
         ( time(provable_at_level([] > [F2], minimal, _)) ->
             write('Valid in minimal logic'), nl
         ; time(provable_at_level([] > [F2], constructive, Proof3)) ->
@@ -1598,7 +1386,7 @@ subst_neg(A, A).
 % END OF DRIVER
 %=================================
 % =========================================================================
-% G4+ FOL Prover — Core Engine
+% G4+ FOL Prover -- Core Engine
 % =========================================================================
 %
 % Sequent calculus theorem prover for first-order logic based on
@@ -1606,11 +1394,17 @@ subst_neg(A, A).
 %
 % Key features:
 % - Contraction-free G4 rules (efficient proof search)
-% - Progressive logic detection: minimal → intuitionistic → classical
+% - Progressive logic detection: minimal -> intuitionistic -> classical
 % - Eigenvariable management for quantifier rules
 % - Optimized rule ordering for performance
 %
-%
+% Rule ordering rationale:
+% - Rforall first: eigenvariable introduced before any left rules fire
+% - L& before L0->: decompose conjunctions before modus ponens
+% - L0-> with guard: avoid re-deriving already present formulas
+% - L\/-> before branching rules: deterministic simplification first
+% - IP just before R->: classical law applied before implication decomposition
+% - Lforall after right rules: universal instantiation guided by Skolem terms
 % =========================================================================
 
 % =========================================================================
@@ -1643,48 +1437,53 @@ g4mic_ax(Gamma > Delta, _, _, SkolemIn, SkolemIn, _, ax(Gamma>Delta, ax)) :-
 %              LogicLevel, Proof)
 % =========================================================================
 
-% --- Rule 0: Axiom (tested first) ----------------------------------------
+% :- table g4mic_proves/7.
+
+% --- Rule 0: Axiom (tested first, non-tabled) ----------------------------
 g4mic_proves(Seq, FV, Th, SI, SO, LL, Proof) :-
     g4mic_ax(Seq, FV, Th, SI, SO, LL, Proof), !.
 
-% --- Rule 0.1: L-bot -----------------------------------------------------
-g4mic_proves(Gamma>Delta, _, _, SI, SI, LL, lbot(Gamma>Delta, #)) :-
-    member(LL, [intuitionistic, classical]),
-    member(#, Gamma), !.
+% =========================================================================
+% QUANTIFIER RIGHT RULE (before all left rules)
+% Rforall fires first: eigenvariable is immediately available for left rules
+% =========================================================================
+
+% --- Rule 1: Rforall -----------------------------------------------------------
+g4mic_proves(Gamma > Delta, FV, Th, SI, SO, LL, rall(Gamma>Delta, P)) :-
+    select((![_Z-X]:A), Delta, D1), !,
+    copy_term((X:A, FV), (f_sk(SI, FV):A1, FV)),
+    (catch(b_getval(g4_eigenvars, UsedVars), _, UsedVars = [])),
+    \+ member_check(f_sk(SI, FV), UsedVars),
+    b_setval(g4_eigenvars, [f_sk(SI, FV) | UsedVars]),
+    J1 is SI + 1,
+    g4mic_proves(Gamma > [A1 | D1], FV, Th, J1, SO, LL, P).
 
 % =========================================================================
 % PROPOSITIONAL RULES (deterministic, no branching)
 % =========================================================================
 
-% --- Rule 1: L& -----------------------------------------------------------
+% --- Rule 2: L& -----------------------------------------------------------
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, land(Gamma>Delta, P)) :-
     select((A & B), Gamma, G1), !,
     g4mic_proves([A, B | G1]>Delta, FV, Th, SI, SO, LL, P).
 
-% --- Rule 2: L0-> (modus ponens on context) -------------------------------
+% --- Rule 3: L0-> (modus ponens on context) -------------------------------
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, l0cond(Gamma>Delta, P)) :-
     select((A => B), Gamma, G1),
-    member(A, G1), !,
+    member(A, G1),
+    !,
     g4mic_proves([B | G1]>Delta, FV, Th, SI, SO, LL, P).
-
-% --- Rule 3: TNE (triple negation elimination) ----------------------------
-g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, tne(Gamma>Delta, P)) :-
-    Delta = [(A => B)],
-    member(LongNeg, Gamma),
-    is_nested_negation(LongNeg, A => B, Depth),
-    Depth >= 2, !,
-    g4mic_proves([A | Gamma]>[B], FV, Th, SI, SO, LL, P).
 
 % --- Rule 4: L&-> ---------------------------------------------------------
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, landto(Gamma>Delta, P)) :-
     select(((A & B) => C), Gamma, G1), !,
     g4mic_proves([(A => (B => C)) | G1]>Delta, FV, Th, SI, SO, LL, P).
 
-% --- Rule 5: Lv-> (optimized) --------------------------------------------
+% --- Rule 6: L\/-> (optimized) --------------------------------------------
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, lorto(Gamma>Delta, P)) :-
     select(((A | B) => C), Gamma, G1), !,
     ( member(A, G1), member(B, G1) ->
-        g4mic_proves([A=>C, B=>C | G1]>Delta, FV, Th, SI, SO, LL, P)
+        g4mic_proves([B=>C, A=>C | G1]>Delta, FV, Th, SI, SO, LL, P)
     ; member(A, G1) ->
         g4mic_proves([A=>C | G1]>Delta, FV, Th, SI, SO, LL, P)
     ; member(B, G1) ->
@@ -1696,8 +1495,13 @@ g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, lorto(Gamma>Delta, P)) :-
 % =========================================================================
 % IMPLICATION RULES
 % =========================================================================
-% --- Rule 6 IP (indirect proof — classical only) -------------------------
-% Must precede R-> : IP needs the goal intact before decomposition
+% --- Rule 7: L-bot -----------------------------------------------------
+g4mic_proves(Gamma>Delta, _, _, SI, SI, LL, lbot(Gamma>Delta, #)) :-
+    member(LL, [intuitionistic, classical]),
+    member(#, Gamma), !.
+
+% --- Rule 8: IP (indirect proof -- classical only) ------------------------
+% Placed just before R->: classical law applied before decomposition
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, classical, ip(Gamma>Delta, P)) :-
     Delta = [A],
     A \= #,
@@ -1705,50 +1509,49 @@ g4mic_proves(Gamma>Delta, FV, Th, SI, SO, classical, ip(Gamma>Delta, P)) :-
     Th > 0,
     g4mic_proves([(A => #) | Gamma]>[#], FV, Th, SI, SO, classical, P).
 
-% --- Rule 7: R-> -----------------------------------------------------------
+% --- Rule 9: R-> ---------------------------------------------------------
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, rcond(Gamma>Delta, P)) :-
     Delta = [A => B], !,
     g4mic_proves([A | Gamma]>[B], FV, Th, SI, SO, LL, P).
 
+
 % =========================================================================
 % BRANCHING RULES
 % =========================================================================
-
-% --- Rule 8: L->-> --------------------------------------------------------
+%% Left rules first
+%==========================================================================
+% --- Rule 10: L->-> --------------------------------------------------------
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, ltoto(Gamma>Delta, P1, P2)) :-
-    select(((A => B) => C), Gamma, G1), !,
+    select(((A => B) => C), Gamma, G1),
+    \+ (B = #, member(A, G1)),
+    !,
     g4mic_proves([A, (B => C) | G1]>[B], FV, Th, SI, J1, LL, P1),
     g4mic_proves([C | G1]>Delta, FV, Th, J1, SO, LL, P2).
 
-% --- Rule 9: Lv (left disjunction — delayed after L->->) ------------------
+% --- Rule 11: L\/ (left disjunction) ---------------------------------------
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, lor(Gamma>Delta, P1, P2)) :-
     select((A | B), Gamma, G1), !,
     g4mic_proves([A | G1]>Delta, FV, Th, SI, J1, LL, P1),
     g4mic_proves([B | G1]>Delta, FV, Th, J1, SO, LL, P2).
 
-% =========================================================================
-% RIGHT RULES
-% =========================================================================
-
-% --- Rule 10: Rv (right disjunction) --------------------------------------
+% --- Rule 12: R\/ ----------------------------------------------------------
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, ror(Gamma>Delta, P)) :-
     Delta = [(A | B)], !,
     (   g4mic_proves(Gamma>[A], FV, Th, SI, SO, LL, P)
     ;   g4mic_proves(Gamma>[B], FV, Th, SI, SO, LL, P)
     ).
 
-% --- Rule 11: R& (right conjunction) --------------------------------------
+% --- Rule 13: R& ----------------------------------------------------------
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, rand(Gamma>Delta, P1, P2)) :-
     Delta = [(A & B)], !,
     g4mic_proves(Gamma>[A], FV, Th, SI, J1, LL, P1),
     g4mic_proves(Gamma>[B], FV, Th, J1, SO, LL, P2).
 
 % =========================================================================
-% QUANTIFIER RULES
-% L-exists before L-forall: Skolem terms guide universal instantiation
+% QUANTIFIER  RULES (except Rforall which is above)
 % =========================================================================
 
-% --- Rule 12: L-exists (eigenvariable introduction) -----------------------
+% --- Rule 14: Lexists ----------------------------------------------------------
 g4mic_proves(Gamma > Delta, FV, Th, SI, SO, LL, lex(Gamma>Delta, P)) :-
     select((?[_Z-X]:A), Gamma, G1), !,
     copy_term((X:A, FV), (f_sk(SI, FV):A1, FV)),
@@ -1758,24 +1561,14 @@ g4mic_proves(Gamma > Delta, FV, Th, SI, SO, LL, lex(Gamma>Delta, P)) :-
     J1 is SI + 1,
     g4mic_proves([A1 | G1] > Delta, FV, Th, J1, SO, LL, P).
 
-% --- Rule 13: R-forall (eigenvariable introduction) -----------------------
-g4mic_proves(Gamma > Delta, FV, Th, SI, SO, LL, rall(Gamma>Delta, P)) :-
-    select((![_Z-X]:A), Delta, D1), !,
-    copy_term((X:A, FV), (f_sk(SI, FV):A1, FV)),
-    (catch(b_getval(g4_eigenvars, UsedVars), _, UsedVars = [])),
-    \+ member_check(f_sk(SI, FV), UsedVars),
-    b_setval(g4_eigenvars, [f_sk(SI, FV) | UsedVars]),
-    J1 is SI + 1,
-    g4mic_proves(Gamma > [A1 | D1], FV, Th, J1, SO, LL, P).
-
-% --- Rule 14: L-forall (universal instantiation, Otten's limitation) ------
+% --- Rule 15: Lforall (universal instantiation, Otten's limitation) -----------
 g4mic_proves(Gamma > Delta, FV, Th, SI, SO, LL, lall(Gamma>Delta, P)) :-
     member((![_Z-X]:A), Gamma),
     length(FV, Len), Len =< Th,
     copy_term((X:A, FV), (Y:A1, FV)),
     g4mic_proves([A1 | Gamma] > Delta, [Y | FV], Th, SI, SO, LL, P), !.
 
-% --- Rule 15: R-exists (existential instantiation) ------------------------
+% --- Rule 16: Rexists ----------------------------------------------------------
 g4mic_proves(Gamma > Delta, FV, Th, SI, SO, LL, rex(Gamma>Delta, P)) :-
     select((?[_Z-X]:A), Delta, D1), !,
     length(FV, Len), Len < Th,
@@ -1786,7 +1579,7 @@ g4mic_proves(Gamma > Delta, FV, Th, SI, SO, LL, rex(Gamma>Delta, P)) :-
 % QUANTIFIER CONVERSION RULES
 % =========================================================================
 
-% --- Rule 16: CQ_c (classical quantifier shift) ---------------------------
+% --- Rule 17: CQ_c (classical quantifier shift) ---------------------------
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, classical, cq_c(Gamma>Delta, P)) :-
     select((![Z-X]:A) => B, Gamma, G1),
     ( member((?[ZT-YT]:AT) => B, G1),
@@ -1796,8 +1589,8 @@ g4mic_proves(Gamma>Delta, FV, Th, SI, SO, classical, cq_c(Gamma>Delta, P)) :-
         g4mic_proves([?[Z-X]:(A => B) | G1]>Delta, FV, Th, SI, SO, classical, P)
     ).
 
-% --- Rule 17: CQ_m (quantifier conversion, all logics) -------------------
-% (?[X]:A => B) → ![X]:(A => B)
+% --- Rule 18: CQ_m (quantifier conversion, all logics) -------------------
+% (?[X]:A => B) -> ![X]:(A => B)
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, cq_m(Gamma>Delta, P)) :-
     select((?[Z-X]:A) => B, Gamma, G1),
     g4mic_proves([![Z-X]:(A => B) | G1]>Delta, FV, Th, SI, SO, LL, P).
@@ -2367,7 +2160,7 @@ rewrite_term(X, J, K, Y) :-
     rewrite_list(L, J, K, R),
     Y =.. [F|R].
 
-% Generateur de noms elegants pour variables liées
+% Generateur de noms elegants pour variables liees
 % Use x, y, z instead of a, b, c to avoid collision with constants
 rewrite_name(K, N) :-
     K < 3,
@@ -2489,56 +2282,6 @@ prepare_list([], _, []).
 prepare_list([X|L], Q, [Y|R]) :-
     prepare_term(X, Q, Y),
     prepare_list(L, Q, R).
-
-% Support lambda calculus
-lambda_has(V:_, W) :-
-    V == W.
-
-lambda_has(app(P,_,_,_), W) :-
-    lambda_has(P, W).
-
-lambda_has(app(_,Q,_,_), W) :-
-    lambda_has(Q, W).
-
-lambda_has(lam(V:_,_,_,_), W) :-
-    V == W,
-    !,
-    fail.
-
-lambda_has(lam(_,P,_,_), W) :-
-    lambda_has(P, W).
-
-lambda_has('C'(P,_,_), W) :-
-    lambda_has(P, W).
-
-%%%%%% Sequents
-
-% Determine proof type (theorem or sequent)
-% RENAMED to avoid conflict with proof_type/2 from driver
-% This function analyzes the STRUCTURE of a G4 proof, not the syntax of a formula
-% Generate Fitch commands according to type and position
-fitch_prefix(sequent, LineNum, TotalPremisses, Prefix) :-
-    (   LineNum =< TotalPremisses
-    ->  (   LineNum = TotalPremisses
-        ->  Prefix = '\\fj '  % Big flag for last premiss
-        ;   Prefix = '\\fa '  % Normal line for premisses
-        )
-    ;   Prefix = '\\fa '      % Normal line after premisses
-    ).
-
-fitch_prefix(theorem, Depth, _, Prefix) :-
-    (   Depth > 0
-    ->  Prefix = '\\fa \\fh '  % Small flag for hypotheses
-    ;   Prefix = '\\fa '       % Normal line at level 0
-    ).
-
-% =========================================================================
-% RENDU LATEX BUSSPROOFS
-% =========================================================================
-
-% =========================================================================
-% LaTeX FORMULA RENDERING
-% =========================================================================
 
 % =========================================================================
 % RENDER LATEX FORMULA - Unified with write_formula_with_parens
@@ -2796,7 +2539,7 @@ handle_warnings(Warnings, permissive, Formula, Formula) :-
     prompt_continue.
 handle_warnings(Warnings, strict, _, _) :-
     report_warnings(Warnings),
-    write('? Validation failed in strict mode. Formula rejected.'), nl,
+    write('  Validation failed (strict mode). Formula rejected.'), nl,
     fail.
 
 % Prompt user to continue
@@ -2805,7 +2548,7 @@ prompt_continue :-
     read(Response),
     (   Response = y -> true
     ;   Response = yes -> true
-    ;   write('? Proof attempt cancelled.'), nl, fail
+    ;   write('  Proof attempt cancelled.'), nl, fail
     ).
 % =========================================================================
 % FOL CONTEXT DETECTION
@@ -2977,42 +2720,42 @@ report_warnings([]) :- !.
 report_warnings(Warnings) :-
     length(Warnings, N),
     nl,
-    format('?  ~d WARNING(S) DETECTED:~n', [N]),
+    format('  ~d warning(s) detected:~n', [N]),
     nl,
     maplist(print_warning, Warnings),
     nl,
-    write('? TIPS:'), nl,
+    write('  Tips:'), nl,
     write('   o Theorems:  prove(p => q).        % implication'), nl,
     write('   o Sequents:  prove([p] > [q]).     % turnstile ?'), nl,
     write('   o FOL:       use = for equality, <=> for biconditional'), nl,
     nl.
 
 print_warning(warning(bicond_between_terms, A, B)) :-
-    format('   ?  (~w <=> ~w): biconditional between terms detected.~n', [A, B]),
+    format('  warning: (~w <=> ~w): biconditional between terms detected.~n', [A, B]),
     format('      -> Did you mean (~w = ~w)?~n', [A, B]).
 
 % NEW: Sequent syntax warnings
 print_warning(warning(list_implication, Msg)) :-
-    format('   ?  Syntax error: ~w~n', [Msg]),
+    format('  syntax warning: ~w~n', [Msg]),
     write('      Example: prove([p, q] > [p & q]).  % CORRECT'), nl,
     write('               prove([p, q] => [p & q]). % WRONG'), nl.
 
 print_warning(warning(list_implication_left, Msg)) :-
-    format('   ?  Syntax error: ~w~n', [Msg]),
+    format('  syntax warning: ~w~n', [Msg]),
     write('      -> Use [Premisses] > [Conclusion] for sequents'), nl.
 
 print_warning(warning(list_implication_right, Msg)) :-
-    format('   ?  Syntax error: ~w~n', [Msg]),
+    format('  syntax warning: ~w~n', [Msg]),
     write('      -> Use [Premisses] > [Conclusion] for sequents'), nl.
 
 print_warning(warning(atom_turnstile, Msg)) :-
-    format('   ?  Syntax error: ~w~n', [Msg]),
+    format('  syntax warning: ~w~n', [Msg]),
     write('      Example: prove(p => q).       % CORRECT (implication)'), nl,
     write('               prove(p > q).        % WRONG'), nl,
     write('               prove([p] > [q]).    % CORRECT (sequent)'), nl.
 
 print_warning(warning(formula_turnstile, Msg)) :-
-    format('   ?  Syntax error: ~w~n', [Msg]),
+    format('  syntax warning: ~w~n', [Msg]),
     write('      -> Use => for implications, > only for sequents'), nl,
     write('      -> Sequent syntax: [Premisses] > [Conclusions]'), nl.
 
@@ -3248,33 +2991,6 @@ render_bussproofs(cq_m(Seq, Proof), VarCounter, FinalCounter) :-
     write('$}'), nl.
 
 % =========================================================================
-% EQUALITY RULES
-% =========================================================================
-
-% Reflexivity : Seq = [t = t]
-
-% Symmetry
-
-% Simple transitivity
-
-% Chained transitivity
-
-% Congruence
-
-% Substitution in equality
-
-% Substitution (Leibniz)
-
-% Substitution for logical equivalence
-render_bussproofs(equiv_subst(Seq), VarCounter, FinalCounter) :-
-    !,
-    write('\\AxiomC{}'), nl,
-    write('\\RightLabel{\\scriptsize{$\\equiv$}}'), nl,
-    write('\\UnaryInfC{$'),
-    render_sequent(Seq, VarCounter, FinalCounter),
-    write('$}'), nl.
-
-% =========================================================================
 % SEQUENT RENDERING
 % =========================================================================
 
@@ -3307,7 +3023,7 @@ filter_empty_lists([], []).
 filter_empty_lists([[]|T], Filtered) :- !, filter_empty_lists(T, Filtered).
 filter_empty_lists([H|T], [H|RestFiltered]) :- filter_empty_lists(T, RestFiltered).
 
-% filter_top_from_gamma/2: Remove top (⊤) from premisses list
+% filter_top_from_gamma/2: Remove top (T) from premisses list
 filter_top_from_gamma([], []).
 filter_top_from_gamma([H|T], Filtered) :-
     ( is_top_formula(H) ->
@@ -3317,7 +3033,7 @@ filter_top_from_gamma([H|T], Filtered) :-
         Filtered = [H|RestFiltered]
     ).
 
-% is_top_formula/1: Detect if a formula is top (⊤)
+% is_top_formula/1: Detect if a formula is top (T)
 % Top is represented as (# => #) or sometimes ~ #
 is_top_formula((# => #)) :- !.
 is_top_formula(((# => #) => #) => #) :- !.  % Double negation of top
@@ -3956,9 +3672,9 @@ build_hypothesis_map([_|Rest], AccMap, FinalMap) :-
 % 5. Generate LaTeX using fitch.sty package syntax
 %
 % Rule mappings:
-% - Sequent right rules → Introduction rules
-% - Sequent left rules → Elimination rules
-% - Structural rules → Reiteration and assumption management
+% - Sequent right rules -> Introduction rules
+% - Sequent left rules -> Elimination rules
+% - Structural rules -> Reiteration and assumption management
 %
 % The resulting Fitch proof is more intuitive than raw sequent calculus
 % and suitable for teaching and publication.
@@ -3970,7 +3686,7 @@ g4_to_fitch_theorem(Proof) :-
     retractall(abbreviated_line(_)),
     fitch_g4_proof(Proof, [], 1, 0, _, _, 0, _).
 % =========================================================================
-% ASSERTION SÉCURISÉE
+% ASSERTION SECURISEE
 % =========================================================================
 assert_safe_fitch_line(N, Formula, Just, Scope) :-
     catch(
@@ -4020,7 +3736,7 @@ fitch_g4_proof(ax((Premisses > [Goal])), Context, _Scope, CurLine, NextLine, Res
 % =========================================================================
 % PROPOSITIONAL RULES
 % =========================================================================
-% L0→
+% L0->
 fitch_g4_proof(l0cond((Premisss > _), SubProof), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :-
     !,
     select((Ant => Cons), Premisss, Remaining),
@@ -4033,7 +3749,7 @@ fitch_g4_proof(l0cond((Premisss > _), SubProof), Context, Scope, CurLine, NextLi
     assert_safe_fitch_line(DerLine, Cons, l0cond(MajLine, MinLine), Scope),
     fitch_g4_proof(SubProof, [DerLine:Cons|Context], Scope, DerLine, NextLine, ResLine, V1, VarOut).
 
-% L∧→
+% L/\->
 fitch_g4_proof(landto((Premisses > _), SubProof), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- !,
     extract_new_formula(Premisses, SubProof, NewFormula),
     select(((A & B) => C), Premisses, _),
@@ -4041,7 +3757,7 @@ fitch_g4_proof(landto((Premisses > _), SubProof), Context, Scope, CurLine, NextL
     derive_and_continue(Scope, NewFormula, '$ \\land \\to E $ ~w', [ImpLine],
                        landto(ImpLine), SubProof, Context, CurLine, NextLine, ResLine, VarIn, VarOut).
 
-% L∨→ : Disjunction to implications
+% L\/-> : Disjunction to implications
 fitch_g4_proof(lorto((Premisses > _), SubProof), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- !,
     SubProof =.. [_Rule|[(SubPremisses > _SubGoal)|_]],
     findall(F, (member(F, SubPremisses), \+ member(F, Premisses)), NewFormulas),
@@ -4063,7 +3779,8 @@ fitch_g4_proof(lorto((Premisses > _), SubProof), Context, Scope, CurLine, NextLi
         fitch_g4_proof(SubProof, Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut)
     ).
 
-% L∧ : Conjunction elimination
+
+% L/\ : Conjunction elimination
 fitch_g4_proof(land((Premisses > [Goal]), SubProof), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- !,
     select((A & B), Premisses, _),
    % member(ConjLine:(A & B), Context), corrected by next line
@@ -4077,7 +3794,7 @@ fitch_g4_proof(land((Premisses > [Goal]), SubProof), Context, Scope, CurLine, Ne
         fitch_g4_proof(SubProof, NewCtx, Scope, LastLine, NextLine, ResLine, V1, VarOut)
     ).
 
-% L⊥ : Explosion
+% L_|_ : Explosion
 fitch_g4_proof(lbot((Premisss > [Goal]), _), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :-
     !,
     member(#, Premisss),
@@ -4089,7 +3806,7 @@ fitch_g4_proof(lbot((Premisss > [Goal]), _), Context, Scope, CurLine, NextLine, 
     NextLine = DerLine,
     ResLine = DerLine.
 
-% R∨ : Disjunction introduction
+% R\/ : Disjunction introduction
 fitch_g4_proof(ror((_ > [Goal]), SubProof), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :-
     !,
     ( Goal = (_ | _), try_derive_immediately(Goal, Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) ->
@@ -4107,7 +3824,7 @@ fitch_g4_proof(ror((_ > [Goal]), SubProof), Context, Scope, CurLine, NextLine, R
 % RULES WITH ASSUMPTIONS (ASSUME-DISCHARGE)
 % =========================================================================
 
-% R→ : Implication introduction
+% R-> : Implication introduction
 fitch_g4_proof(rcond((_ > [A => B]), SubProof), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :-
     !,
     HypLine is CurLine + 1,
@@ -4159,18 +3876,18 @@ fitch_g4_proof(ip((_ > [Goal]), SubProof), Context, Scope, CurLine, NextLine, Re
     NextLine = IPLine,
     ResLine = IPLine.
 
-% L∨ : Disjunction elimination
+% L\/ : Disjunction elimination
 % L-or: Disjunction elimination with DS optimization
-% DISJUNCTIVE SYLLOGISM (DS): If we have A ∨ B and ¬A, derive B directly
+% DISJUNCTIVE SYLLOGISM (DS): If we have A \/ B and ~A, derive B directly
 % Valid in intuitionistic and classical logic (not minimal logic)
-% Pattern: One branch uses explosion (¬A with A), other branch derives Goal from B
+% Pattern: One branch uses explosion (~A with A), other branch derives Goal from B
 fitch_g4_proof(lor((Premisss > [_Goal]), SP1, SP2), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :-
-    % Try DS optimization: Check if we have A ∨ B and ¬A (A => #)
+    % Try DS optimization: Check if we have A \/ B and ~A (A => #)
     select((A | B), Premisss, _),
-    % Check if ¬A (i.e., A => #) is available
+    % Check if ~A (i.e., A => #) is available
     ( member((A => #), Premisss) ->
-        % We have A ∨ B and ¬A, so we can use DS to derive B directly
-        % This is valid because SP1 would just derive ⊥ from A and ¬A, then Goal by ⊥E
+        % We have A \/ B and ~A, so we can use DS to derive B directly
+        % This is valid because SP1 would just derive _|_ from A and ~A, then Goal by _|_E
         % Find the disjunction and negation in context
         ( find_disj_context(A, B, Context, DisjLine) -> true
         ; find_context_line((A | B), Context, DisjLine)
@@ -4178,7 +3895,7 @@ fitch_g4_proof(lor((Premisss > [_Goal]), SP1, SP2), Context, Scope, CurLine, Nex
         % CORRECTION: Chercher explicitement (A => #) dans le contexte
         % Do not use find_context_line which could match another implication
         member(NegLine:NegFormula, Context),
-        NegFormula = (A => #),  % Vérifier EXACTEMENT que c'est bien A => #
+        NegFormula = (A => #),  % Verifier EXACTEMENT que c'est bien A => #
         % Derive B by DS (without showing the explosion subproof)
         DerLine is CurLine + 1,
         assert_safe_fitch_line(DerLine, B, ds(DisjLine, NegLine), Scope),
@@ -4188,13 +3905,13 @@ fitch_g4_proof(lor((Premisss > [_Goal]), SP1, SP2), Context, Scope, CurLine, Nex
         fitch_g4_proof(SP2, [DerLine:B|Context], Scope, DerLine, NextLine, ResLine, V1, VarOut),
         !
     ; member((B => #), Premisss) ->
-        % Symmetric case: We have A ∨ B and ¬B, derive A by DS
+        % Symmetric case: We have A \/ B and ~B, derive A by DS
         ( find_disj_context(A, B, Context, DisjLine) -> true
         ; find_context_line((A | B), Context, DisjLine)
         ),
         % CORRECTION: Chercher explicitement (B => #) dans le contexte
         member(NegLine:NegFormula, Context),
-        NegFormula = (B => #),  % Vérifier EXACTEMENT que c'est bien B => #
+        NegFormula = (B => #),  % Verifier EXACTEMENT que c'est bien B => #
         DerLine is CurLine + 1,
         assert_safe_fitch_line(DerLine, A, ds(DisjLine, NegLine), Scope),
         format(atom(Just), '$ DS $ ~w,~w', [DisjLine, NegLine]),
@@ -4202,10 +3919,10 @@ fitch_g4_proof(lor((Premisss > [_Goal]), SP1, SP2), Context, Scope, CurLine, Nex
         fitch_g4_proof(SP1, [DerLine:A|Context], Scope, DerLine, NextLine, ResLine, V1, VarOut),
         !
     ;
-        fail  % DS not applicable, fall through to regular ∨E
+        fail  % DS not applicable, fall through to regular \/E
     ).
 
-% L-or: Disjunction elimination (regular case with full ∨E)
+% L-or: Disjunction elimination (regular case with full \/E)
 fitch_g4_proof(lor((Premisss > [Goal]), SP1, SP2), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :-
     !,
     ( try_derive_immediately(Goal, Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) ->
@@ -4234,7 +3951,7 @@ fitch_g4_proof(lor((Premisss > [Goal]), SP1, SP2), Context, Scope, CurLine, Next
 % BINARY RULES
 % =========================================================================
 
-% R∧ : Conjunction introduction
+% R/\ : Conjunction introduction
 fitch_g4_proof(rand((_ > [Goal]), SP1, SP2), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- !,
     Goal = (L & _R),
     ( try_derive_immediately(Goal, Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) -> true
@@ -4244,12 +3961,12 @@ fitch_g4_proof(rand((_ > [Goal]), SP1, SP2), Context, Scope, CurLine, NextLine, 
                     End2, NextLine, ResLine, V2, VarOut)
     ).
 
-% L→→ : Special G4 rule
+% L->-> : Special G4 rule
 fitch_g4_proof(ltoto((Premisses > _), SP1, SP2), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- !,
     select(((Ant => Inter) => Cons), Premisses, _),
     find_context_line(((Ant => Inter) => Cons), Context, ComplexLine),
 
-    % STEP 1: Derive (Inter => Cons) by L→→
+    % STEP 1: Derive (Inter => Cons) by L->->
     ExtractLine is CurLine + 1,
     format(atom(ExtractJust), '\\to \\to E $ ~w', [ComplexLine]),
     render_have(Scope, (Inter => Cons), ExtractJust, CurLine, ExtractLine, VarIn, V1),
@@ -4265,13 +3982,13 @@ fitch_g4_proof(ltoto((Premisses > _), SP1, SP2), Context, Scope, CurLine, NextLi
     fitch_g4_proof(SP1, [AssLine:Ant, ExtractLine:(Inter => Cons)|Context],
                   NewScope, AssLine, SubEnd, InterLine, V2, V3),
 
-    % STEP 4: Derive (Ant => Inter) by →I
+    % STEP 4: Derive (Ant => Inter) by ->I
     ImpLine is SubEnd + 1,
     assert_safe_fitch_line(ImpLine, (Ant => Inter), rcond(AssLine, InterLine), Scope),
     format(atom(Just1), '$ \\to I $ ~w-~w', [AssLine, InterLine]),
     render_have(Scope, (Ant => Inter), Just1, SubEnd, ImpLine, V3, V4),
 
-    % STEP 5: Derive Cons by →E
+    % STEP 5: Derive Cons by ->E
     MPLine is ImpLine + 1,
     assert_safe_fitch_line(MPLine, Cons, l0cond(ComplexLine, ImpLine), Scope),
     format(atom(Just2), '$ \\to E $ ~w,~w', [ComplexLine, ImpLine]),
@@ -4283,12 +4000,14 @@ fitch_g4_proof(ltoto((Premisses > _), SP1, SP2), Context, Scope, CurLine, NextLi
 % =========================================================================
 % QUANTIFICATION RULES
 % =========================================================================
-% R∀
+% Rforall
+
 fitch_g4_proof(rall((_ > [(![Z-X]:A)]), SubProof), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- !,
     fitch_g4_proof(SubProof, Context, Scope, CurLine, SubEnd, BodyLine, VarIn, V1),
     derive_formula(Scope, (![Z-X]:A), '$ \\forall I $ ~w', [BodyLine], rall(BodyLine),
-                  SubEnd, NextLine, ResLine, V1, VarOut).
-% L∀ : Universal Elimination
+                   SubEnd, NextLine, ResLine, V1, VarOut).
+
+% Lforall : Universal Elimination
 fitch_g4_proof(lall((Premisses > _), SubProof), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- !,
     extract_new_formula(Premisses > _, SubProof, NewFormula),
 
@@ -4318,13 +4037,13 @@ fitch_g4_proof(lall((Premisses > _), SubProof), Context, Scope, CurLine, NextLin
     derive_and_continue(Scope, NewFormula, '$ \\forall E $ ~w', [UnivLine], lall(UnivLine),
                        SubProof, Context, CurLine, NextLine, ResLine, VarIn, VarOut).
 
-% R∃
+% Rexists
 fitch_g4_proof(rex((_ > [Goal]), SubProof), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- !,
     fitch_g4_proof(SubProof, Context, Scope, CurLine, SubEnd, _WitnessLine, VarIn, V1),
     % CORRECTION: Reference SubEnd (witness line), not WitnessLine
     derive_formula(Scope, Goal, '$ \\exists I $ ~w', [SubEnd], rex(SubEnd),
                   SubEnd, NextLine, ResLine, V1, VarOut).
-% L∃
+% Lexists
 fitch_g4_proof(lex((Premisses > [Goal]), SubProof), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- !,
     select((?[Z-X]:Body), Premisses, _),
     find_context_line(?[Z-X]:Body, Context, ExistLine),
@@ -4344,7 +4063,7 @@ fitch_g4_proof(lex((Premisses > [Goal]), SubProof), Context, Scope, CurLine, Nex
       render_have(Scope, Goal, Just, SubEnd, ElimLine, V2, VarOut),
       NextLine = ElimLine, ResLine = ElimLine
     ).
-% L∃∨ : Combined existential-disjunction
+% Lexists\/ : Combined existential-disjunction
 fitch_g4_proof(lex_lor((Premisses > [Goal]), SP1, SP2), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- !,
     SP1 =.. [_, (Prem1 > _)|_],
     SP2 =.. [_, (Prem2 > _)|_],
@@ -4622,11 +4341,11 @@ build_tree_from_just(ltoto(Line), _LineNum, Formula, FitchLines, unary_node(ltot
     !, build_buss_tree(Line, FitchLines, SubTree).
 
 % -- Disjunction Rules --
-% R∨ (Intro Or)
+% R\/ (Intro Or)
 build_tree_from_just(ror(SubLine), _LineNum, Formula, FitchLines, unary_node(ror, Formula, SubTree)) :-
     !, build_buss_tree(SubLine, FitchLines, SubTree).
 
-% L∨ (Elim Or) - Ternary
+% L\/ (Elim Or) - Ternary
 build_tree_from_just(lor(DisjLine, HypA, EndA, HypB, EndB), _LineNum, Formula, FitchLines,
                      ternary_node(lor, HypA, HypB, Formula, DisjTree, TreeA, TreeB)) :-
     !,
@@ -4634,27 +4353,27 @@ build_tree_from_just(lor(DisjLine, HypA, EndA, HypB, EndB), _LineNum, Formula, F
     build_buss_tree(EndA, FitchLines, TreeA),
     build_buss_tree(EndB, FitchLines, TreeB).
 
-% L∨-> (Left disjunction to conditional)
+% L\/-> (Left disjunction to conditional)
 build_tree_from_just(lorto(Line), _LineNum, Formula, FitchLines, unary_node(lorto, Formula, SubTree)) :-
     !, build_buss_tree(Line, FitchLines, SubTree).
 
 % -- Conjunction Rules --
-% L∧ (Elim And)
+% L/\ (Elim And)
 build_tree_from_just(land(ConjLine, _Which), _LineNum, Formula, FitchLines, unary_node(land, Formula, SubTree)) :-
     !, build_buss_tree(ConjLine, FitchLines, SubTree).
 build_tree_from_just(land(ConjLine), _LineNum, Formula, FitchLines, unary_node(land, Formula, SubTree)) :-
     !, build_buss_tree(ConjLine, FitchLines, SubTree).
 
-% R∧ (Intro And)
+% R/\ (Intro And)
 build_tree_from_just(rand(LineA, LineB), _LineNum, Formula, FitchLines, binary_node(rand, Formula, TreeA, TreeB)) :-
     !, build_buss_tree(LineA, FitchLines, TreeA), build_buss_tree(LineB, FitchLines, TreeB).
 
-% L∧-> (Left conjunction to conditional)
+% L/\-> (Left conjunction to conditional)
 build_tree_from_just(landto(Line), _LineNum, Formula, FitchLines, unary_node(landto, Formula, SubTree)) :-
     !, build_buss_tree(Line, FitchLines, SubTree).
 
 % -- Falsum / Negation Rules --
-% L⊥ (Bot Elim)
+% L_|_ (Bot Elim)
 build_tree_from_just(lbot(BotLine), _LineNum, Formula, FitchLines, unary_node(lbot, Formula, SubTree)) :-
     !, build_buss_tree(BotLine, FitchLines, SubTree).
 
@@ -4671,26 +4390,26 @@ build_tree_from_just(ip(HypNum, BotNum), _LineNum, Formula, FitchLines, discharg
     build_buss_tree(BotNum, FitchLines, SubTree).
 
 % -- Quantifier Rules --
-% L∃ (Exist Elim)
+% Lexists (Exist Elim)
 build_tree_from_just(lex(ExistLine, WitNum, GoalNum), _LineNum, Formula, FitchLines,
                      discharged_node(lex, WitNum, Formula, ExistTree, GoalTree)) :-
     !,
     build_buss_tree(ExistLine, FitchLines, ExistTree),
     build_buss_tree(GoalNum, FitchLines, GoalTree).
 
-% R∃ (Exist Intro)
+% Rexists (Exist Intro)
 build_tree_from_just(rex(WitLine), _LineNum, Formula, FitchLines, unary_node(rex, Formula, SubTree)) :-
     !, build_buss_tree(WitLine, FitchLines, SubTree).
 
-% L∀ (Forall Elim) - Special case when UnivLine = 0 (not found in context)
+% Lforall (Forall Elim) - Special case when UnivLine = 0 (not found in context)
 build_tree_from_just(lall(0), _LineNum, Formula, _FitchLines, axiom_node(Formula)) :-
     !.
 
-% L∀ (Forall Elim) - Normal case
+% Lforall (Forall Elim) - Normal case
 build_tree_from_just(lall(UnivLine), _LineNum, Formula, FitchLines, unary_node(lall, Formula, SubTree)) :-
     !, build_buss_tree(UnivLine, FitchLines, SubTree).
 
-% R∀ (Forall Intro)
+% Rforall (Forall Intro)
 build_tree_from_just(rall(BodyLine), _LineNum, Formula, FitchLines, unary_node(rall, Formula, SubTree)) :-
     !, build_buss_tree(BodyLine, FitchLines, SubTree).
 
@@ -4799,7 +4518,7 @@ render_buss_tree(ternary_node(Rule, HypA, HypB, F, TreeA, TreeB, TreeC)) :-
     write('\\TrinaryInfC{$'), render_formula_for_buss(F), write('$}'), nl.
 
 % -- Nodes with Discharge (Assumptions) --
-% For rcond (→I): check for vacuous discharge
+% For rcond (->I): check for vacuous discharge
 render_buss_tree(discharged_node(rcond, HypNum, F, SubTree)) :-
     render_buss_tree(SubTree),
     format_rule_label(rcond, BaseLabel),
@@ -5265,7 +4984,7 @@ prove_tptp_file(Filename) :-
     open(Filename, read, Stream),
     read_tptp_formulas(Stream, Formulas),
     close(Stream),
-    process_tptp_formulas(Formulas).
+    ( process_tptp_formulas(Formulas) -> true ; true ).
 
 % Read all fof() declarations from file
 read_tptp_formulas(Stream, Formulas) :-
@@ -5285,11 +5004,17 @@ process_tptp_formulas(Formulas) :-
     process_tptp_formulas(Formulas, []).
 
 % process_tptp_formulas(Formulas, AccumulatedAxioms)
+%
+% No conjecture found: test satisfiability of the axiom set.
+% SZS Unsatisfiable if axioms are inconsistent, SZS Satisfiable otherwise.
 process_tptp_formulas([], Axioms) :-
-    % If axioms remain at end without conjecture, report them
     (   Axioms \= [] ->
         length(Axioms, NumAxioms),
-        format('~nWarning: ~w axiom(s) without conjecture at end of file~n', [NumAxioms])
+        format('~nSatisfiability check: ~w axiom(s) without conjecture~n', [NumAxioms]),
+        maplist(convert_axiom_formula, Axioms, G4micAxioms),
+        combine_axioms(G4micAxioms, Combined),
+        NegCombined = (Combined => #),
+        ( prove_tptp_internal(NegCombined, no_conjecture) -> true ; true )
     ;   true
     ).
 
@@ -5301,7 +5026,7 @@ process_tptp_formulas([fof(Name, Role, Formula)|Rest], AccAxioms) :-
     ;   Role = conjecture ->
         % Found conjecture - combine with accumulated axioms
         nl,
-        format('═══════════════════════════════════════════════════════════════~n', []),
+        format('===============================================================~n', []),
         (   AccAxioms = [] ->
             format('TPTP Problem: ~w (conjecture, no axioms)~n', [Name])
         ;   length(AccAxioms, NumAxioms),
@@ -5310,7 +5035,7 @@ process_tptp_formulas([fof(Name, Role, Formula)|Rest], AccAxioms) :-
             extract_axiom_names(AccAxioms, AxiomNames),
             format('  Axioms: ~w~n', [AxiomNames])
         ),
-        format('═══════════════════════════════════════════════════════════════~n', []),
+        format('===============================================================~n', []),
         nl,
 
         % Convert all formulas (axioms and conjecture)
@@ -5328,8 +5053,8 @@ process_tptp_formulas([fof(Name, Role, Formula)|Rest], AccAxioms) :-
             format('Combined formula: ~w axiom(s) => conjecture~n~n', [NumAx])
         ),
 
-        % Prove the combined formula
-        prove_tptp_internal(CombinedFormula),
+        % Prove the combined formula - SZS: Theorem / CounterSatisfiable
+        ( prove_tptp_internal(CombinedFormula, has_conjecture) -> true ; true ),
 
         % Clear accumulated axioms and continue
         process_tptp_formulas(Rest, [])
@@ -5365,70 +5090,7 @@ extract_axiom_names([], []).
 extract_axiom_names([fof(Name, _, _)|Rest], [Name|Names]) :-
     extract_axiom_names(Rest, Names).
 
-% Convert TPTP formula by replacing Prolog variables with generated atoms
-% This preserves the variable/constant distinction that string conversion destroys
-convert_tptp_vars(Formula, Converted) :-
-    convert_tptp_vars(Formula, 0, Converted, _).
-
-% For quantifiers, unify Prolog variables with generated atoms
-convert_tptp_vars(!(VarTerm:Body), Counter, Result, NextCounter) :- !,
-    % Handle both ![X]: and ![X,Y]:
-    (   is_list(VarTerm) ->
-        bind_vars_in_list(VarTerm, Counter, Counter1)
-    ;   var(VarTerm) ->
-        xyz_name(Counter, AtomName),
-        VarTerm = AtomName,
-        Counter1 is Counter + 1
-    ;   Counter1 = Counter
-    ),
-    convert_tptp_vars(Body, Counter1, NewBody, NextCounter),
-    Result = (!(VarTerm:NewBody)).
-
-convert_tptp_vars(?(VarTerm:Body), Counter, Result, NextCounter) :- !,
-    (   is_list(VarTerm) ->
-        bind_vars_in_list(VarTerm, Counter, Counter1)
-    ;   var(VarTerm) ->
-        xyz_name(Counter, AtomName),
-        VarTerm = AtomName,
-        Counter1 is Counter + 1
-    ;   Counter1 = Counter
-    ),
-    convert_tptp_vars(Body, Counter1, NewBody, NextCounter),
-    Result = (?(VarTerm:NewBody)).
-
-convert_tptp_vars(A & B, Counter, NewA & NewB, NextCounter) :- !,
-    convert_tptp_vars(A, Counter, NewA, Counter1),
-    convert_tptp_vars(B, Counter1, NewB, NextCounter).
-
-convert_tptp_vars(A | B, Counter, NewA | NewB, NextCounter) :- !,
-    convert_tptp_vars(A, Counter, NewA, Counter1),
-    convert_tptp_vars(B, Counter1, NewB, NextCounter).
-
-convert_tptp_vars(A => B, Counter, NewA => NewB, NextCounter) :- !,
-    convert_tptp_vars(A, Counter, NewA, Counter1),
-    convert_tptp_vars(B, Counter1, NewB, NextCounter).
-
-convert_tptp_vars(A <=> B, Counter, NewA <=> NewB, NextCounter) :- !,
-    convert_tptp_vars(A, Counter, NewA, Counter1),
-    convert_tptp_vars(B, Counter1, NewB, NextCounter).
-
-convert_tptp_vars(~A, Counter, ~NewA, NextCounter) :- !,
-    convert_tptp_vars(A, Counter, NewA, NextCounter).
-
-convert_tptp_vars(Term, Counter, Term, Counter).
-
-% Bind each variable in a list to a generated atom
-bind_vars_in_list([], Counter, Counter).
-bind_vars_in_list([Var|Rest], Counter, NextCounter) :-
-    (   var(Var) ->
-        xyz_name(Counter, AtomName),
-        Var = AtomName,
-        Counter1 is Counter + 1
-    ;   Counter1 = Counter
-    ),
-    bind_vars_in_list(Rest, Counter1, NextCounter).
-
-% Expand multi-variable quantifiers ONLY: ![v0,v1]: → ![v0]:![v1]:
+% Expand multi-variable quantifiers ONLY: ![v0,v1]: -> ![v0]:![v1]:
 % G4-mic's prepare() handles the binding, we just need to unnest lists
 expand_multi_var_quantifiers(!(Expr), Result) :-
     Expr = (VarList:Body),
@@ -5504,7 +5166,7 @@ char_downcase(C, L) :-
 % This clause was matching before the list-handling clause and causing bugs
 
 % PRIMARY PATTERN - handles all cases including lists
-% Expand multi-variable quantifiers: ![x,y]: → ![x]:![y]:
+% Expand multi-variable quantifiers: ![x,y]: -> ![x]:![y]:
 % CRITICAL: ![a,b]:Body is parsed as !([a,b]:Body) due to operator precedence
 expand_quantifier_lists(!(Expr), Result) :-
     Expr = (VarTerm:Body),
@@ -5637,118 +5299,11 @@ expand_exists_list([Var|Rest], Body, Result) :-
     Expr = (Var:RestResult),
     Result =.. ['?', Expr].
 
-% Convert comma operator to list: ','(a,','(b,c)) → [a,b,c]
+% Convert comma operator to list: ','(a,','(b,c)) -> [a,b,c]
 comma_to_list((A,B), [A|Rest]) :-
     !,
     comma_to_list(B, Rest).
 comma_to_list(A, [A]).
-
-% Rename quantified variables in a formula to x, y, z, x0, y0, z0...
-rename_quantified_vars(Formula, RenamedFormula) :-
-    % Safety check: if Formula is an unbound variable, fail gracefully
-    (   var(Formula) ->
-        RenamedFormula = Formula
-    ;   rename_quantified_vars(Formula, 0, RenamedFormula, _)
-    ).
-
-% Counter-based renaming
-
-% Pattern 1: !(Var:Body) - produced by expand_forall_list
-rename_quantified_vars(!(OldName:Body), Counter, Result, NextCounter) :-
-    (atom(OldName) ; compound(OldName)), !,  % Accept both atoms and compounds like $var(0)
-    format('DEBUG rename !(~w:...) with counter=~w~n', [OldName, Counter]),
-    xyz_name(Counter, NewName),
-    format('DEBUG newname=~w, substituting in: ~w~n', [NewName, Body]),
-    substitute_in_formula(Body, OldName, NewName, SubstBody),
-    format('DEBUG after subst: ~w~n', [SubstBody]),
-    Counter1 is Counter + 1,
-    rename_quantified_vars(SubstBody, Counter1, NewBody, NextCounter),
-    % Construct !(NewName:NewBody) explicitly
-    Expr = (NewName:NewBody),
-    Result =.. ['!', Expr],
-    format('DEBUG result: ~w~n', [Result]).
-
-% Pattern 2: ?(Var:Body) - produced by expand_exists_list
-rename_quantified_vars(?(OldName:Body), Counter, Result, NextCounter) :-
-    (atom(OldName) ; compound(OldName)), !,  % Accept both atoms and compounds like $var(0)
-    xyz_name(Counter, NewName),
-    substitute_in_formula(Body, OldName, NewName, SubstBody),
-    Counter1 is Counter + 1,
-    rename_quantified_vars(SubstBody, Counter1, NewBody, NextCounter),
-    % Construct ?(NewName:NewBody) explicitly
-    Expr = (NewName:NewBody),
-    Result =.. ['?', Expr].
-
-% Pattern 3: ![Var]:Body - legacy pattern
-rename_quantified_vars(![OldName]:Body, Counter, ![NewName]:NewBody, NextCounter) :- !,
-    xyz_name(Counter, NewName),
-    substitute_in_formula(Body, OldName, NewName, SubstBody),
-    Counter1 is Counter + 1,
-    rename_quantified_vars(SubstBody, Counter1, NewBody, NextCounter).
-
-rename_quantified_vars(?[OldName]:Body, Counter, ?[NewName]:NewBody, NextCounter) :- !,
-    xyz_name(Counter, NewName),
-    substitute_in_formula(Body, OldName, NewName, SubstBody),
-    Counter1 is Counter + 1,
-    rename_quantified_vars(SubstBody, Counter1, NewBody, NextCounter).
-
-rename_quantified_vars(A & B, Counter, NewA & NewB, NextCounter) :- !,
-    rename_quantified_vars(A, Counter, NewA, Counter1),
-    rename_quantified_vars(B, Counter1, NewB, NextCounter).
-
-rename_quantified_vars(A | B, Counter, NewA | NewB, NextCounter) :- !,
-    rename_quantified_vars(A, Counter, NewA, Counter1),
-    rename_quantified_vars(B, Counter1, NewB, NextCounter).
-
-rename_quantified_vars(A => B, Counter, NewA => NewB, NextCounter) :- !,
-    rename_quantified_vars(A, Counter, NewA, Counter1),
-    rename_quantified_vars(B, Counter1, NewB, NextCounter).
-
-rename_quantified_vars(A <=> B, Counter, NewA <=> NewB, NextCounter) :- !,
-    rename_quantified_vars(A, Counter, NewA, Counter1),
-    rename_quantified_vars(B, Counter1, NewB, NextCounter).
-
-rename_quantified_vars(~A, Counter, ~NewA, NextCounter) :- !,
-    rename_quantified_vars(A, Counter, NewA, NextCounter).
-
-% Equality - no renaming needed, just process both sides
-rename_quantified_vars(A = B, Counter, NewA = NewB, Counter) :- !,
-    rename_in_term(A, NewA),
-    rename_in_term(B, NewB).
-
-rename_quantified_vars(Term, Counter, NewTerm, Counter) :-
-    compound(Term), !,
-    Term =.. [F|Args],
-    maplist(rename_in_term, Args, NewArgs),
-    NewTerm =.. [F|NewArgs].
-
-rename_quantified_vars(Atom, Counter, Atom, Counter).
-
-% Helper for compound terms (no renaming, just recursion)
-rename_in_term(Term, Term) :-
-    atomic(Term), !.
-rename_in_term(Term, NewTerm) :-
-    compound(Term),
-    Term =.. [F|Args],
-    maplist(rename_in_term, Args, NewArgs),
-    NewTerm =.. [F|NewArgs].
-
-% Substitute all occurrences of OldName with NewName in formula
-substitute_in_formula(Old, Old, New, New) :-
-    atom(Old), !.
-
-substitute_in_formula(Atom, _Old, _New, Atom) :-
-    atomic(Atom), !.
-
-substitute_in_formula(Term, Old, New, NewTerm) :-
-    compound(Term), !,
-    Term =.. [F|Args],
-    maplist(substitute_in_args(Old, New), Args, NewArgs),
-    NewTerm =.. [F|NewArgs].
-
-substitute_in_args(Old, New, Arg, NewArg) :-
-    substitute_in_formula(Arg, Old, New, NewArg).
-% Generate x, y, z, x0, y0, z0, x1, y1, z1...
 xyz_name(N, Name) :-
     Base is N mod 3,
     Suffix is N div 3,
@@ -5761,36 +5316,70 @@ xyz_name(N, Name) :-
 % Convert TPTP formula to G4-mic using string conversion
 % This is more reliable than trying to manipulate the term structure
 
+% =========================================================================
+% SZS STATUS MAPPING
+% =========================================================================
+% With conjecture:    proved => Theorem,       not proved => CounterSatisfiable
+% Without conjecture: proved => Unsatisfiable, not proved => Satisfiable
+
+szs_status(has_conjecture, proved,    theorem).
+szs_status(has_conjecture, disproved, countersatisfiable).
+szs_status(no_conjecture,  proved,    unsatisfiable).
+szs_status(no_conjecture,  disproved, satisfiable).
+
+% Backward-compatible wrapper (called from prove_tptp/1 and elsewhere)
+prove_tptp_internal(Formula) :-
+    prove_tptp_internal(Formula, has_conjecture).
 
 % Direct TPTP formula entry (for testing)
 prove_tptp(fof(Name, Role, Formula)) :-
     nl,
-    format('═══════════════════════════════════════════════════════════════~n', []),
+    format('===============================================================~n', []),
     format('TPTP: ~w (~w)~n', [Name, Role]),
-    format('═══════════════════════════════════════════════════════════════~n', []),
+    format('===============================================================~n', []),
     nl,
     convert_tptp_formula(Formula, G4micFormula),
     format('Converted to G4-mic: ~w~n~n', [G4micFormula]),
     % Skip validate_and_warn for TPTP - it gives false positives on ![x]: syntax
-    prove_tptp_internal(G4micFormula).
+    prove_tptp_internal(G4micFormula, has_conjecture).
 
 % Internal prove for TPTP (bypasses validate_and_warn)
-prove_tptp_internal(Formula) :-
+% Case 1: equality/functions detected - delegate to nanoCoP
+prove_tptp_internal(Formula, ProblemType) :-
     % Check if needs nanoCoP (equality/functions)
     g4mic_needs_nanocop(Formula),
     !,
     nl,
-    write('╔═══════════════════════════════════════════════════════════╗'), nl,
-    write('   🔍 EQUALITY/FUNCTIONS DETECTED → USING NANOCOP ENGINE     '), nl,
-    write('╚═══════════════════════════════════════════════════════════╝'), nl,
+    write('[ Equality/functions detected -- routing to nanoCoP ]'), nl,
     nl,
-    write('🔄 Calling nanoCoP prover...'), nl, nl,
-    nanocop_proves(Formula),
-    write('═══════════════════════════════════════════════════════════════'), nl,
-    write('✅ Q.E.D.  '), nl, nl.
+    write('Calling nanoCoP...'), nl, nl,
+    ( nanocop_proves(Formula) ->
+        szs_status(ProblemType, proved, SZSStatus),
+        upcase_atom(SZSStatus, SZSUpper),
+        format('% SZS status ~w~n', [SZSUpper]),
+        write('Q.E.D.'), nl, nl
+    ;
+        szs_status(ProblemType, disproved, SZSStatus),
+        upcase_atom(SZSStatus, SZSUpper),
+        format('% SZS status ~w~n', [SZSUpper]),
+        fail
+    ).
 
-prove_tptp_internal(Formula) :-
-    % Normal g4mic flow (same as prove/1 but without validate_and_warn)
+% Case 2a: no conjecture - only test satisfiability, no proof output
+prove_tptp_internal(Formula, no_conjecture) :-
+    !,
+    ( catch(
+          call_with_inference_limit(nanocop_decides(Formula), 2000000, _),
+          _,
+          fail
+      ) ->
+      write('% SZS status Unsatisfiable'), nl
+    ;
+      write('% SZS status Satisfiable'), nl
+    ).
+
+% Case 2b: has conjecture - full g4mic proof flow
+prove_tptp_internal(Formula, has_conjecture) :-
     current_prolog_flag(occurs_check, OriginalFlag),
     ( catch(
           setup_call_cleanup(
@@ -5803,12 +5392,12 @@ prove_tptp_internal(Formula) :-
       ) ->
       true
     ;
-    nl, !, fail
+    szs_disproved_status(Formula, DisprStatus2),
+    format('% SZS status ~w~n', [DisprStatus2]), !, fail
     ),
 
-    write('═══════════════════════════════════════════════════════════'), nl,
-    write('  🎯 G4 PROOF FOR: '), write(Formula), nl,
-    write('═══════════════════════════════════════════════════════════'), nl,
+    write('--- G4 Proof for: '), write(Formula), nl,
+    write('-----------------------------------------------------------'), nl,
     nl,
 
     retractall(premiss_list(_)),
@@ -5822,37 +5411,29 @@ prove_tptp_internal(Formula) :-
     statistics(walltime, [Start|_]),
 
     ( provable_at_level([] > [F2], minimal, Proof) ->
-        write('┌─────────────────────────────────────────────────────────┐'), nl,
-        write('              ✅ MINIMAL LOGIC                            '), nl,
-        write('└─────────────────────────────────────────────────────────┘'), nl,
+        write('--- Minimal logic ---'), nl,
         Logic = minimal,
         OutputProof = Proof
 
     ; provable_at_level([] > [F2], constructive, Proof) ->
-        write('┌─────────────────────────────────────────────────────────┐'), nl,
-        write('              ✅ INTUITIONISTIC LOGIC                      '), nl,
-        write('└─────────────────────────────────────────────────────────┘'), nl,
+        write('--- Intuitionistic logic ---'), nl,
         Logic = intuitionistic,
         OutputProof = Proof
 
     ; provable_at_level([] > [F2], classical, Proof) ->
-        write('┌─────────────────────────────────────────────────────────┐'), nl,
-        write('              ✅ CLASSICAL LOGIC                           '), nl,
-        write('└─────────────────────────────────────────────────────────┘'), nl,
+        write('--- Classical logic ---'), nl,
         Logic = classical,
         OutputProof = Proof
 
     ;
         nl,
-        write('═════════════════════════════════════════════════════════════'), nl,
-        write('⚠️  UNEXPECTED: g4mic failed but nanoCoP validated!'), nl,
-        write('═════════════════════════════════════════════════════════════'), nl,
+        write('[!] UNEXPECTED: g4mic failed but nanoCoP validated!'), nl,
         nl,
         write('This is likely a BUG in G4-mic.'), nl,
         write('Please help improve G4-mic by reporting this issue:'), nl,
         nl,
-        write('  📧  Email: joseph@vidal-rosset.net'), nl,
-        write('  📝  Include: the formula and this error message'), nl,
+        write('  *  Email: joseph@vidal-rosset.net'), nl,
+        write('  -  Include: the formula and this error message'), nl,
         nl,
         write('Thank you for your contribution!'), nl,
         nl,
@@ -5863,79 +5444,60 @@ prove_tptp_internal(Formula) :-
     Time is (End - Start) / 1000,
 
     nl,
-    format('⏱️  G4mic time: ~3f seconds~n', [Time]),
+    format('G4mic time: ~3f seconds~n', [Time]),
     nl,
-    output_proof_results(OutputProof, Logic, Formula, theorem),
-    !,
-
+    write('% SZS status Theorem'), nl,
+    nl,
+    output_proof_results(OutputProof, Logic, Formula),
     % Validation phase
     nl,
-    write('╔══════════════════════════════════════════════════════════════╗'), nl,
-    write('                  🔍 PHASE 3: VALIDATION                         '), nl,
-    write('╚══════════════════════════════════════════════════════════════╝'), nl,
+    write('--- Validation ---'), nl,
     nl,
-
-    write('═══════════════════════════════════════════════════════════════'), nl,
-    write('🔍 g4mic_decides output'), nl,
-    write('═══════════════════════════════════════════════════════════════'), nl,
+    write('g4mic_decides:   '),
     ( catch(g4mic_decides(Formula), _, fail) ->
-        write('true.'), nl,
+        write('true'), nl,
         G4micResult = valid
     ;
-        write('false. '), nl,
+        write('false'), nl,
         G4micResult = invalid
     ),
-    nl,
-
-    write('═══════════════════════════════════════════════════════════════'), nl,
-    write('🔍 nanocop_decides output'), nl,
-    write('═══════════════════════════════════════════════════════════════'), nl,
+    write('nanocop_decides: '),
     ( catch(time(nanocop_decides(Formula)), _, fail) ->
-        write('true.'), nl,
+        write('true'), nl,
         NanoCopResult = valid
     ;
-        write('false.'), nl,
+        write('false'), nl,
         NanoCopResult = invalid
     ),
     nl,
-
-    write('═══════════════════════════════════════════════════════════════'), nl,
-    write('📊 Validation Summary'), nl,
-    write('═══════════════════════════════════════════════════════════════'), nl,
     ( G4micResult = valid, NanoCopResult = valid ->
-        write('✅ Both provers agree: '), write('true'), nl
+        write('Both provers agree: valid.'), nl
     ; G4micResult = invalid, NanoCopResult = invalid ->
-        write('✅ Both provers agree: '), write('false'), nl
+        write('Both provers agree: invalid.'), nl
     ; G4micResult = valid, NanoCopResult = invalid ->
-        nl,
-        write('═════════════════════════════════════════════════════════════'), nl,
-        write('⚠️  CRITICAL DISAGREEMENT: g4mic=true, nanoCoP=false'), nl,
-        write('═════════════════════════════════════════════════════════════'), nl,
-        nl,
-        write('This is a SOUNDNESS BUG in G4-mic (false positive).'), nl,
-        write('G4-mic proved an invalid formula!'), nl,
-        nl,
-        write('URGENT: Please report this issue immediately:'), nl,
-        write('  📧  Email: joseph@vidal-rosset.net'), nl,
-        write('  📝  Include: the formula and full output'), nl,
-        nl
+        write('[!] SOUNDNESS BUG: g4mic=true, nanoCoP=false'), nl,
+        write('    Please report to: joseph@vidal-rosset.net'), nl
     ; G4micResult = invalid, NanoCopResult = valid ->
-        nl,
-        write('═════════════════════════════════════════════════════════════'), nl,
-        write('⚠️  DISAGREEMENT: g4mic=false, nanoCoP=true'), nl,
-        write('═════════════════════════════════════════════════════════════'), nl,
-        nl,
-        write('This is a COMPLETENESS issue in G4-mic (false negative).'), nl,
-        write('G4-mic failed to prove a valid formula.'), nl,
-        nl,
-        write('Please help improve G4-mic by reporting this:'), nl,
-        write('  📧  Email: joseph@vidal-rosset.net'), nl,
-        write('  📝  Include: the formula and validation output'), nl,
-        nl
+        write('[!] COMPLETENESS ISSUE: g4mic=false, nanoCoP=true'), nl,
+        write('    Please report to: joseph@vidal-rosset.net'), nl
     ),
-    nl, nl.
+    nl.
 
 % =========================================================================
 % UTILITY: AUTO-SUGGESTION (optional feature)
 % =========================================================================
 %%% END OF g4mic PROVER
+
+% Determine SZS status for a formula that failed to prove.
+% If ~F is provable (i.e. F is a contradiction), status is 'Unsatisfiable'.
+% Otherwise F is coherent but not valid: status is 'CounterSatisfiable'.
+szs_disproved_status(Formula, Status) :-
+    ( catch(
+          call_with_inference_limit(nanocop_decides(~Formula), 2000000, _),
+          _,
+          fail
+      ) ->
+      Status = 'Unsatisfiable'
+    ;
+      Status = 'CounterSatisfiable'
+    ).

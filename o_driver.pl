@@ -79,64 +79,12 @@
 :- [viii_tree_style].
 :- [ix_clean_fitch].
 :- [x_tptp].
-% -------------------------------------------------------------------------
-% CORE LOGICAL OPERATORS (shared by all)
-% -------------------------------------------------------------------------
-:- op( 500, fy,  ~).              % negation
-:- op(1000, xfy, &).              % conjunction
-:- op(1100, xfy, '|').            % disjunction
-:- op(1110, xfy, =>).             % implication
-:- op(1130, xfy, <=>).            % biconditional (STANDARD: 1130)
-:- op( 500, xfy, :).              % quantifier separator
-% -------------------------------------------------------------------------
-% QUANTIFIERS - Dual syntax (TPTP + internal)
-% -------------------------------------------------------------------------
-:- op( 500, fy,  !).              % universal (TPTP): ![X]:
-:- op( 500, fy,  ?).              % existential (TPTP): ?[X]:
-:- op( 500, fy,  all).            % universal (internal): all X:
-:- op( 500, fy,  ex).             % existential (internal): ex X:
-% -------------------------------------------------------------------------
-% EXTENDED TPTP OPERATORS (from nanocop_tptp)
-% -------------------------------------------------------------------------
-:- op(1130, xfy, <~>).            % negated equivalence
-:- op(1110, xfy, <=).             % reverse implication
-:- op(1100, xfy, '~|').           % negated disjunction (NOR)
-:- op(1000, xfy, ~&).             % negated conjunction (NAND)
-% :- op( 400, xfx, =).              % equality
-:- op( 300, xf,  !).              % negated equality (for !=)
-:- op( 299, fx,  $).              % TPTP constants ($true/$false)
-% =========================================================================
-% g4mic specific
-% =========================================================================
-% Input syntax: sequent turnstile
-% Equivalence operator for sequents (bidirectional provability)
-% :- op(800, xfx, <>).
-% =========================================================================
-% LATEX OPERATORS (formatted output)
-% ATTENTION: Respect spaces exactly!
-% =========================================================================
-:- op( 500, fy, ' \\lnot ').     % negation
-:- op(1000, xfy, ' \\land ').    % conjunction
-:- op(1100, xfy, ' \\lor ').     % disjunction
-:- op(1110, xfx, ' \\to ').      % conditional
-:- op(1120, xfx, ' \\leftrightarrow ').  % biconditional
-:- op( 500, fy, ' \\forall ').   % universal quantifier
-:- op( 500, fy, ' \\exists ').   % existential quantifier
-:- op( 500, xfy, ' ').           % space for quantifiers
-:- op(400, fx, ' \\bot ').      % falsity (#)
-% LaTeX syntax: sequent turnstile
-% :- op(1150, xfx, ' \\vdash ').
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% End of operators list
-%% File: minimal_driver_equal.pl  -  Version: 7.3 FINAL (time seulement dans proves)
-
 :-style_check(-singleton).
-
 :-[nanocop20_swi].
 :-[nanocop_proof].
 :-[nanocop_tptp2].
 
-% Activer le format d'explication complète d'Otten
+% Activer le format d'explication complete d'Otten
 :-retractall(proof(_)).
 :-assert(proof(readable)).
 
@@ -150,10 +98,10 @@ nanocop_proves(Formula) :-
     % Forcer l'affichage
     retractall(g4mic_silent_mode),
 
-    % Limite d'inférences avec LOGIQUE CORRECTE
+    % Limite d'inferences avec LOGIQUE CORRECTE
     call_with_inference_limit(
         (
-            % Détecter l'égalité AVANT traduction
+            % Detecter l'egalite AVANT traduction
             (nanocop_contains_equality(Formula) ->
                 HasEquality = true
             ;
@@ -162,14 +110,14 @@ nanocop_proves(Formula) :-
 
             translate_formula(Formula, InternalFormula),
 
-            % N'appeler leancop_equal QUE si égalité présente
+            % N'appeler leancop_equal QUE si egalite presente
             (HasEquality = true ->
                 leancop_equal(InternalFormula, FormulaToProve)
             ;
                 FormulaToProve = InternalFormula
             ),
 
-            % IMPORTANT : PAS DE NÉGATION - prove2 gère la réfutation en interne
+            % IMPORTANT : PAS DE NEGATION - prove2 gere la refutation en interne
             ( time(prove2(FormulaToProve, [cut,comp(7)], Proof)) ->
               Result='Theorem'
             ;
@@ -177,22 +125,13 @@ nanocop_proves(Formula) :-
             ),
             bmatrix(FormulaToProve, [cut,comp(7)], Matrix),
             output_result(Formula, Matrix, Proof, Result),
-            % VÉRIFIER le résultat
+            % VERIFIER le resultat
             Result='Theorem'
         ),
         2000000,
         InfResult
     ),
-    % VÉRIFIER SI LIMITE ATTEINTE
-    ( InfResult == inference_limit_exceeded ->
-        nl,
-        write('❌ INFERENCE LIMIT EXCEEDED (2,000,000 inferences)'), nl,
-        write('   Formula too complex or invalid'), nl,
-        nl,
-        fail
-    ;
-        true
-    ),!.
+    ( InfResult == inference_limit_exceeded -> fail ; true ),!.
 
 % =========================================================================
 % nanocop_decides/1 :   Version SILENCIEUSE (avec stats)
@@ -201,7 +140,7 @@ nanocop_proves(Formula) :-
 nanocop_decides(Formula) :-
     assertz(g4mic_silent_mode),
 
-    % Détecter l'égalité AVANT traduction
+    % Detecter l'egalite AVANT traduction
     (nanocop_contains_equality(Formula) ->
         HasEquality = true
     ;
@@ -210,19 +149,19 @@ nanocop_decides(Formula) :-
 
     translate_formula(Formula, InternalFormula),
 
-    % N'appeler leancop_equal QUE si égalité présente
+    % N'appeler leancop_equal QUE si egalite presente
     (HasEquality = true ->
         leancop_equal(InternalFormula, FormulaToProve)
     ;
         FormulaToProve = InternalFormula
     ),
 
-    % IMPORTANT : PAS DE NÉGATION - prove2 gère la réfutation en interne
+    % IMPORTANT : PAS DE NEGATION - prove2 gere la refutation en interne
     prove2(FormulaToProve, [cut,comp(7)], _Proof),
     retractall(g4mic_silent_mode), !.
 
 % =========================================================================
-% EQUALITY DETECTION (copié de minimal_driver.pl)
+% EQUALITY DETECTION (copie de minimal_driver.pl)
 % =========================================================================
 
 nanocop_contains_equality((_ = _)) :- !.
@@ -273,17 +212,17 @@ output_result(Formula, Matrix, Proof, Result) :-
         true
     ;
         nl,
-        format('╔═══════════════════════════════════════════════════════════════╗~n'),
-        format('                    NANOCOP THEOREM PROVER                       ~n'),
-        format('╚═══════════════════════════════════════════════════════════════╝~n~n'),
+        format('================================================================~n'),
+        format('                     NANOCOP THEOREM PROVER~n'),
+        format('================================================================~n~n'),
         write('Formula:         '), write(Formula), nl,
         write('Result:    '), write(Result), nl, nl,
         ( var(Proof) ->
             write('No proof found.      '), nl
         ;
-            write('═══════════════════════════════════════════════════════════'), nl,
+            write('==========================================================='), nl,
             nanocop_proof(Matrix, Proof),
-            write('═══════════════════════════════════════════════════════════'), nl
+            write('==========================================================='), nl
         ), nl
     ),!.
 
@@ -300,13 +239,13 @@ translate_formula(F, F_out) :-
 % OPERATOR TRANSLATION - COPIED EXACTLY FROM minimal_driver.pl
 % =========================================================================
 
-% Bottom/falsum: # is translated to ~(p0 => p0) which represents ⊥
+% Bottom/falsum: # is translated to ~(p0 => p0) which represents _|_
 translate_operators(F, (~(p0 => p0))) :-
     nonvar(F),
     (F == '#' ; F == f ; F == bot ; F == bottom ; F == falsum),
     !.
 
-% Top/verum: t is translated to (p0 => p0) which represents ⊤
+% Top/verum: t is translated to (p0 => p0) which represents T
 translate_operators(F, (p0 => p0)) :-
     nonvar(F),
     (F == t ; F == top ; F == verum),
@@ -442,58 +381,6 @@ nanocop_decides_silent(Formula) :-
 % - Teaching purposes (showing why a formula doesn't hold)
 % =========================================================================
 
-% Analyze and display nanoCoP refutation
-nanocop_refutation_analysis(Formula) :-
-    nl,
-    write('❌ INVALID (nanoCoP).'), nl,
-
-    % Build the matrix
-    translate_formula(Formula, InternalFormula),
-    Problem1 = (~InternalFormula),
-    leancop_equal(Problem1, Problem2),
-
-    % Try to prove (will fail)
-    \+ prove2(Problem2, [cut,comp(7)], _Proof),
-
-    % Display the matrix
-    bmatrix(Problem2, [cut,comp(7)], Matrix),
-    write(' === RAW MATRIX CONSTRUCTION ==='), nl,
-    write('    '), portray_clause(Matrix), nl, nl,
-
-    % Analyze open path (counter-model)
-    extract_open_path(Matrix, OpenPath),
-    write(' === RAW OPEN PATH ==='), nl,
-    write('    '), portray_clause(OpenPath), nl, nl,
-
-    % Display premises for refutation
-    write(' 🎯 PREMISS FOR REFUTATION :'), nl, nl,
-    extract_and_display_assignments(OpenPath),
-    nl.
-
-% Extract an open path from the matrix
-extract_open_path(Matrix, OpenPath) :-
-    findall(Lit, (member((_^_)^_: Literals, Matrix), member(Lit, Literals)), AllLits),
-    include(is_negative_literal, AllLits, OpenPath).
-
-is_negative_literal(- _).
-is_negative_literal((_ => #)).
-
-% Extract and display assignments
-extract_and_display_assignments(OpenPath) :-
-    findall(Atom=Value, literal_to_assignment(OpenPath, Atom, Value), Assignments),
-    ( Assignments \= [] ->
-        forall(member(A=V, Assignments),
-               format('     ~w = ~w~n', [A, V]))
-    ;
-        write('     (no direct assignments found)'), nl
-    ).
-
-% Convert a literal to an assignment
-literal_to_assignment([- A|_], A, '⊤') :- atomic(A), !.
-literal_to_assignment([(A => #)|_], A, '⊤') :- atomic(A), !.
-literal_to_assignment([_|Rest], Atom, Value) :-
-    literal_to_assignment(Rest, Atom, Value).
-% =========================================================================
 % STARTUP BANNER
 % =========================================================================
 % Disable automatic SWI-Prolog banner
@@ -504,34 +391,26 @@ literal_to_assignment([_|Rest], Atom, Value) :-
 
 show_banner :-
     current_prolog_flag(version_data, swi(Major, Minor, Patch, _)),
-   format('Welcome to ~w (32 bits, version ~w.~w.~w)~n',
-       ['\e]8;;https://www.swi-prolog.org\e\\SWI-Prolog\e]8;;\e\\',
-        Major, Minor, Patch]),
-    write('╔═══════════════════════════════════════════════════════════════════╗'), nl,
-    write('║                                                                   ║'), nl,
-    write('🎓🎓🎓                     𝐆𝟒+                                 🎓🎓🎓'), nl,
-    write('🎓🎓🎓    A Unified Prover for Minimal, Intuitionistic and     🎓🎓🎓'), nl,
-    write('🎓🎓🎓       Classical First-Order Logic (G4 + nanoCoP)        🎓🎓🎓'), nl,
-    write('║                                                                   ║'), nl,
-    write('╠═══════════════════════════════════════════════════════════════════╣'), nl,
-    write('║                                                                   ║'), nl,
-    write('⚠️⚠️   Your formula MUST follow the correct syntax (type help.)  ⚠️⚠️ '), nl,
-    write('║                                                                   ║'), nl,
-    write('╠═══════════════════════════════════════════════════════════════════╣'), nl,
-    write('║                                                                   ║'), nl,
-    write('║   📝  Usage:                                                      ║'), nl,
-    write('║     • prove(Formula).          → proof in 3 styles + validation   ║'), nl,
-    write('║     • decide(Formula)          → concise mode                     ║'), nl,
-    write('║     • prove_tptp(fof(...)).    → TPTP format support              ║'), nl,
-    write('║     • prove_tptp_file(File).   → process TPTP .p file             ║'), nl,
-    write('║     • nanocop_proves(Formula)  → nanoCoP only - verbose mode      ║'), nl,
-    write('║     • nanocop_decides(Formula) → nanoCoP only - concise mode      ║'), nl,
-    write('║     • help.                    → show detailed help               ║'), nl,
-    write('║     • examples.                → show formula examples            ║'), nl,
-    write('║                                                                   ║'), nl,
-    write('║   💡  Remember: End each request with a dot!                      ║'), nl,
-    write('║                                                                   ║'), nl,
-    write('╚═══════════════════════════════════════════════════════════════════╝'), nl,
+    format('SWI-Prolog version ~w.~w.~w~n', [Major, Minor, Patch]),
+    nl,
+    write('================================================================'), nl,
+    write('  G4+  --  Unified Prover for Minimal, Intuitionistic and'), nl,
+    write('           Classical First-Order Logic (G4 + nanoCoP)'), nl,
+    write('================================================================'), nl,
+    write('  NOTE: Your formula must follow the correct syntax.'), nl,
+    write('        Type  help.  for details.'), nl,
+    write('----------------------------------------------------------------'), nl,
+    write('  prove(Formula).           full proof with validation'), nl,
+    write('  decide(Formula).          concise validity check'), nl,
+    write('  prove_tptp(fof(...)).     TPTP format support'), nl,
+    write('  prove_tptp_file(File).    process a TPTP .p file'), nl,
+    write('  nanocop_proves(Formula).  nanoCoP engine, verbose'), nl,
+    write('  nanocop_decides(Formula). nanoCoP engine, concise'), nl,
+    write('  help.                     detailed help'), nl,
+    write('  examples.                 formula examples'), nl,
+    write('----------------------------------------------------------------'), nl,
+    write('  End each query with a dot.'), nl,
+    write('================================================================'), nl,
     nl.
 
 % =========================================================================
@@ -540,7 +419,7 @@ show_banner :-
 
 logic_iteration_limit(constructive, 3).
 logic_iteration_limit(classical, 4).
-logic_iteration_limit(minimal, 3).
+logic_iteration_limit(minimal, 5).
 logic_iteration_limit(intuitionistic, 3).
 logic_iteration_limit(fol, 4).
 
@@ -567,18 +446,18 @@ for(Threshold, M, N) :- M < N, M1 is M+1, for(Threshold, M1, N).
 % to optimize proof search strategy.
 %
 % Key optimizations:
-% 1. Double negation elimination: ~~A → A (in safe contexts)
-% 2. Excluded middle detection: A ∨ ¬A patterns
+% 1. Double negation elimination: ~~A -> A (in safe contexts)
+% 2. Excluded middle detection: A \/ ~A patterns
 % 3. DNE (Double Negation Elimination) presence checking
-% 4. Peirce's law detection: ((A → B) → A) → A
+% 4. Peirce's law detection: ((A -> B) -> A) -> A
 %
 % Strategy:
-% - If classical patterns detected early → skip minimal/intuitionistic attempts
+% - If classical patterns detected early -> skip minimal/intuitionistic attempts
 % - Start directly with classical logic rules
 % - Avoid wasting time on constructive proof attempts for inherently classical formulas
 %
-% This is a significant performance optimization: formulas like ~~A → A or
-% A ∨ ¬A cannot be proven constructively, so detecting them early saves
+% This is a significant performance optimization: formulas like ~~A -> A or
+% A \/ ~A cannot be proven constructively, so detecting them early saves
 % unnecessary backtracking through minimal and intuitionistic logic levels.
 %
 % Pattern detection is conservative: only triggers on clear classical markers
@@ -708,11 +587,11 @@ is_fol_structural_pattern((_) => ?[_-_]:(_ & ![_-_]:(_ | _))) :- !.
 %
 % Supported input formats:
 % 1. Theorems: prove(F)
-%    - Proves ⊢ F (F is a tautology)
+%    - Proves |- F (F is a tautology)
 %
 % 2. Biconditionals: prove(A <=> B)
 %    - Equivalence between two formulas
-%    - Proves both A → B and B → A
+%    - Proves both A -> B and B -> A
 %
 % For each input, the system:
 % - Validates syntax
@@ -728,17 +607,17 @@ is_fol_structural_pattern((_) => ?[_-_]:(_ & ![_-_]:(_ | _))) :- !.
 % Handles biconditional formulas (equivalences): prove(A <=> B)
 %
 % A biconditional A <=> B is proven by establishing both directions:
-% - Direction 1: A → B  (forward implication)
-% - Direction 2: B → A  (backward implication)
+% - Direction 1: A -> B  (forward implication)
+% - Direction 2: B -> A  (backward implication)
 %
 % Special handling:
 % 1. If formula contains equality or function symbols:
-%    → Route exclusively to nanoCoP (G4 doesn't handle equality natively)
+%    -> Route exclusively to nanoCoP (G4 doesn't handle equality natively)
 %
 % 2. For pure propositional/FOL formulas:
-%    → Prove both directions with G4
-%    → Validate each direction with nanoCoP
-%    → Display proofs in all three styles (sequent, Fitch, tree)
+%    -> Prove both directions with G4
+%    -> Validate each direction with nanoCoP
+%    -> Display proofs in all three styles (sequent, Fitch, tree)
 %
 % The system groups output by proof style rather than by direction,
 % making it easier to compare the two directions in the same format.
@@ -753,20 +632,20 @@ prove(Left <=> Right) :-
     !,
 
     nl,
-    write('╔═══════════════════════════════════════════════════════════╗'), nl,
-    write('    🔍 EQUALITY/FUNCTIONS DETECTED → USING NANOCOP ENGINE    '), nl,
-    write('╚═══════════════════════════════════════════════════════════╝'), nl,
+    write('============================================================='), nl,
+    write('    - EQUALITY/FUNCTIONS DETECTED -> USING NANOCOP ENGINE    '), nl,
+    write('============================================================='), nl,
     nl,
 
     validate_and_warn(Left <=> Right, _),
 
-    write('🔄 Calling nanoCoP prover...'), nl, nl,
+    write('Calling nanoCoP...'), nl, nl,
 
     % DIRECT CALL to nanocop_proves/1 - THAT'S ALL!
     nanocop_proves(Left <=> Right),
 
-    write('═══════════════════════════════════════════════════════════════'), nl,
-    write('✅ Q.E.D.  '), nl, nl,!.
+    write('==============================================================='), nl,
+    write('Q.E.D.'), nl, nl,!.
 
 %  ALTERNATIVE Clause - no equality/functions: g4mic
 
@@ -774,9 +653,9 @@ prove(Left <=> Right) :-
     \+ g4mic_needs_nanocop(Left <=> Right),  % Exclude equality and functions
     validate_and_warn(Left <=> Right, _ValidatedFormula),
 
-        % ═══════════════════════════════════════════════════════════════
+        % ===============================================================
         % FILTRE NANOCOP (comme prove(Formula))
-        % ═══════════════════════════════════════════════════════════════
+        % ===============================================================
         validate_and_warn(Left, _),
         validate_and_warn(Right, _),
 
@@ -794,12 +673,13 @@ prove(Left <=> Right) :-
           ) ->
           true
         ;
-        nl, !, fail
+        szs_disproved_status(Left <=> Right, DisprStatus694),
+        format('% SZS status ~w~n', [DisprStatus694]), !, fail
         ),
 
-        % ═══════════════════════════════════════════════════════════════
+        % ===============================================================
         % PHASE 1 & 2: g4mic PROOF SEARCH (both directions)
-        % ═══════════════════════════════════════════════════════════════
+        % ===============================================================
         % Test direction 1
         retractall(current_proof_sequent(_)),
         assertz(current_proof_sequent(Left => Right)),
@@ -819,172 +699,151 @@ prove(Left <=> Right) :-
         ),
 
         nl,
-        write('╔══════════════════════════════════════════════════════════════╗'), nl,
-        write('           ↔️  BICONDITIONAL:  Proving Both Directions           '), nl,
-        write('╚══════════════════════════════════════════════════════════════╝'), nl, nl,
+        write('================================================================'), nl,
+        write('           <->  BICONDITIONAL:  Proving Both Directions           '), nl,
+        write('================================================================'), nl, nl,
 
-        % ═══════════════════════════════════════════════════════════════
+        % ===============================================================
         % SEQUENT CALCULUS (both directions)
-        % ═══════════════════════════════════════════════════════════════
-        write('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'), nl,
-        write('📐 Sequent Calculus Proofs'), nl,
-        write('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'), nl, nl,
+        % ===============================================================
+        write('--- Sequent Calculus Proofs ---'), nl, nl,
 
         % Direction 1 - Sequent
-        write('┌──────────────────────────────────────────────────────────────┐'), nl,
-        write('                ➡️   DIRECTION 1                                '), nl,
+        write('----------------------------------------------------------------'), nl,
+        write('                ->   DIRECTION 1                                '), nl,
         write('           '), write(Left => Right), nl,
-        write('└──────────────────────────────────────────────────────────────┘'), nl, nl,
+        write('----------------------------------------------------------------'), nl, nl,
         ( Direction1Valid = true ->
             output_logic_label(Logic1), nl, nl,
             write('\\begin{prooftree}'), nl,
             render_bussproofs(Proof1, 0, _),
             write('\\end{prooftree}'), nl, nl,
-            write('✅ Q. E.D. '), nl, nl
-        ; write('⚠️  FAILED TO PROVE'), nl, nl
+            write('Q.E.D.'), nl, nl
+        ; write('  failed'), nl, nl
         ),
 
         % Direction 2 - Sequent
-        write('┌──────────────────────────────────────────────────────────────┐'), nl,
-        write('                    ⬅️   DIRECTION 2                            '), nl,
+        write('----------------------------------------------------------------'), nl,
+        write('                    <-   DIRECTION 2                            '), nl,
         write('               '), write(Right => Left), nl,
-        write('└──────────────────────────────────────────────────────────────┘'), nl, nl,
+        write('----------------------------------------------------------------'), nl, nl,
         ( Direction2Valid = true ->
             output_logic_label(Logic2), nl, nl,
             write('\\begin{prooftree}'), nl,
             render_bussproofs(Proof2, 0, _),
             write('\\end{prooftree}'), nl, nl,
-            write('✅ Q.E.D.'), nl, nl
-        ; write('⚠️  FAILED TO PROVE'), nl, nl
+            write('Q.E.D.'), nl, nl
+        ; write('  failed'), nl, nl
         ),
 
-        % ═══════════════════════════════════════════════════════════════
+        % ===============================================================
         % NATURAL DEDUCTION - TREE STYLE (both directions)
-        % ═══════════════════════════════════════════════════════════════
-        write('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'), nl,
-        write('🌳 Natural Deduction - Tree Style'), nl,
-        write('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'), nl, nl,
+        % ===============================================================
+        write('--- Natural Deduction (tree style) ---'), nl, nl,
 
         % Direction 1 - ND Tree
-        write('┌──────────────────────────────────────────────────────────────┐'), nl,
-        write('                     ➡️   DIRECTION 1                            '), nl,
+        write('----------------------------------------------------------------'), nl,
+        write('                     ->   DIRECTION 1                            '), nl,
         write('                '), write(Left => Right), nl,
-        write('└──────────────────────────────────────────────────────────────┘'), nl, nl,
+        write('----------------------------------------------------------------'), nl, nl,
         ( Direction1Valid = true ->
             render_nd_tree_proof(Proof1), nl, nl,
-            write('✅ Q.E.D. '), nl, nl
-        ; write('⚠️  FAILED TO PROVE'), nl, nl
+            write('Q.E.D.'), nl, nl
+        ; write('  failed'), nl, nl
         ),
 
         % Direction 2 - ND Tree
-        write('┌──────────────────────────────────────────────────────────────┐'), nl,
-        write('                   ⬅️   DIRECTION 2                              '), nl,
+        write('----------------------------------------------------------------'), nl,
+        write('                   <-   DIRECTION 2                              '), nl,
         write('                 '), write(Right => Left), nl,
-        write('└──────────────────────────────────────────────────────────────┘'), nl, nl,
+        write('----------------------------------------------------------------'), nl, nl,
         ( Direction2Valid = true ->
             render_nd_tree_proof(Proof2), nl, nl,
-            write('✅ Q.E.D.'), nl, nl
-        ; write('⚠️  FAILED TO PROVE'), nl, nl
+            write('Q.E.D.'), nl, nl
+        ; write('  failed'), nl, nl
         ),
 
-        % ═══════════════════════════════════════════════════════════════
+        % ===============================================================
         % NATURAL DEDUCTION - FITCH STYLE (both directions)
-        % ═══════════════════════════════════════════════════════════════
-        write('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'), nl,
-        write('🚩 Natural Deduction - Flag Style'), nl,
-        write('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'), nl, nl,
+        % ===============================================================
+        write('--- Natural Deduction (flag style) ---'), nl, nl,
 
         % Direction 1 - Fitch
-        write('┌──────────────────────────────────────────────────────────────┐'), nl,
-        write('                     ➡️   DIRECTION 1                           '), nl,
+        write('----------------------------------------------------------------'), nl,
+        write('                     ->   DIRECTION 1                           '), nl,
         write('                '), write(Left => Right), nl,
-        write('└──────────────────────────────────────────────────────────────┘'), nl, nl,
+        write('----------------------------------------------------------------'), nl, nl,
         ( Direction1Valid = true ->
             % write('\\begin{fitch}'), nl,
             % g4_to_fitch_theorem(Proof1),
             % write('\\end{fitch}'), nl, nl,
           render_clean_fitch(Proof1),nl,nl,
-            write('✅ Q. E.D.'), nl, nl
-        ; write('⚠️  FAILED TO PROVE'), nl, nl
+            write('Q.E.D.'), nl, nl
+        ; write('  failed'), nl, nl
         ),
 
         % Direction 2 - Fitch
-        write('┌──────────────────────────────────────────────────────────────┐'), nl,
-        write('              ⬅️   DIRECTION 2                                   '), nl,
+        write('----------------------------------------------------------------'), nl,
+        write('              <-   DIRECTION 2                                   '), nl,
         write('             '), write(Right => Left), nl,
-        write('└──────────────────────────────────────────────────────────────┘'), nl, nl,
+        write('----------------------------------------------------------------'), nl, nl,
         ( Direction2Valid = true ->
             % write('\\begin{fitch}'), nl,
             % g4_to_fitch_theorem(Proof2),
             % write('\\end{fitch}'), nl, nl,
           render_clean_fitch(Proof2),nl,nl,
-            write('✅ Q.E.D. '), nl, nl
-        ; write('⚠️  FAILED TO PROVE'), nl, nl
+            write('Q.E.D.'), nl, nl
+        ; write('  failed'), nl, nl
         ),
 
-        % ═══════════════════════════════════════════════════════════════
+        % ===============================================================
         % SUMMARY
-        % ═══════════════════════════════════════════════════════════════
-        write('╔══════════════════════════════════════════════════════════════╗'), nl,
-        write('                          📊 SUMMARY                             '), nl,
-        write('╚══════════════════════════════════════════════════════════════╝'), nl,
+        % ===============================================================
+        write('================================================================'), nl,
+        write('                          - SUMMARY                             '), nl,
+        write('================================================================'), nl,
         write('Direction 1 ('), write(Left => Right), write('): '),
         ( Direction1Valid = true ->
-            write('✅ VALID in '), write(Logic1), write(' logic')
-        ; write('⚠️  FAILED')
+            write('  valid in '), write(Logic1), write(' logic')
+        ; write('  failed')
         ), nl,
         write('Direction 2 ('), write(Right => Left), write('): '),
         ( Direction2Valid = true ->
-            write('✅ VALID in '), write(Logic2), write(' logic')
-        ; write('⚠️  FAILED')
+            write('  valid in '), write(Logic2), write(' logic')
+        ; write('  failed')
         ), nl, nl,
 
-        % ═══════════════════════════════════════════════════════════════
-        % PHASE 3: EXTERNAL VALIDATION (g4mic FIRST, THEN NANOCOP)
-        % ═══════════════════════════════════════════════════════════════
-        write('╔══════════════════════════════════════════════════════════════╗'), nl,
-        write('                  🔍 PHASE 3: VALIDATION                         '), nl,
-        write('╚══════════════════════════════════════════════════════════════╝'), nl,
+        % Validation
         nl,
-
-        % g4mic VALIDATION (PRIMARY PROVER)
-        write('═══════════════════════════════════════════════════════════════'), nl,
-        write('🔍 g4mic_decides output'), nl,
-        write('═══════════════════════════════════════════════════════════════'), nl,
+        write('--- Validation ---'), nl,
+        nl,
+        write('g4mic_decides:   '),
         ( catch(g4mic_decides(Left <=> Right), _, fail) ->
-            write('true.'), nl,
+            write('true'), nl,
             G4micResult = valid
         ;
-            write('false.'), nl,
+            write('false'), nl,
             G4micResult = invalid
         ),
-        nl,
-
-        % NANOCOP VALIDATION (EXTERNAL VALIDATION)
-        write('═══════════════════════════════════════════════════════════════'), nl,
-        write('🔍 nanocop_decides output'), nl,
-        write('═══════════════════════════════════════════════════════════════'), nl,
+        write('nanocop_decides: '),
         ( catch(time(nanocop_decides(Left <=> Right)), _, fail) ->
-            write('true. '), nl,
+            write('true'), nl,
             NanoCopResult = valid
         ;
-            write('false.'), nl,
+            write('false'), nl,
             NanoCopResult = invalid
         ),
         nl,
-
-        % VALIDATION SUMMARY
-        write('═══════════════════════════════════════════════════════════════'), nl,
-        write('📊 Validation Summary'), nl,
-        write('═══════════════════════════════════════════════════════════════'), nl,
         ( G4micResult = valid, NanoCopResult = valid ->
-            write('✅ Both provers agree: '), write('true'), nl
+            write('Both provers agree: valid.'), nl
         ; G4micResult = invalid, NanoCopResult = invalid ->
-            write('✅ Both provers agree: '), write('false'), nl
+            write('Both provers agree: invalid.'), nl
         ; G4micResult = valid, NanoCopResult = invalid ->
-            write('⚠️  Disagreement: g4mic=true, nanocop=false'), nl
+            write('[!] SOUNDNESS BUG: g4mic=true, nanoCoP=false'), nl,
+            write('    Please report to: joseph@vidal-rosset.net'), nl
         ; G4micResult = invalid, NanoCopResult = valid ->
-            write('⚠️  Disagreement: g4mic=false, nanocop=true'), nl
+            write('[!] COMPLETENESS ISSUE: g4mic=false, nanoCoP=true'), nl,
+            write('    Please report to: joseph@vidal-rosset.net'), nl
         ),
         nl, nl, !.
 
@@ -1001,28 +860,28 @@ prove(Formula) :-
     !,
 
     nl,
-    write('╔═══════════════════════════════════════════════════════════╗'), nl,
-    write('    🔍 EQUALITY/FUNCTIONS DETECTED → USING NANOCOP ENGINE    '), nl,
-    write('╚═══════════════════════════════════════════════════════════╝'), nl,
+    write('============================================================='), nl,
+    write('    - EQUALITY/FUNCTIONS DETECTED -> USING NANOCOP ENGINE    '), nl,
+    write('============================================================='), nl,
     nl,
 
     validate_and_warn(Formula, _),
 
-    write('🔄 Calling nanoCoP prover...'), nl, nl,
+    write('Calling nanoCoP...'), nl, nl,
 
     % DIRECT CALL to nanocop_proves/1 - THAT'S ALL!
     nanocop_proves(Formula),
 
-    write('═══════════════════════════════════════════════════════════════'), nl,
-    write('✅ Q.E.D.  '), nl, nl,!.
+    write('==============================================================='), nl,
+    write('Q.E.D.'), nl, nl,!.
 
-% ALTERNATIVE CLAUSE: No equality/functions → normal g4mic flow
+% ALTERNATIVE CLAUSE: No equality/functions -> normal g4mic flow
 prove(Formula) :-
     \+ g4mic_needs_nanocop(Formula),  % Exclude equality and functions
     validate_and_warn(Formula, _ValidatedFormula),
-    % ═══════════════════════════════════════════════════════════════
+    % ===============================================================
     % NANOCOP FILTER (negative only)
-    % ═══════════════════════════════════════════════════════════════
+    % ===============================================================
     % NANOCOP FILTER (WASM version)
     current_prolog_flag(occurs_check, OriginalFlag),
     ( catch(
@@ -1037,15 +896,15 @@ prove(Formula) :-
       ) ->
       true
     ;
-    nl, !, fail
+    szs_disproved_status(Formula, DisprStatus),
+    format('% SZS status ~w~n', [DisprStatus]), !, fail
     ),
 
-    % ═══════════════════════════════════════════════════════════════
+    % ===============================================================
     % g4mic PROOF
-    % ═══════════════════════════════════════════════════════════════
-    write('═══════════════════════════════════════════════════════════'), nl,
-    write('  🎯 G4 PROOF FOR: '), write(Formula), nl,
-    write('═══════════════════════════════════════════════════════════'), nl,
+    % ===============================================================
+    write('--- G4 Proof for: '), write(Formula), nl,
+    write('-----------------------------------------------------------'), nl,
     nl,
 
     retractall(premiss_list(_)),
@@ -1059,37 +918,29 @@ prove(Formula) :-
     statistics(walltime, [Start|_]),
 
     ( provable_at_level([] > [F2], minimal, Proof) ->
-        write('┌─────────────────────────────────────────────────────────┐'), nl,
-        write('              ✅ MINIMAL LOGIC                            '), nl,
-        write('└─────────────────────────────────────────────────────────┘'), nl,
+        write('--- Minimal logic ---'), nl,
         Logic = minimal,
         OutputProof = Proof
 
     ; provable_at_level([] > [F2], constructive, Proof) ->
-        write('┌─────────────────────────────────────────────────────────┐'), nl,
-        write('              ✅ INTUITIONISTIC LOGIC                      '), nl,
-        write('└─────────────────────────────────────────────────────────┘'), nl,
+        write('--- Intuitionistic logic ---'), nl,
         Logic = intuitionistic,
         OutputProof = Proof
 
     ; provable_at_level([] > [F2], classical, Proof) ->
-        write('┌─────────────────────────────────────────────────────────┐'), nl,
-        write('              ✅ CLASSICAL LOGIC                           '), nl,
-        write('└─────────────────────────────────────────────────────────┘'), nl,
+        write('--- Classical logic ---'), nl,
         Logic = classical,
         OutputProof = Proof
 
     ;
         nl,
-        write('═════════════════════════════════════════════════════════════'), nl,
-        write('⚠️  UNEXPECTED: g4mic failed but nanoCoP validated!'), nl,
-        write('═════════════════════════════════════════════════════════════'), nl,
+        write('[!] UNEXPECTED: g4mic failed but nanoCoP validated!'), nl,
         nl,
         write('This is likely a BUG in G4-mic.'), nl,
         write('Please help improve G4-mic by reporting this issue:'), nl,
         nl,
-        write('  📧  Email: joseph@vidal-rosset.net'), nl,
-        write('  📝  Include: the formula and this error message'), nl,
+        write('  *  Email: joseph@vidal-rosset.net'), nl,
+        write('  -  Include: the formula and this error message'), nl,
         nl,
         write('Thank you for your contribution!'), nl,
         nl,
@@ -1100,25 +951,25 @@ prove(Formula) :-
     Time is (End - Start) / 1000,
 
     nl,
-    format('⏱️  G4mic time: ~3f seconds~n', [Time]),
+    format('G4mic time: ~3f seconds~n', [Time]),
     nl,
-    output_proof_results(OutputProof, Logic, Formula, theorem),
+    format("% SZS status Theorem~n"), nl, output_proof_results(OutputProof, Logic, Formula),
     !,
 
 
-    % ═══════════════════════════════════════════════════════════════
+    % ===============================================================
     % PHASE 3: EXTERNAL VALIDATION (displayed)
-    % ═══════════════════════════════════════════════════════════════
+    % ===============================================================
     nl,
-    write('╔══════════════════════════════════════════════════════════════╗'), nl,
-    write('                  🔍 PHASE 3: VALIDATION                         '), nl,
-    write('╚══════════════════════════════════════════════════════════════╝'), nl,
+    write('================================================================'), nl,
+    write('                  - PHASE 3: VALIDATION                         '), nl,
+    write('================================================================'), nl,
     nl,
 
     % g4mic VALIDATION
-    write('═══════════════════════════════════════════════════════════════'), nl,
-    write('🔍 g4mic_decides output'), nl,
-    write('═══════════════════════════════════════════════════════════════'), nl,
+    write('==============================================================='), nl,
+    write('- g4mic_decides output'), nl,
+    write('==============================================================='), nl,
     ( catch(g4mic_decides(Formula), _, fail) ->
         write('true.'), nl,
         G4micResult = valid
@@ -1129,9 +980,9 @@ prove(Formula) :-
     nl,
 
     % NANOCOP VALIDATION (SILENCIEUX mais avec time/1)
-    write('═══════════════════════════════════════════════════════════════'), nl,
-    write('🔍 nanocop_decides output'), nl,
-    write('═══════════════════════════════════════════════════════════════'), nl,
+    write('==============================================================='), nl,
+    write('- nanocop_decides output'), nl,
+    write('==============================================================='), nl,
     ( catch(time(nanocop_decides(Formula)), _, fail) ->
         write('true.'), nl,
         NanoCopResult = valid
@@ -1142,38 +993,38 @@ prove(Formula) :-
     nl,
 
     % VALIDATION SUMMARY
-    write('═══════════════════════════════════════════════════════════════'), nl,
-    write('📊 Validation Summary'), nl,
-    write('═══════════════════════════════════════════════════════════════'), nl,
+    write('==============================================================='), nl,
+    write('- Validation Summary'), nl,
+    write('==============================================================='), nl,
     ( G4micResult = valid, NanoCopResult = valid ->
-        write('✅ Both provers agree: '), write('true'), nl
+        write('  Both provers agree: '), write('true'), nl
     ; G4micResult = invalid, NanoCopResult = invalid ->
-        write('✅ Both provers agree: '), write('false'), nl
+        write('  Both provers agree: '), write('false'), nl
     ; G4micResult = valid, NanoCopResult = invalid ->
         nl,
-        write('═════════════════════════════════════════════════════════════'), nl,
-        write('⚠️  CRITICAL DISAGREEMENT: g4mic=true, nanoCoP=false'), nl,
-        write('═════════════════════════════════════════════════════════════'), nl,
+        write('============================================================='), nl,
+        write('  DISAGREEMENT: g4mic=true, nanoCoP=false'), nl,
+        write('============================================================='), nl,
         nl,
         write('This is a SOUNDNESS BUG in G4-mic (false positive).'), nl,
         write('G4-mic proved an invalid formula!'), nl,
         nl,
         write('URGENT: Please report this issue immediately:'), nl,
-        write('  📧  Email: joseph@vidal-rosset.net'), nl,
-        write('  📝  Include: the formula and full output'), nl,
+        write('  *  Email: joseph@vidal-rosset.net'), nl,
+        write('  -  Include: the formula and full output'), nl,
         nl
     ; G4micResult = invalid, NanoCopResult = valid ->
         nl,
-        write('═════════════════════════════════════════════════════════════'), nl,
-        write('⚠️  DISAGREEMENT: g4mic=false, nanoCoP=true'), nl,
-        write('═════════════════════════════════════════════════════════════'), nl,
+        write('============================================================='), nl,
+        write('  DISAGREEMENT: g4mic=false, nanoCoP=true'), nl,
+        write('============================================================='), nl,
         nl,
         write('This is a COMPLETENESS issue in G4-mic (false negative).'), nl,
         write('G4-mic failed to prove a valid formula.'), nl,
         nl,
         write('Please help improve G4-mic by reporting this:'), nl,
-        write('  📧  Email: joseph@vidal-rosset.net'), nl,
-        write('  📝  Include: the formula and validation output'), nl,
+        write('  *  Email: joseph@vidal-rosset.net'), nl,
+        write('  -  Include: the formula and validation output'), nl,
         nl
     ),
     nl, nl.
@@ -1186,51 +1037,28 @@ prove(Formula) :-
 % OUTPUT WITH MODE DETECTION
 % =========================================================================
 
-output_proof_results(Proof, LogicType, _OriginalFormula, _Mode) :-
+output_proof_results(Proof, LogicType, _OriginalFormula) :-
     extract_formula_from_proof(Proof, Formula),
     detect_and_set_logic_level(Formula),
-    % Store logic level for use in proof rendering (e.g., DS optimization)
     retractall(current_logic_level(_)),
     assertz(current_logic_level(LogicType)),
 
-    % CRITICAL: Save a fresh copy of Proof BEFORE any renderer touches it.
-    % Renderers (bussproofs, tree style) may instantiate variables in Proof,
-    % which corrupts the term for subsequent renderers.
-    copy_term(Proof, FitchProof),
-
-    % Display appropriate label
+    % Display logic label
     output_logic_label(LogicType),
 
-    % ADDED: Display raw Prolog proof term
-    nl, write('=== RAW PROLOG PROOF TERM ==='), nl,
-    write('    '), portray_clause(Proof), nl, nl,
-    ( catch(
-          (copy_term(Proof, ProofCopy),
-           numbervars(ProofCopy, 0, _),
-           nl, nl),
-          error(cyclic_term, _),
-          (write('%% WARNING: Cannot represent proof term due to cyclic_term.'), nl, nl)
-      ) -> true ; true ),
-
     % Sequent Calculus
-    write('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'), nl,
-    write('📐 Sequent Calculus Proof'), nl,
-    write('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'), nl, nl,
+    write('--- Sequent Calculus Proof ---'), nl, nl,
     write('\\begin{prooftree}'), nl,
     render_bussproofs(Proof, 0, _),
     write('\\end{prooftree}'), nl, nl,
-    write('✅ Q.E.D.'), nl, nl,
+    write('Q.E.D.'), nl, nl,
 
-    write('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'), nl,
-    write('🌳 Natural Deduction - Tree Style'), nl,
-    write('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'), nl, nl,
+    write('--- Natural Deduction (tree style) ---'), nl, nl,
     render_nd_tree_proof(Proof), nl, nl,
-    write('✅ Q.E.D.'), nl, nl,
-    write('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'), nl,
-    write('🚩 Natural Deduction - Flag Style'), nl,
-    write('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'), nl, nl,
-    render_clean_fitch(FitchProof),nl,nl,
-    write('✅ Q.E.D.'), nl, nl,
+    write('Q.E.D.'), nl, nl,
+    write('--- Natural Deduction (flag style) ---'), nl, nl,
+    render_clean_fitch(Proof),nl,nl,
+    write('Q.E.D.'), nl, nl,
     !.
 
 % =========================================================================
@@ -1341,7 +1169,7 @@ g4mic_decides(Formula) :-
     % Follow the same logic progression as prove/1
     (   F2 = ((A => #) => #), A \= (_ => #)  ->
         % Double negation detected - try constructive first
-        write('🔍 Double negation detected → Trying constructive logic first'), nl,
+        write('- Double negation detected -> Trying constructive logic first'), nl,
         ((time(provable_at_level([] > [F2], constructive, Proof1))) ->
             ((time(provable_at_level([] > [F2], minimal, _))) ->
                 write('Valid in minimal logic'), nl
@@ -1358,7 +1186,7 @@ g4mic_decides(Formula) :-
         )
     ; is_classical_pattern(F2) ->
         % Classical pattern detected - but still try constructive first!
-        write('🔍 Classical pattern detected → Trying constructive logic first'), nl,
+        write('- Classical pattern detected -> Trying constructive logic first'), nl,
         ((time(provable_at_level([] > [F2], constructive, Proof2))) ->
             ((time(provable_at_level([] > [F2], minimal, _))) ->
                 write('Valid in minimal logic'), nl
@@ -1374,7 +1202,7 @@ g4mic_decides(Formula) :-
             write('Valid in classical logic'), nl
         )
     ;
-        % Normal progression: minimal → intuitionistic → classical
+        % Normal progression: minimal -> intuitionistic -> classical
         ( time(provable_at_level([] > [F2], minimal, _)) ->
             write('Valid in minimal logic'), nl
         ; time(provable_at_level([] > [F2], constructive, Proof3)) ->

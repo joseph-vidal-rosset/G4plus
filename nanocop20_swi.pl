@@ -67,45 +67,7 @@ prove2(F, Set, Proof) :-
     nb_setval(g4mic_matrix, Mat),
     retractall(lit(_,_,_,_)),
     assert_matrix(Mat),
-    ( prove(Mat, 1, Set, Proof) ->
-        format('~n✅ VALID (nanoCoP).~n')
-    ;   format('~n❌ INVALID (nanoCoP).~n'),
-        nb_getval(g4mic_matrix, G4Mat),
-        write(' === RAW MATRIX CONSTRUCTION ==='), nl,
-        write('    '), portray_clause(G4Mat), nl, nl,
-
-        % Gestion du counter-model
-        (member((_^_)^_: StartCla, G4Mat) ->
-            write(' === RAW OPEN PATH ==='), nl,
-            write('    '), portray_clause(StartCla), nl, nl,
-
-            % Détecter structure complexe AVANT d'essayer
-            ( is_nested_axiom_structure(StartCla) ->
-                % Structure complexe (UNA)
-                nl,
-                write(' 🎯 COUNTER-MODEL :    (complex axiom structure)'), nl,
-                write('    The formula is contradictory with the added axioms.'), nl,
-                write('    Raw path above shows the open branch. '), nl,
-                nl
-            ;
-                % Structure simple :  générer le pretty counter-model
-                ( catch(
-                    (g4mic_interpret_path(StartCla, CounterModel),
-                     format('~n 🎯 PREMISS FOR REFUTATION: ~n~n'),
-                     pretty_print_countermodel(CounterModel)),
-                    _Error,
-                    (nl, write(' 🎯 PREMISS FOR REFUTATION :    (interpretation failed)'), nl, nl)
-                  ) ->
-                    true
-                ;
-                    nl, write(' 🎯 PREMISS FOR REFUTATION :   (unable to generate)'), nl, nl
-                )
-            )
-        ;
-            true
-        ),
-        fail
-    ).
+    prove(Mat, 1, Set, Proof).
 
 %% is_nested_axiom_structure(+Term)
 %% Détecte les structures avec axiomes imbriqués (UNA, etc.)
