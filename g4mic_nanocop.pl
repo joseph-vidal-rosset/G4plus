@@ -5323,7 +5323,7 @@ xyz_name(N, Name) :-
 % Without conjecture: proved => Unsatisfiable, not proved => Satisfiable
 
 szs_status(has_conjecture, proved,    theorem).
-szs_status(has_conjecture, disproved, countersatisfiable).
+szs_status(has_conjecture, disproved, 'CounterSatisfiable').
 szs_status(no_conjecture,  proved,    unsatisfiable).
 szs_status(no_conjecture,  disproved, satisfiable).
 
@@ -5354,18 +5354,16 @@ prove_tptp_internal(Formula, ProblemType) :-
     nl,
     write('Calling nanoCoP...'), nl, nl,
     ( nanocop_proves(Formula) ->
-        szs_status(ProblemType, proved, SZSStatus),
-        upcase_atom(SZSStatus, SZSUpper),
-        format('% SZS status ~w~n', [SZSUpper]),
-        write('Q.E.D.'), nl, nl
+      szs_status(ProblemType, proved, SZSStatus),
+      format('% SZS status ~w~n', [SZSStatus]),
+      write('Q.E.D.'), nl, nl
     ;
-        szs_status(ProblemType, disproved, SZSStatus),
-        upcase_atom(SZSStatus, SZSUpper),
-        format('% SZS status ~w~n', [SZSUpper]),
-        fail
+      szs_status(ProblemType, disproved, SZSStatus),
+      format('% SZS status ~w~n', [SZSStatus]),
+      fail
     ).
 
-% Case 2a: no conjecture - only test satisfiability, no proof output
+% Case 2a: no conjecture - test unsatisfiability, output proof if found
 prove_tptp_internal(Formula, no_conjecture) :-
     !,
     ( catch(
@@ -5373,7 +5371,41 @@ prove_tptp_internal(Formula, no_conjecture) :-
           _,
           fail
       ) ->
-      write('% SZS status Unsatisfiable'), nl
+      write('--- G4 Proof for: '), write(Formula), nl,
+      write('-----------------------------------------------------------'), nl,
+      nl,
+      retractall(premiss_list(_)),
+      retractall(current_proof_sequent(_)),
+      copy_term(Formula, FormulaCopy),
+      prepare(FormulaCopy, [], F0),
+      subst_neg(F0, F1),
+      subst_bicond(F1, F2),
+      statistics(walltime, [Start|_]),
+      ( provable_at_level([] > [F2], minimal, Proof) ->
+          write('--- Minimal logic ---'), nl,
+          Logic = minimal,
+          OutputProof = Proof
+      ; provable_at_level([] > [F2], constructive, Proof) ->
+          write('--- Intuitionistic logic ---'), nl,
+          Logic = intuitionistic,
+          OutputProof = Proof
+      ; provable_at_level([] > [F2], classical, Proof) ->
+          write('--- Classical logic ---'), nl,
+          Logic = classical,
+          OutputProof = Proof
+      ;
+          nl,
+          write('[!] UNEXPECTED: g4mic failed but nanoCoP validated!'), nl,
+          fail
+      ),
+      statistics(walltime, [End|_]),
+      Time is (End - Start) / 1000,
+      nl,
+      format('G4mic time: ~3f seconds~n', [Time]),
+      nl,
+      write('% SZS status Unsatisfiable'), nl,
+      nl,
+      output_proof_results(OutputProof, Logic, Formula)
     ;
       write('% SZS status Satisfiable'), nl
     ).
