@@ -663,6 +663,7 @@ prove(Left <=> Right) :-
     nanocop_proves(Left <=> Right),
 
     write('==============================================================='), nl,
+    write('% SZS status Theorem'), nl,
     write('Q.E.D.'), nl, nl,!.
 
 %  ALTERNATIVE Clause - no equality/functions: g4mic
@@ -831,39 +832,16 @@ prove(Left <=> Right) :-
         ; write('  failed')
         ), nl, nl,
 
+        % SZS status
+        ( Direction1Valid = true, Direction2Valid = true ->
+            write('% SZS status Theorem'), nl
+        ;
+            write('% SZS status CounterSatisfiable'), nl
+        ),
+
         % Validation
-        nl,
-        write('--- Validation ---'), nl,
-        nl,
-        write('g4mic_decides:   '),
-        ( catch(g4mic_decides(Left <=> Right), _, fail) ->
-            write('true'), nl,
-            G4micResult = valid
-        ;
-            write('false'), nl,
-            G4micResult = invalid
-        ),
-        write('nanocop_decides: '),
-        ( catch(time(nanocop_decides(Left <=> Right)), _, fail) ->
-            write('true'), nl,
-            NanoCopResult = valid
-        ;
-            write('false'), nl,
-            NanoCopResult = invalid
-        ),
-        nl,
-        ( G4micResult = valid, NanoCopResult = valid ->
-            write('Both provers agree: valid.'), nl
-        ; G4micResult = invalid, NanoCopResult = invalid ->
-            write('Both provers agree: invalid.'), nl
-        ; G4micResult = valid, NanoCopResult = invalid ->
-            write('[!] SOUNDNESS BUG: g4mic=true, nanoCoP=false'), nl,
-            write('    Please report to: joseph@vidal-rosset.net'), nl
-        ; G4micResult = invalid, NanoCopResult = valid ->
-            write('[!] COMPLETENESS ISSUE: g4mic=false, nanoCoP=true'), nl,
-            write('    Please report to: joseph@vidal-rosset.net'), nl
-        ),
-        nl, nl, !.
+        tptp_validation_phase(Left <=> Right, 'Theorem'),
+        nl, !.
 
 
 % =========================================================================
@@ -891,6 +869,7 @@ prove(Formula) :-
     nanocop_proves(Formula),
 
     write('==============================================================='), nl,
+    write('% SZS status Theorem'), nl,
     write('Q.E.D.'), nl, nl,!.
 
 % ALTERNATIVE CLAUSE: No equality/functions -> normal g4mic flow
@@ -914,8 +893,20 @@ prove(Formula) :-
       ) ->
       true
     ;
+    % nanocop_decides failed: formula is not valid.
+    % Distinguish CounterSatisfiable vs Unsatisfiable, and for the latter
+    % produce a full proof of the negation (=> #) with validation.
     szs_disproved_status(Formula, DisprStatus),
-    format('% SZS status ~w~n', [DisprStatus]), !, fail
+    format('% SZS status ~w~n', [DisprStatus]),
+    ( DisprStatus = 'Unsatisfiable' ->
+        % Formula is a contradiction: prove (Formula => #) and show full proof
+        NegFormula = (Formula => #),
+        nl,
+        write('[ Contradiction detected -- proving (Formula => #) ]'), nl,
+        nl,
+        prove_tptp_internal(NegFormula, no_conjecture)
+    ; true ),
+    !, fail
     ),
 
     % ===============================================================
@@ -972,8 +963,6 @@ prove(Formula) :-
     format('G4mic time: ~3f seconds~n', [Time]),
     nl,
     format("% SZS status Theorem~n"), nl, output_proof_results(OutputProof, Logic, Formula),
-    !,
-
 
     % ===============================================================
     % PHASE 3: EXTERNAL VALIDATION (displayed)
@@ -982,70 +971,8 @@ prove(Formula) :-
     write('================================================================'), nl,
     write('                  - PHASE 3: VALIDATION                         '), nl,
     write('================================================================'), nl,
-    nl,
-
-    % g4mic VALIDATION
-    write('==============================================================='), nl,
-    write('- g4mic_decides output'), nl,
-    write('==============================================================='), nl,
-    ( catch(g4mic_decides(Formula), _, fail) ->
-        write('true.'), nl,
-        G4micResult = valid
-    ;
-        write('false. '), nl,
-        G4micResult = invalid
-    ),
-    nl,
-
-    % NANOCOP VALIDATION (SILENCIEUX mais avec time/1)
-    write('==============================================================='), nl,
-    write('- nanocop_decides output'), nl,
-    write('==============================================================='), nl,
-    ( catch(time(nanocop_decides(Formula)), _, fail) ->
-        write('true.'), nl,
-        NanoCopResult = valid
-    ;
-        write('false.'), nl,
-        NanoCopResult = invalid
-    ),
-    nl,
-
-    % VALIDATION SUMMARY
-    write('==============================================================='), nl,
-    write('- Validation Summary'), nl,
-    write('==============================================================='), nl,
-    ( G4micResult = valid, NanoCopResult = valid ->
-        write('  Both provers agree: '), write('true'), nl
-    ; G4micResult = invalid, NanoCopResult = invalid ->
-        write('  Both provers agree: '), write('false'), nl
-    ; G4micResult = valid, NanoCopResult = invalid ->
-        nl,
-        write('============================================================='), nl,
-        write('  DISAGREEMENT: g4mic=true, nanoCoP=false'), nl,
-        write('============================================================='), nl,
-        nl,
-        write('This is a SOUNDNESS BUG in G4-mic (false positive).'), nl,
-        write('G4-mic proved an invalid formula!'), nl,
-        nl,
-        write('URGENT: Please report this issue immediately:'), nl,
-        write('  *  Email: joseph@vidal-rosset.net'), nl,
-        write('  -  Include: the formula and full output'), nl,
-        nl
-    ; G4micResult = invalid, NanoCopResult = valid ->
-        nl,
-        write('============================================================='), nl,
-        write('  DISAGREEMENT: g4mic=false, nanoCoP=true'), nl,
-        write('============================================================='), nl,
-        nl,
-        write('This is a COMPLETENESS issue in G4-mic (false negative).'), nl,
-        write('G4-mic failed to prove a valid formula.'), nl,
-        nl,
-        write('Please help improve G4-mic by reporting this:'), nl,
-        write('  *  Email: joseph@vidal-rosset.net'), nl,
-        write('  -  Include: the formula and validation output'), nl,
-        nl
-    ),
-    nl, nl.
+    tptp_validation_phase(Formula, 'Theorem'),
+    nl.
 % =========================================================================
 % HELPERS
 % =========================================================================
@@ -4981,23 +4908,49 @@ render_clean_just(Just) :-
 
 % Read and process a TPTP file
 prove_tptp_file(Filename) :-
+    file_directory_name(Filename, FileDir),
     open(Filename, read, Stream),
-    read_tptp_formulas(Stream, Formulas),
+    read_tptp_formulas(Stream, FileDir, Formulas),
     close(Stream),
     ( process_tptp_formulas(Formulas) -> true ; true ).
 
-% Read all fof() declarations from file
-read_tptp_formulas(Stream, Formulas) :-
+% Read all fof() declarations from file, resolving include() directives.
+% FileDir is the directory of the current file, used for relative include paths.
+read_tptp_formulas(Stream, FileDir, Formulas) :-
     \+ at_end_of_stream(Stream),
     read(Stream, Term),
     !,
     (   Term = fof(_, _, _) ->
         Formulas = [Term|Rest],
-        read_tptp_formulas(Stream, Rest)
-    ;   % Skip non-fof terms (comments, etc.)
-        read_tptp_formulas(Stream, Formulas)
+        read_tptp_formulas(Stream, FileDir, Rest)
+    ;   Term = include(RelPath) ->
+        % Resolve include path: try relative to FileDir first, then $TPTP
+        ( atom_concat(FileDir, '/', Prefix),
+          atom_concat(Prefix, RelPath, AbsPath1),
+          exists_file(AbsPath1)
+        -> IncludePath = AbsPath1
+        ; getenv('TPTP', TTPTBase),
+          atom_concat(TTPTBase, '/', TPrefix),
+          atom_concat(TPrefix, RelPath, AbsPath2),
+          exists_file(AbsPath2)
+        -> IncludePath = AbsPath2
+        ;  format('% WARNING: Include file not found: ~w~n', [RelPath]),
+           IncludePath = ''
+        ),
+        ( IncludePath \= '' ->
+            file_directory_name(IncludePath, IncludeDir),
+            open(IncludePath, read, IncStream),
+            read_tptp_formulas(IncStream, IncludeDir, IncFormulas),
+            close(IncStream),
+            read_tptp_formulas(Stream, FileDir, RestFormulas),
+            append(IncFormulas, RestFormulas, Formulas)
+        ;
+            read_tptp_formulas(Stream, FileDir, Formulas)
+        )
+    ;   % Skip other non-fof terms (comments, directives, etc.)
+        read_tptp_formulas(Stream, FileDir, Formulas)
     ).
-read_tptp_formulas(_, []).
+read_tptp_formulas(_, _, []).
 
 % Process list of TPTP formulas - collect axioms and combine with conjecture
 process_tptp_formulas(Formulas) :-
@@ -5322,10 +5275,10 @@ xyz_name(N, Name) :-
 % With conjecture:    proved => Theorem,       not proved => CounterSatisfiable
 % Without conjecture: proved => Unsatisfiable, not proved => Satisfiable
 
-szs_status(has_conjecture, proved,    theorem).
+szs_status(has_conjecture, proved,    'Theorem').
 szs_status(has_conjecture, disproved, 'CounterSatisfiable').
-szs_status(no_conjecture,  proved,    unsatisfiable).
-szs_status(no_conjecture,  disproved, satisfiable).
+szs_status(no_conjecture,  proved,    'Unsatisfiable').
+szs_status(no_conjecture,  disproved, 'Satisfiable').
 
 % Backward-compatible wrapper (called from prove_tptp/1 and elsewhere)
 prove_tptp_internal(Formula) :-
@@ -5405,7 +5358,8 @@ prove_tptp_internal(Formula, no_conjecture) :-
       nl,
       write('% SZS status Unsatisfiable'), nl,
       nl,
-      output_proof_results(OutputProof, Logic, Formula)
+      output_proof_results(OutputProof, Logic, Formula),
+      tptp_validation_phase(Formula, 'Unsatisfiable')
     ;
       write('% SZS status Satisfiable'), nl
     ).
@@ -5481,7 +5435,22 @@ prove_tptp_internal(Formula, has_conjecture) :-
     write('% SZS status Theorem'), nl,
     nl,
     output_proof_results(OutputProof, Logic, Formula),
-    % Validation phase
+    tptp_validation_phase(Formula, 'Theorem').
+
+% =========================================================================
+% UTILITY: AUTO-SUGGESTION (optional feature)
+% =========================================================================
+%%% END OF g4mic PROVER
+
+% =========================================================================
+% SHARED VALIDATION PHASE
+% =========================================================================
+% Called after every successful g4mic proof (prove/1 and prove_tptp_internal).
+% SZSStatus is the SZS verdict already announced ('Theorem' or 'Unsatisfiable'),
+% used to phrase the agreement message correctly.
+% Runs g4mic_decides + nanocop_decides (with time/1) and summarises agreement.
+
+tptp_validation_phase(Formula, SZSStatus) :-
     nl,
     write('--- Validation ---'), nl,
     nl,
@@ -5503,9 +5472,9 @@ prove_tptp_internal(Formula, has_conjecture) :-
     ),
     nl,
     ( G4micResult = valid, NanoCopResult = valid ->
-        write('Both provers agree: valid.'), nl
+        format('Both provers agree: ~w.~n', [SZSStatus])
     ; G4micResult = invalid, NanoCopResult = invalid ->
-        write('Both provers agree: invalid.'), nl
+        write('Both provers agree: not provable.'), nl
     ; G4micResult = valid, NanoCopResult = invalid ->
         write('[!] SOUNDNESS BUG: g4mic=true, nanoCoP=false'), nl,
         write('    Please report to: joseph@vidal-rosset.net'), nl
@@ -5514,11 +5483,6 @@ prove_tptp_internal(Formula, has_conjecture) :-
         write('    Please report to: joseph@vidal-rosset.net'), nl
     ),
     nl.
-
-% =========================================================================
-% UTILITY: AUTO-SUGGESTION (optional feature)
-% =========================================================================
-%%% END OF g4mic PROVER
 
 % Determine SZS status for a formula that failed to prove.
 % If ~F is provable (i.e. F is a contradiction), status is 'Unsatisfiable'.
