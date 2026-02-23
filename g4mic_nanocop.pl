@@ -1387,7 +1387,9 @@ g4mic_proves(Gamma > Delta, FV, Th, SI, SO, LL, rall(Gamma>Delta, P)) :-
 
 % =========================================================================
 % PROPOSITIONAL RULES (deterministic, no branching)
-% =========================================================================
+%=========================================================================
+% LEFT RULES
+%========================================================================
 
 % --- Rule 2: L& -----------------------------------------------------------
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, land(Gamma>Delta, P)) :-
@@ -1420,7 +1422,7 @@ g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, lorto(Gamma>Delta, P)) :-
     ).
 
 % =========================================================================
-% IMPLICATION RULES
+% Intuitionistic rule Lbot and classical rule IP
 % =========================================================================
 % --- Rule 7: L-bot -----------------------------------------------------
 g4mic_proves(Gamma>Delta, _, _, SI, SI, LL, lbot(Gamma>Delta, #)) :-
@@ -1436,18 +1438,12 @@ g4mic_proves(Gamma>Delta, FV, Th, SI, SO, classical, ip(Gamma>Delta, P)) :-
     Th > 0,
     g4mic_proves([(A => #) | Gamma]>[#], FV, Th, SI, SO, classical, P).
 
-% --- Rule 9: R-> ---------------------------------------------------------
-g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, rcond(Gamma>Delta, P)) :-
-    Delta = [A => B], !,
-    g4mic_proves([A | Gamma]>[B], FV, Th, SI, SO, LL, P).
-
-
 % =========================================================================
 % BRANCHING RULES
 % =========================================================================
 %% Left rules first
 %==========================================================================
-% --- Rule 10: L->-> --------------------------------------------------------
+% --- Rule 9: L->-> --------------------------------------------------------
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, ltoto(Gamma>Delta, P1, P2)) :-
     select(((A => B) => C), Gamma, G1),
     \+ (B = #, member(A, G1)),
@@ -1455,11 +1451,20 @@ g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, ltoto(Gamma>Delta, P1, P2)) :-
     g4mic_proves([A, (B => C) | G1]>[B], FV, Th, SI, J1, LL, P1),
     g4mic_proves([C | G1]>Delta, FV, Th, J1, SO, LL, P2).
 
-% --- Rule 11: L\/ (left disjunction) ---------------------------------------
+% --- Rule 10: L\/ (left disjunction) ---------------------------------------
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, lor(Gamma>Delta, P1, P2)) :-
     select((A | B), Gamma, G1), !,
     g4mic_proves([A | G1]>Delta, FV, Th, SI, J1, LL, P1),
     g4mic_proves([B | G1]>Delta, FV, Th, J1, SO, LL, P2).
+
+%=========================================================================
+% RIGHT RULES
+%========================================================================
+
+% --- Rule 11: R-> ---------------------------------------------------------
+g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, rcond(Gamma>Delta, P)) :-
+    Delta = [A => B], !,
+    g4mic_proves([A | Gamma]>[B], FV, Th, SI, SO, LL, P).
 
 % --- Rule 12: R\/ ----------------------------------------------------------
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, ror(Gamma>Delta, P)) :-
