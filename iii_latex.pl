@@ -11,14 +11,18 @@
 
 % render_hypo/7: Display a hypothesis in Fitch style
 
-render_hypo(Scope, Formula, Label, _CurLine, _NextLine, VarIn, VarOut) :-
-    render_fitch_indent(Scope),
-    write(' \\fh '),
-    rewrite(Formula, VarIn, VarOut, LatexFormula),
-    write_formula_with_parens(LatexFormula),
-    write(' &  '),
-    write(Label),
-    write('\\\\'), nl.
+render_hypo(Scope, Formula, Label, _CurLine, NextLine, VarIn, VarOut) :-
+    with_output_to(atom(LatexLine), (
+        render_fitch_indent(Scope),
+        write(' \\fh '),
+        rewrite(Formula, VarIn, VarOut, LatexFormula),
+        write_formula_with_parens(LatexFormula),
+        write(' &  '),
+        write(Label),
+        write('\\\\'), nl
+    )),
+    write(LatexLine),
+    ( integer(NextLine) -> assertz(fitch_line_latex(NextLine, LatexLine)) ; true ).
 
 
 % render_fitch_indent/1: Genere l'indentation Fitch (\\fa)
@@ -31,15 +35,18 @@ render_fitch_indent(N) :-
     N1 is N - 1,
     render_fitch_indent(N1).
 
-render_have(Scope, Formula, Just, _CurLine, _NextLine, VarIn, VarOut) :-
-    render_fitch_indent(Scope),
-    % Always write \fa at level 0 (for sequents)
-    ( Scope = 0 -> write('\\fa ') ; true ),
-    rewrite(Formula, VarIn, VarOut, LatexFormula),
-    write_formula_with_parens(LatexFormula),
-    write(' &  '),
-    write(Just),
-    write('\\\\'), nl.
+render_have(Scope, Formula, Just, _CurLine, NextLine, VarIn, VarOut) :-
+    with_output_to(atom(LatexLine), (
+        render_fitch_indent(Scope),
+        ( Scope = 0 -> write('\\fa ') ; true ),
+        rewrite(Formula, VarIn, VarOut, LatexFormula),
+        write_formula_with_parens(LatexFormula),
+        write(' &  '),
+        write(Just),
+        write('\\\\'), nl
+    )),
+    write(LatexLine),
+    ( integer(NextLine) -> assertz(fitch_line_latex(NextLine, LatexLine)) ; true ).
 
 % =========================================================================
 % SIMPLE RULE: (Antecedent) => (Consequent) except for atoms
@@ -311,12 +318,12 @@ rewrite(# => #, J, J, '\\top') :- !.
 rewrite(f_sk(K), J, J, Name) :-
     integer(K),
     !,
-    rewrite_name(K, Name).
+    constant_name(K, Name).
 
 % Converts f_sk(K,_) to a simple name like 'a', 'b', etc. (two arguments version)
 rewrite(f_sk(K,_), J, J, Name) :-
     !,
-    rewrite_name(K, Name).
+    constant_name(K, Name).
 
 % BASE CASE: atomic formulas
 rewrite(A, J, J, A_latex) :-
@@ -519,17 +526,17 @@ rewrite_list([X|L], J, K, [Y|R]) :-
 rewrite_term(V, J, K, V) :-
     var(V),
     !,
-    rewrite_name(J, V),
+    constant_name(J, V),
     K is J+1.
 
 rewrite_term(f_sk(K), J, J, N) :-
     integer(K),
     !,
-    rewrite_name(K, N).
+    constant_name(K, N).
 
 rewrite_term(f_sk(K,_), J, J, N) :-
     !,
-    rewrite_name(K, N).
+    constant_name(K, N).
 
 % NEW: If the term is a simple atom (constant), DO NOT capitalize it
 % Because it is an argument of a predicate/function
@@ -542,7 +549,7 @@ rewrite_term(X, J, K, Y) :-
     rewrite_list(L, J, K, R),
     Y =.. [F|R].
 
-% Generateur de noms elegants pour variables liées
+% Generateur de noms elegants pour variables liees
 % Use x, y, z instead of a, b, c to avoid collision with constants
 rewrite_name(K, N) :-
     K < 3,
@@ -555,6 +562,21 @@ rewrite_name(K, N) :-
     H is K div 3,
     number_codes(H, L),
     atom_codes(N, [J|L]).
+
+% =========================================================================
+% CONSTANT NAME GENERATOR
+% For instantiation terms (eigenvariables and gamma-rule witnesses)
+% Generates a, b, c, d, ..., w, a1, b1, c1, ... (skipping x, y, z)
+% =========================================================================
+constant_name(K, N) :-
+    Index is K mod 23,
+    Suffix is K div 23,
+    Code is Index + 0'a,
+    char_code(Base, Code),
+    (   Suffix =:= 0 ->
+        N = Base
+    ;   atom_concat(Base, Suffix, N)
+    ).
 
 % Toggle majuscules/minuscules
 toggle(X, Y) :-
@@ -649,56 +671,6 @@ prepare_list([], _, []).
 prepare_list([X|L], Q, [Y|R]) :-
     prepare_term(X, Q, Y),
     prepare_list(L, Q, R).
-
-% Support lambda calculus
-lambda_has(V:_, W) :-
-    V == W.
-
-lambda_has(app(P,_,_,_), W) :-
-    lambda_has(P, W).
-
-lambda_has(app(_,Q,_,_), W) :-
-    lambda_has(Q, W).
-
-lambda_has(lam(V:_,_,_,_), W) :-
-    V == W,
-    !,
-    fail.
-
-lambda_has(lam(_,P,_,_), W) :-
-    lambda_has(P, W).
-
-lambda_has('C'(P,_,_), W) :-
-    lambda_has(P, W).
-
-%%%%%% Sequents
-
-% Determine proof type (theorem or sequent)
-% RENAMED to avoid conflict with proof_type/2 from driver
-% This function analyzes the STRUCTURE of a G4 proof, not the syntax of a formula
-% Generate Fitch commands according to type and position
-fitch_prefix(sequent, LineNum, TotalPremisses, Prefix) :-
-    (   LineNum =< TotalPremisses
-    ->  (   LineNum = TotalPremisses
-        ->  Prefix = '\\fj '  % Big flag for last premiss
-        ;   Prefix = '\\fa '  % Normal line for premisses
-        )
-    ;   Prefix = '\\fa '      % Normal line after premisses
-    ).
-
-fitch_prefix(theorem, Depth, _, Prefix) :-
-    (   Depth > 0
-    ->  Prefix = '\\fa \\fh '  % Small flag for hypotheses
-    ;   Prefix = '\\fa '       % Normal line at level 0
-    ).
-
-% =========================================================================
-% RENDU LATEX BUSSPROOFS
-% =========================================================================
-
-% =========================================================================
-% LaTeX FORMULA RENDERING
-% =========================================================================
 
 % =========================================================================
 % RENDER LATEX FORMULA - Unified with write_formula_with_parens

@@ -2,6 +2,7 @@
 % NATURAL DEDUCTION PRINTER IN TREE STYLE
 % =========================================================================
 :- dynamic fitch_line/4.
+:- dynamic fitch_line_latex/2.
 :- dynamic abbreviated_line/1.
 % =========================================================================
 % DISPLAY PREMISS LIST FOR TREE STYLE
@@ -199,39 +200,39 @@ build_tree_from_just(ltoto(Line), _LineNum, Formula, FitchLines, unary_node(ltot
     !, build_buss_tree(Line, FitchLines, SubTree).
 
 % -- Disjunction Rules --
-% R∨ (Intro Or)
+% R\/ (Intro Or)
 build_tree_from_just(ror(SubLine), _LineNum, Formula, FitchLines, unary_node(ror, Formula, SubTree)) :-
     !, build_buss_tree(SubLine, FitchLines, SubTree).
 
-% L∨ (Elim Or) - Ternary
-build_tree_from_just(lor(DisjLine, HypA, HypB, GoalA, GoalB), _LineNum, Formula, FitchLines,
+% L\/ (Elim Or) - Ternary
+build_tree_from_just(lor(DisjLine, HypA, EndA, HypB, EndB), _LineNum, Formula, FitchLines,
                      ternary_node(lor, HypA, HypB, Formula, DisjTree, TreeA, TreeB)) :-
     !,
     build_buss_tree(DisjLine, FitchLines, DisjTree),
-    build_buss_tree(GoalA, FitchLines, TreeA),
-    build_buss_tree(GoalB, FitchLines, TreeB).
+    build_buss_tree(EndA, FitchLines, TreeA),
+    build_buss_tree(EndB, FitchLines, TreeB).
 
-% L∨-> (Left disjunction to conditional)
+% L\/-> (Left disjunction to conditional)
 build_tree_from_just(lorto(Line), _LineNum, Formula, FitchLines, unary_node(lorto, Formula, SubTree)) :-
     !, build_buss_tree(Line, FitchLines, SubTree).
 
 % -- Conjunction Rules --
-% L∧ (Elim And)
+% L/\ (Elim And)
 build_tree_from_just(land(ConjLine, _Which), _LineNum, Formula, FitchLines, unary_node(land, Formula, SubTree)) :-
     !, build_buss_tree(ConjLine, FitchLines, SubTree).
 build_tree_from_just(land(ConjLine), _LineNum, Formula, FitchLines, unary_node(land, Formula, SubTree)) :-
     !, build_buss_tree(ConjLine, FitchLines, SubTree).
 
-% R∧ (Intro And)
+% R/\ (Intro And)
 build_tree_from_just(rand(LineA, LineB), _LineNum, Formula, FitchLines, binary_node(rand, Formula, TreeA, TreeB)) :-
     !, build_buss_tree(LineA, FitchLines, TreeA), build_buss_tree(LineB, FitchLines, TreeB).
 
-% L∧-> (Left conjunction to conditional)
+% L/\-> (Left conjunction to conditional)
 build_tree_from_just(landto(Line), _LineNum, Formula, FitchLines, unary_node(landto, Formula, SubTree)) :-
     !, build_buss_tree(Line, FitchLines, SubTree).
 
 % -- Falsum / Negation Rules --
-% L⊥ (Bot Elim)
+% L_|_ (Bot Elim)
 build_tree_from_just(lbot(BotLine), _LineNum, Formula, FitchLines, unary_node(lbot, Formula, SubTree)) :-
     !, build_buss_tree(BotLine, FitchLines, SubTree).
 
@@ -248,26 +249,26 @@ build_tree_from_just(ip(HypNum, BotNum), _LineNum, Formula, FitchLines, discharg
     build_buss_tree(BotNum, FitchLines, SubTree).
 
 % -- Quantifier Rules --
-% L∃ (Exist Elim)
+% Lexists (Exist Elim)
 build_tree_from_just(lex(ExistLine, WitNum, GoalNum), _LineNum, Formula, FitchLines,
                      discharged_node(lex, WitNum, Formula, ExistTree, GoalTree)) :-
     !,
     build_buss_tree(ExistLine, FitchLines, ExistTree),
     build_buss_tree(GoalNum, FitchLines, GoalTree).
 
-% R∃ (Exist Intro)
+% Rexists (Exist Intro)
 build_tree_from_just(rex(WitLine), _LineNum, Formula, FitchLines, unary_node(rex, Formula, SubTree)) :-
     !, build_buss_tree(WitLine, FitchLines, SubTree).
 
-% L∀ (Forall Elim) - Special case when UnivLine = 0 (not found in context)
+% Lforall (Forall Elim) - Special case when UnivLine = 0 (not found in context)
 build_tree_from_just(lall(0), _LineNum, Formula, _FitchLines, axiom_node(Formula)) :-
     !.
 
-% L∀ (Forall Elim) - Normal case
+% Lforall (Forall Elim) - Normal case
 build_tree_from_just(lall(UnivLine), _LineNum, Formula, FitchLines, unary_node(lall, Formula, SubTree)) :-
     !, build_buss_tree(UnivLine, FitchLines, SubTree).
 
-% R∀ (Forall Intro)
+% Rforall (Forall Intro)
 build_tree_from_just(rall(BodyLine), _LineNum, Formula, FitchLines, unary_node(rall, Formula, SubTree)) :-
     !, build_buss_tree(BodyLine, FitchLines, SubTree).
 
@@ -376,7 +377,7 @@ render_buss_tree(ternary_node(Rule, HypA, HypB, F, TreeA, TreeB, TreeC)) :-
     write('\\TrinaryInfC{$'), render_formula_for_buss(F), write('$}'), nl.
 
 % -- Nodes with Discharge (Assumptions) --
-% For rcond (→I): check for vacuous discharge
+% For rcond (->I): check for vacuous discharge
 render_buss_tree(discharged_node(rcond, HypNum, F, SubTree)) :-
     render_buss_tree(SubTree),
     format_rule_label(rcond, BaseLabel),

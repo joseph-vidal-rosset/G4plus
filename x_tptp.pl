@@ -6,34 +6,66 @@
 
 % Read and process a TPTP file
 prove_tptp_file(Filename) :-
+    file_directory_name(Filename, FileDir),
     open(Filename, read, Stream),
-    read_tptp_formulas(Stream, Formulas),
+    read_tptp_formulas(Stream, FileDir, Formulas),
     close(Stream),
-    process_tptp_formulas(Formulas).
+    ( process_tptp_formulas(Formulas) -> true ; true ).
 
-% Read all fof() declarations from file
-read_tptp_formulas(Stream, Formulas) :-
+% Read all fof() declarations from file, resolving include() directives.
+% FileDir is the directory of the current file, used for relative include paths.
+read_tptp_formulas(Stream, FileDir, Formulas) :-
     \+ at_end_of_stream(Stream),
     read(Stream, Term),
     !,
     (   Term = fof(_, _, _) ->
         Formulas = [Term|Rest],
-        read_tptp_formulas(Stream, Rest)
-    ;   % Skip non-fof terms (comments, etc.)
-        read_tptp_formulas(Stream, Formulas)
+        read_tptp_formulas(Stream, FileDir, Rest)
+    ;   Term = include(RelPath) ->
+        % Resolve include path: try relative to FileDir first, then $TPTP
+        ( atom_concat(FileDir, '/', Prefix),
+          atom_concat(Prefix, RelPath, AbsPath1),
+          exists_file(AbsPath1)
+        -> IncludePath = AbsPath1
+        ; getenv('TPTP', TTPTBase),
+          atom_concat(TTPTBase, '/', TPrefix),
+          atom_concat(TPrefix, RelPath, AbsPath2),
+          exists_file(AbsPath2)
+        -> IncludePath = AbsPath2
+        ;  format('% WARNING: Include file not found: ~w~n', [RelPath]),
+           IncludePath = ''
+        ),
+        ( IncludePath \= '' ->
+            file_directory_name(IncludePath, IncludeDir),
+            open(IncludePath, read, IncStream),
+            read_tptp_formulas(IncStream, IncludeDir, IncFormulas),
+            close(IncStream),
+            read_tptp_formulas(Stream, FileDir, RestFormulas),
+            append(IncFormulas, RestFormulas, Formulas)
+        ;
+            read_tptp_formulas(Stream, FileDir, Formulas)
+        )
+    ;   % Skip other non-fof terms (comments, directives, etc.)
+        read_tptp_formulas(Stream, FileDir, Formulas)
     ).
-read_tptp_formulas(_, []).
+read_tptp_formulas(_, _, []).
 
 % Process list of TPTP formulas - collect axioms and combine with conjecture
 process_tptp_formulas(Formulas) :-
     process_tptp_formulas(Formulas, []).
 
 % process_tptp_formulas(Formulas, AccumulatedAxioms)
+%
+% No conjecture found: test satisfiability of the axiom set.
+% SZS Unsatisfiable if axioms are inconsistent, SZS Satisfiable otherwise.
 process_tptp_formulas([], Axioms) :-
-    % If axioms remain at end without conjecture, report them
     (   Axioms \= [] ->
         length(Axioms, NumAxioms),
-        format('~nWarning: ~w axiom(s) without conjecture at end of file~n', [NumAxioms])
+        format('~nSatisfiability check: ~w axiom(s) without conjecture~n', [NumAxioms]),
+        maplist(convert_axiom_formula, Axioms, G4micAxioms),
+        combine_axioms(G4micAxioms, Combined),
+        NegCombined = (Combined => #),
+        ( prove_tptp_internal(NegCombined, no_conjecture) -> true ; true )
     ;   true
     ).
 
@@ -45,7 +77,7 @@ process_tptp_formulas([fof(Name, Role, Formula)|Rest], AccAxioms) :-
     ;   Role = conjecture ->
         % Found conjecture - combine with accumulated axioms
         nl,
-        format('═══════════════════════════════════════════════════════════════~n', []),
+        format('===============================================================~n', []),
         (   AccAxioms = [] ->
             format('TPTP Problem: ~w (conjecture, no axioms)~n', [Name])
         ;   length(AccAxioms, NumAxioms),
@@ -54,7 +86,7 @@ process_tptp_formulas([fof(Name, Role, Formula)|Rest], AccAxioms) :-
             extract_axiom_names(AccAxioms, AxiomNames),
             format('  Axioms: ~w~n', [AxiomNames])
         ),
-        format('═══════════════════════════════════════════════════════════════~n', []),
+        format('===============================================================~n', []),
         nl,
 
         % Convert all formulas (axioms and conjecture)
@@ -72,8 +104,8 @@ process_tptp_formulas([fof(Name, Role, Formula)|Rest], AccAxioms) :-
             format('Combined formula: ~w axiom(s) => conjecture~n~n', [NumAx])
         ),
 
-        % Prove the combined formula
-        prove_tptp_internal(CombinedFormula),
+        % Prove the combined formula - SZS: Theorem / CounterSatisfiable
+        ( prove_tptp_internal(CombinedFormula, has_conjecture) -> true ; true ),
 
         % Clear accumulated axioms and continue
         process_tptp_formulas(Rest, [])
@@ -109,70 +141,7 @@ extract_axiom_names([], []).
 extract_axiom_names([fof(Name, _, _)|Rest], [Name|Names]) :-
     extract_axiom_names(Rest, Names).
 
-% Convert TPTP formula by replacing Prolog variables with generated atoms
-% This preserves the variable/constant distinction that string conversion destroys
-convert_tptp_vars(Formula, Converted) :-
-    convert_tptp_vars(Formula, 0, Converted, _).
-
-% For quantifiers, unify Prolog variables with generated atoms
-convert_tptp_vars(!(VarTerm:Body), Counter, Result, NextCounter) :- !,
-    % Handle both ![X]: and ![X,Y]:
-    (   is_list(VarTerm) ->
-        bind_vars_in_list(VarTerm, Counter, Counter1)
-    ;   var(VarTerm) ->
-        xyz_name(Counter, AtomName),
-        VarTerm = AtomName,
-        Counter1 is Counter + 1
-    ;   Counter1 = Counter
-    ),
-    convert_tptp_vars(Body, Counter1, NewBody, NextCounter),
-    Result = (!(VarTerm:NewBody)).
-
-convert_tptp_vars(?(VarTerm:Body), Counter, Result, NextCounter) :- !,
-    (   is_list(VarTerm) ->
-        bind_vars_in_list(VarTerm, Counter, Counter1)
-    ;   var(VarTerm) ->
-        xyz_name(Counter, AtomName),
-        VarTerm = AtomName,
-        Counter1 is Counter + 1
-    ;   Counter1 = Counter
-    ),
-    convert_tptp_vars(Body, Counter1, NewBody, NextCounter),
-    Result = (?(VarTerm:NewBody)).
-
-convert_tptp_vars(A & B, Counter, NewA & NewB, NextCounter) :- !,
-    convert_tptp_vars(A, Counter, NewA, Counter1),
-    convert_tptp_vars(B, Counter1, NewB, NextCounter).
-
-convert_tptp_vars(A | B, Counter, NewA | NewB, NextCounter) :- !,
-    convert_tptp_vars(A, Counter, NewA, Counter1),
-    convert_tptp_vars(B, Counter1, NewB, NextCounter).
-
-convert_tptp_vars(A => B, Counter, NewA => NewB, NextCounter) :- !,
-    convert_tptp_vars(A, Counter, NewA, Counter1),
-    convert_tptp_vars(B, Counter1, NewB, NextCounter).
-
-convert_tptp_vars(A <=> B, Counter, NewA <=> NewB, NextCounter) :- !,
-    convert_tptp_vars(A, Counter, NewA, Counter1),
-    convert_tptp_vars(B, Counter1, NewB, NextCounter).
-
-convert_tptp_vars(~A, Counter, ~NewA, NextCounter) :- !,
-    convert_tptp_vars(A, Counter, NewA, NextCounter).
-
-convert_tptp_vars(Term, Counter, Term, Counter).
-
-% Bind each variable in a list to a generated atom
-bind_vars_in_list([], Counter, Counter).
-bind_vars_in_list([Var|Rest], Counter, NextCounter) :-
-    (   var(Var) ->
-        xyz_name(Counter, AtomName),
-        Var = AtomName,
-        Counter1 is Counter + 1
-    ;   Counter1 = Counter
-    ),
-    bind_vars_in_list(Rest, Counter1, NextCounter).
-
-% Expand multi-variable quantifiers ONLY: ![v0,v1]: → ![v0]:![v1]:
+% Expand multi-variable quantifiers ONLY: ![v0,v1]: -> ![v0]:![v1]:
 % G4-mic's prepare() handles the binding, we just need to unnest lists
 expand_multi_var_quantifiers(!(Expr), Result) :-
     Expr = (VarList:Body),
@@ -248,7 +217,7 @@ char_downcase(C, L) :-
 % This clause was matching before the list-handling clause and causing bugs
 
 % PRIMARY PATTERN - handles all cases including lists
-% Expand multi-variable quantifiers: ![x,y]: → ![x]:![y]:
+% Expand multi-variable quantifiers: ![x,y]: -> ![x]:![y]:
 % CRITICAL: ![a,b]:Body is parsed as !([a,b]:Body) due to operator precedence
 expand_quantifier_lists(!(Expr), Result) :-
     Expr = (VarTerm:Body),
@@ -381,118 +350,11 @@ expand_exists_list([Var|Rest], Body, Result) :-
     Expr = (Var:RestResult),
     Result =.. ['?', Expr].
 
-% Convert comma operator to list: ','(a,','(b,c)) → [a,b,c]
+% Convert comma operator to list: ','(a,','(b,c)) -> [a,b,c]
 comma_to_list((A,B), [A|Rest]) :-
     !,
     comma_to_list(B, Rest).
 comma_to_list(A, [A]).
-
-% Rename quantified variables in a formula to x, y, z, x0, y0, z0...
-rename_quantified_vars(Formula, RenamedFormula) :-
-    % Safety check: if Formula is an unbound variable, fail gracefully
-    (   var(Formula) ->
-        RenamedFormula = Formula
-    ;   rename_quantified_vars(Formula, 0, RenamedFormula, _)
-    ).
-
-% Counter-based renaming
-
-% Pattern 1: !(Var:Body) - produced by expand_forall_list
-rename_quantified_vars(!(OldName:Body), Counter, Result, NextCounter) :-
-    (atom(OldName) ; compound(OldName)), !,  % Accept both atoms and compounds like $var(0)
-    format('DEBUG rename !(~w:...) with counter=~w~n', [OldName, Counter]),
-    xyz_name(Counter, NewName),
-    format('DEBUG newname=~w, substituting in: ~w~n', [NewName, Body]),
-    substitute_in_formula(Body, OldName, NewName, SubstBody),
-    format('DEBUG after subst: ~w~n', [SubstBody]),
-    Counter1 is Counter + 1,
-    rename_quantified_vars(SubstBody, Counter1, NewBody, NextCounter),
-    % Construct !(NewName:NewBody) explicitly
-    Expr = (NewName:NewBody),
-    Result =.. ['!', Expr],
-    format('DEBUG result: ~w~n', [Result]).
-
-% Pattern 2: ?(Var:Body) - produced by expand_exists_list
-rename_quantified_vars(?(OldName:Body), Counter, Result, NextCounter) :-
-    (atom(OldName) ; compound(OldName)), !,  % Accept both atoms and compounds like $var(0)
-    xyz_name(Counter, NewName),
-    substitute_in_formula(Body, OldName, NewName, SubstBody),
-    Counter1 is Counter + 1,
-    rename_quantified_vars(SubstBody, Counter1, NewBody, NextCounter),
-    % Construct ?(NewName:NewBody) explicitly
-    Expr = (NewName:NewBody),
-    Result =.. ['?', Expr].
-
-% Pattern 3: ![Var]:Body - legacy pattern
-rename_quantified_vars(![OldName]:Body, Counter, ![NewName]:NewBody, NextCounter) :- !,
-    xyz_name(Counter, NewName),
-    substitute_in_formula(Body, OldName, NewName, SubstBody),
-    Counter1 is Counter + 1,
-    rename_quantified_vars(SubstBody, Counter1, NewBody, NextCounter).
-
-rename_quantified_vars(?[OldName]:Body, Counter, ?[NewName]:NewBody, NextCounter) :- !,
-    xyz_name(Counter, NewName),
-    substitute_in_formula(Body, OldName, NewName, SubstBody),
-    Counter1 is Counter + 1,
-    rename_quantified_vars(SubstBody, Counter1, NewBody, NextCounter).
-
-rename_quantified_vars(A & B, Counter, NewA & NewB, NextCounter) :- !,
-    rename_quantified_vars(A, Counter, NewA, Counter1),
-    rename_quantified_vars(B, Counter1, NewB, NextCounter).
-
-rename_quantified_vars(A | B, Counter, NewA | NewB, NextCounter) :- !,
-    rename_quantified_vars(A, Counter, NewA, Counter1),
-    rename_quantified_vars(B, Counter1, NewB, NextCounter).
-
-rename_quantified_vars(A => B, Counter, NewA => NewB, NextCounter) :- !,
-    rename_quantified_vars(A, Counter, NewA, Counter1),
-    rename_quantified_vars(B, Counter1, NewB, NextCounter).
-
-rename_quantified_vars(A <=> B, Counter, NewA <=> NewB, NextCounter) :- !,
-    rename_quantified_vars(A, Counter, NewA, Counter1),
-    rename_quantified_vars(B, Counter1, NewB, NextCounter).
-
-rename_quantified_vars(~A, Counter, ~NewA, NextCounter) :- !,
-    rename_quantified_vars(A, Counter, NewA, NextCounter).
-
-% Equality - no renaming needed, just process both sides
-rename_quantified_vars(A = B, Counter, NewA = NewB, Counter) :- !,
-    rename_in_term(A, NewA),
-    rename_in_term(B, NewB).
-
-rename_quantified_vars(Term, Counter, NewTerm, Counter) :-
-    compound(Term), !,
-    Term =.. [F|Args],
-    maplist(rename_in_term, Args, NewArgs),
-    NewTerm =.. [F|NewArgs].
-
-rename_quantified_vars(Atom, Counter, Atom, Counter).
-
-% Helper for compound terms (no renaming, just recursion)
-rename_in_term(Term, Term) :-
-    atomic(Term), !.
-rename_in_term(Term, NewTerm) :-
-    compound(Term),
-    Term =.. [F|Args],
-    maplist(rename_in_term, Args, NewArgs),
-    NewTerm =.. [F|NewArgs].
-
-% Substitute all occurrences of OldName with NewName in formula
-substitute_in_formula(Old, Old, New, New) :-
-    atom(Old), !.
-
-substitute_in_formula(Atom, _Old, _New, Atom) :-
-    atomic(Atom), !.
-
-substitute_in_formula(Term, Old, New, NewTerm) :-
-    compound(Term), !,
-    Term =.. [F|Args],
-    maplist(substitute_in_args(Old, New), Args, NewArgs),
-    NewTerm =.. [F|NewArgs].
-
-substitute_in_args(Old, New, Arg, NewArg) :-
-    substitute_in_formula(Arg, Old, New, NewArg).
-% Generate x, y, z, x0, y0, z0, x1, y1, z1...
 xyz_name(N, Name) :-
     Base is N mod 3,
     Suffix is N div 3,
@@ -505,36 +367,103 @@ xyz_name(N, Name) :-
 % Convert TPTP formula to G4-mic using string conversion
 % This is more reliable than trying to manipulate the term structure
 
+% =========================================================================
+% SZS STATUS MAPPING
+% =========================================================================
+% With conjecture:    proved => Theorem,       not proved => CounterSatisfiable
+% Without conjecture: proved => Unsatisfiable, not proved => Satisfiable
+
+szs_status(has_conjecture, proved,    'Theorem').
+szs_status(has_conjecture, disproved, 'CounterSatisfiable').
+szs_status(no_conjecture,  proved,    'Unsatisfiable').
+szs_status(no_conjecture,  disproved, 'Satisfiable').
+
+% Backward-compatible wrapper (called from prove_tptp/1 and elsewhere)
+prove_tptp_internal(Formula) :-
+    prove_tptp_internal(Formula, has_conjecture).
 
 % Direct TPTP formula entry (for testing)
 prove_tptp(fof(Name, Role, Formula)) :-
     nl,
-    format('═══════════════════════════════════════════════════════════════~n', []),
+    format('===============================================================~n', []),
     format('TPTP: ~w (~w)~n', [Name, Role]),
-    format('═══════════════════════════════════════════════════════════════~n', []),
+    format('===============================================================~n', []),
     nl,
     convert_tptp_formula(Formula, G4micFormula),
     format('Converted to G4-mic: ~w~n~n', [G4micFormula]),
     % Skip validate_and_warn for TPTP - it gives false positives on ![x]: syntax
-    prove_tptp_internal(G4micFormula).
+    prove_tptp_internal(G4micFormula, has_conjecture).
 
 % Internal prove for TPTP (bypasses validate_and_warn)
-prove_tptp_internal(Formula) :-
+% Case 1: equality/functions detected - delegate to nanoCoP
+prove_tptp_internal(Formula, ProblemType) :-
     % Check if needs nanoCoP (equality/functions)
     g4mic_needs_nanocop(Formula),
     !,
     nl,
-    write('╔═══════════════════════════════════════════════════════════╗'), nl,
-    write('   🔍 EQUALITY/FUNCTIONS DETECTED → USING NANOCOP ENGINE     '), nl,
-    write('╚═══════════════════════════════════════════════════════════╝'), nl,
+    write('[ Equality/functions detected -- routing to nanoCoP ]'), nl,
     nl,
-    write('🔄 Calling nanoCoP prover...'), nl, nl,
-    nanocop_proves(Formula),
-    write('═══════════════════════════════════════════════════════════════'), nl,
-    write('✅ Q.E.D.  '), nl, nl.
+    write('Calling nanoCoP...'), nl, nl,
+    ( nanocop_proves(Formula) ->
+      szs_status(ProblemType, proved, SZSStatus),
+      format('% SZS status ~w~n', [SZSStatus]),
+      write('Q.E.D.'), nl, nl
+    ;
+      szs_status(ProblemType, disproved, SZSStatus),
+      format('% SZS status ~w~n', [SZSStatus]),
+      fail
+    ).
 
-prove_tptp_internal(Formula) :-
-    % Normal g4mic flow (same as prove/1 but without validate_and_warn)
+% Case 2a: no conjecture - test unsatisfiability, output proof if found
+prove_tptp_internal(Formula, no_conjecture) :-
+    !,
+    ( catch(
+          call_with_inference_limit(nanocop_decides(Formula), 2000000, _),
+          _,
+          fail
+      ) ->
+      write('--- G4 Proof for: '), write(Formula), nl,
+      write('-----------------------------------------------------------'), nl,
+      nl,
+      retractall(premiss_list(_)),
+      retractall(current_proof_sequent(_)),
+      copy_term(Formula, FormulaCopy),
+      prepare(FormulaCopy, [], F0),
+      subst_neg(F0, F1),
+      subst_bicond(F1, F2),
+      statistics(walltime, [Start|_]),
+      ( provable_at_level([] > [F2], minimal, Proof) ->
+          write('--- Minimal logic ---'), nl,
+          Logic = minimal,
+          OutputProof = Proof
+      ; provable_at_level([] > [F2], constructive, Proof) ->
+          write('--- Intuitionistic logic ---'), nl,
+          Logic = intuitionistic,
+          OutputProof = Proof
+      ; provable_at_level([] > [F2], classical, Proof) ->
+          write('--- Classical logic ---'), nl,
+          Logic = classical,
+          OutputProof = Proof
+      ;
+          nl,
+          write('[!] UNEXPECTED: g4mic failed but nanoCoP validated!'), nl,
+          fail
+      ),
+      statistics(walltime, [End|_]),
+      Time is (End - Start) / 1000,
+      nl,
+      format('G4mic time: ~3f seconds~n', [Time]),
+      nl,
+      write('% SZS status Unsatisfiable'), nl,
+      nl,
+      output_proof_results(OutputProof, Logic, Formula),
+      tptp_validation_phase(Formula, 'Unsatisfiable')
+    ;
+      write('% SZS status Satisfiable'), nl
+    ).
+
+% Case 2b: has conjecture - full g4mic proof flow
+prove_tptp_internal(Formula, has_conjecture) :-
     current_prolog_flag(occurs_check, OriginalFlag),
     ( catch(
           setup_call_cleanup(
@@ -547,12 +476,12 @@ prove_tptp_internal(Formula) :-
       ) ->
       true
     ;
-    nl, !, fail
+    szs_disproved_status(Formula, DisprStatus2),
+    format('% SZS status ~w~n', [DisprStatus2]), !, fail
     ),
 
-    write('═══════════════════════════════════════════════════════════'), nl,
-    write('  🎯 G4 PROOF FOR: '), write(Formula), nl,
-    write('═══════════════════════════════════════════════════════════'), nl,
+    write('--- G4 Proof for: '), write(Formula), nl,
+    write('-----------------------------------------------------------'), nl,
     nl,
 
     retractall(premiss_list(_)),
@@ -566,37 +495,29 @@ prove_tptp_internal(Formula) :-
     statistics(walltime, [Start|_]),
 
     ( provable_at_level([] > [F2], minimal, Proof) ->
-        write('┌─────────────────────────────────────────────────────────┐'), nl,
-        write('              ✅ MINIMAL LOGIC                            '), nl,
-        write('└─────────────────────────────────────────────────────────┘'), nl,
+        write('--- Minimal logic ---'), nl,
         Logic = minimal,
         OutputProof = Proof
 
     ; provable_at_level([] > [F2], constructive, Proof) ->
-        write('┌─────────────────────────────────────────────────────────┐'), nl,
-        write('              ✅ INTUITIONISTIC LOGIC                      '), nl,
-        write('└─────────────────────────────────────────────────────────┘'), nl,
+        write('--- Intuitionistic logic ---'), nl,
         Logic = intuitionistic,
         OutputProof = Proof
 
     ; provable_at_level([] > [F2], classical, Proof) ->
-        write('┌─────────────────────────────────────────────────────────┐'), nl,
-        write('              ✅ CLASSICAL LOGIC                           '), nl,
-        write('└─────────────────────────────────────────────────────────┘'), nl,
+        write('--- Classical logic ---'), nl,
         Logic = classical,
         OutputProof = Proof
 
     ;
         nl,
-        write('═════════════════════════════════════════════════════════════'), nl,
-        write('⚠️  UNEXPECTED: g4mic failed but nanoCoP validated!'), nl,
-        write('═════════════════════════════════════════════════════════════'), nl,
+        write('[!] UNEXPECTED: g4mic failed but nanoCoP validated!'), nl,
         nl,
         write('This is likely a BUG in G4-mic.'), nl,
         write('Please help improve G4-mic by reporting this issue:'), nl,
         nl,
-        write('  📧  Email: joseph@vidal-rosset.net'), nl,
-        write('  📝  Include: the formula and this error message'), nl,
+        write('  *  Email: joseph@vidal-rosset.net'), nl,
+        write('  -  Include: the formula and this error message'), nl,
         nl,
         write('Thank you for your contribution!'), nl,
         nl,
@@ -607,79 +528,67 @@ prove_tptp_internal(Formula) :-
     Time is (End - Start) / 1000,
 
     nl,
-    format('⏱️  G4mic time: ~3f seconds~n', [Time]),
+    format('G4mic time: ~3f seconds~n', [Time]),
     nl,
-    output_proof_results(OutputProof, Logic, Formula, theorem),
-    !,
+    write('% SZS status Theorem'), nl,
+    nl,
+    output_proof_results(OutputProof, Logic, Formula),
+    tptp_validation_phase(Formula, 'Theorem').
 
-    % Validation phase
-    nl,
-    write('╔══════════════════════════════════════════════════════════════╗'), nl,
-    write('                  🔍 PHASE 3: VALIDATION                         '), nl,
-    write('╚══════════════════════════════════════════════════════════════╝'), nl,
-    nl,
+% =========================================================================
+% SHARED VALIDATION PHASE
+% =========================================================================
+% Called after every successful g4mic proof (prove/1 and prove_tptp_internal).
+% SZSStatus is the SZS verdict already announced ('Theorem' or 'Unsatisfiable'),
+% used to phrase the agreement message correctly.
+% Runs g4mic_decides + nanocop_decides (with time/1) and summarises agreement.
 
-    write('═══════════════════════════════════════════════════════════════'), nl,
-    write('🔍 g4mic_decides output'), nl,
-    write('═══════════════════════════════════════════════════════════════'), nl,
+tptp_validation_phase(Formula, SZSStatus) :-
+    nl,
+    write('--- Validation ---'), nl,
+    nl,
+    write('g4mic_decides:   '),
     ( catch(g4mic_decides(Formula), _, fail) ->
-        write('true.'), nl,
+        write('true'), nl,
         G4micResult = valid
     ;
-        write('false. '), nl,
+        write('false'), nl,
         G4micResult = invalid
     ),
-    nl,
-
-    write('═══════════════════════════════════════════════════════════════'), nl,
-    write('🔍 nanocop_decides output'), nl,
-    write('═══════════════════════════════════════════════════════════════'), nl,
+    write('nanocop_decides: '),
     ( catch(time(nanocop_decides(Formula)), _, fail) ->
-        write('true.'), nl,
+        write('true'), nl,
         NanoCopResult = valid
     ;
-        write('false.'), nl,
+        write('false'), nl,
         NanoCopResult = invalid
     ),
     nl,
-
-    write('═══════════════════════════════════════════════════════════════'), nl,
-    write('📊 Validation Summary'), nl,
-    write('═══════════════════════════════════════════════════════════════'), nl,
     ( G4micResult = valid, NanoCopResult = valid ->
-        write('✅ Both provers agree: '), write('true'), nl
+        format('Both provers agree: ~w.~n', [SZSStatus])
     ; G4micResult = invalid, NanoCopResult = invalid ->
-        write('✅ Both provers agree: '), write('false'), nl
+        write('Both provers agree: not provable.'), nl
     ; G4micResult = valid, NanoCopResult = invalid ->
-        nl,
-        write('═════════════════════════════════════════════════════════════'), nl,
-        write('⚠️  CRITICAL DISAGREEMENT: g4mic=true, nanoCoP=false'), nl,
-        write('═════════════════════════════════════════════════════════════'), nl,
-        nl,
-        write('This is a SOUNDNESS BUG in G4-mic (false positive).'), nl,
-        write('G4-mic proved an invalid formula!'), nl,
-        nl,
-        write('URGENT: Please report this issue immediately:'), nl,
-        write('  📧  Email: joseph@vidal-rosset.net'), nl,
-        write('  📝  Include: the formula and full output'), nl,
-        nl
+        write('[!] SOUNDNESS BUG: g4mic=true, nanoCoP=false'), nl,
+        write('    Please report to: joseph@vidal-rosset.net'), nl
     ; G4micResult = invalid, NanoCopResult = valid ->
-        nl,
-        write('═════════════════════════════════════════════════════════════'), nl,
-        write('⚠️  DISAGREEMENT: g4mic=false, nanoCoP=true'), nl,
-        write('═════════════════════════════════════════════════════════════'), nl,
-        nl,
-        write('This is a COMPLETENESS issue in G4-mic (false negative).'), nl,
-        write('G4-mic failed to prove a valid formula.'), nl,
-        nl,
-        write('Please help improve G4-mic by reporting this:'), nl,
-        write('  📧  Email: joseph@vidal-rosset.net'), nl,
-        write('  📝  Include: the formula and validation output'), nl,
-        nl
+        write('[!] COMPLETENESS ISSUE: g4mic=false, nanoCoP=true'), nl,
+        write('    Please report to: joseph@vidal-rosset.net'), nl
     ),
-    nl, nl.
+    nl.
 
-% =========================================================================
-% UTILITY: AUTO-SUGGESTION (optional feature)
-% =========================================================================
+% Determine SZS status for a formula that failed to prove.
+% If ~F is provable (i.e. F is a contradiction), status is 'Unsatisfiable'.
+% Otherwise F is coherent but not valid: status is 'CounterSatisfiable'.
+szs_disproved_status(Formula, Status) :-
+    ( catch(
+          call_with_inference_limit(nanocop_decides(~Formula), 2000000, _),
+          _,
+          fail
+      ) ->
+      Status = 'Unsatisfiable'
+    ;
+      Status = 'CounterSatisfiable'
+    ).
+
 %%% END OF g4mic PROVER

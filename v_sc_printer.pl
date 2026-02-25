@@ -201,33 +201,6 @@ render_bussproofs(cq_m(Seq, Proof), VarCounter, FinalCounter) :-
     write('$}'), nl.
 
 % =========================================================================
-% EQUALITY RULES
-% =========================================================================
-
-% Reflexivity : Seq = [t = t]
-
-% Symmetry
-
-% Simple transitivity
-
-% Chained transitivity
-
-% Congruence
-
-% Substitution in equality
-
-% Substitution (Leibniz)
-
-% Substitution for logical equivalence
-render_bussproofs(equiv_subst(Seq), VarCounter, FinalCounter) :-
-    !,
-    write('\\AxiomC{}'), nl,
-    write('\\RightLabel{\\scriptsize{$\\equiv$}}'), nl,
-    write('\\UnaryInfC{$'),
-    render_sequent(Seq, VarCounter, FinalCounter),
-    write('$}'), nl.
-
-% =========================================================================
 % SEQUENT RENDERING
 % =========================================================================
 
@@ -260,7 +233,7 @@ filter_empty_lists([], []).
 filter_empty_lists([[]|T], Filtered) :- !, filter_empty_lists(T, Filtered).
 filter_empty_lists([H|T], [H|RestFiltered]) :- filter_empty_lists(T, RestFiltered).
 
-% filter_top_from_gamma/2: Remove top (⊤) from premisses list
+% filter_top_from_gamma/2: Remove top (T) from premisses list
 filter_top_from_gamma([], []).
 filter_top_from_gamma([H|T], Filtered) :-
     ( is_top_formula(H) ->
@@ -270,7 +243,7 @@ filter_top_from_gamma([H|T], Filtered) :-
         Filtered = [H|RestFiltered]
     ).
 
-% is_top_formula/1: Detect if a formula is top (⊤)
+% is_top_formula/1: Detect if a formula is top (T)
 % Top is represented as (# => #) or sometimes ~ #
 is_top_formula((# => #)) :- !.
 is_top_formula(((# => #) => #) => #) :- !.  % Double negation of top

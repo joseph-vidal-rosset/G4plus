@@ -20,9 +20,9 @@
 
 :- op(1130,xfy,<=>). :- op(1110,xfy,=>). :- op(500, fy,'~').
 :- op( 500, fy,all). :- op( 500, fy,ex). :- op(500,xfy,:).
-% : - op(200,xfy,^).    % ← AJOUTER CETTE LIGNE pour indexation (I^K)^V
+% : - op(200,xfy,^).    % <- AJOUTER CETTE LIGNE pour indexation (I^K)^V
 
-:- [i_operators].
+:- [operators].
 
 % -----------------------------------------------------------------
 % prove(F,Proof) - prove formula F
@@ -70,7 +70,7 @@ prove2(F, Set, Proof) :-
     prove(Mat, 1, Set, Proof).
 
 %% is_nested_axiom_structure(+Term)
-%% Détecte les structures avec axiomes imbriqués (UNA, etc.)
+%% Detecte les structures avec axiomes imbriques (UNA, etc.)
 is_nested_axiom_structure([H|_]) :-
     is_list(H), !.
 is_nested_axiom_structure([H|_]) :-
@@ -270,7 +270,7 @@ delete2([X|T],Y,[X|T1]) :- delete2(T,Y,T1).
 
 %% pretty_print_countermodel(+Model)
 pretty_print_countermodel([]) :-
-    write('     ∅'), nl, nl, !.
+    write('     {}'), nl, nl, !.
 
 pretty_print_countermodel(Model) :-
     is_list(Model),
@@ -284,7 +284,7 @@ pretty_print_countermodel(Model) :-
     format('     ~w~n~n', [Model]).
 
 %% format_model_compact(+List)
-%% Affiche le modèle sur une ligne :  a = ⊤, b = ⊥, ...
+%% Affiche le mod?le sur une ligne :  a = T, b = F, ...
 format_model_compact([Interp]) :-
     ! ,
     format_compact_assignment(Interp).
@@ -295,9 +295,9 @@ format_model_compact([Interp|Rest]) :-
     format_model_compact(Rest).
 
 %% format_compact_assignment(+Assignment)
-%% Formate une assignation :  a = ⊤ ou p(x) = ⊥
+%% Formate une assignation :  a = T ou p(x) = F
 format_compact_assignment((Atom = Value)) :-
-    Atom = (A = B),  % Cas égalité
+    Atom = (A = B),  % Cas egalite
     !,
     format_value(Value, DisplayValue),
     format('(~w = ~w) = ~w', [A, B, DisplayValue]).
@@ -310,9 +310,9 @@ format_compact_assignment(Other) :-
     format('~w', [Other]).
 
 %% format_value(+Value, -DisplayValue)
-%% Convertit True/False en ⊤/⊥
-format_value(true, '⊤') :- !.
-format_value('True', '⊤') :- !.
-format_value(false, '⊥') :- !.
-format_value('False', '⊥') :- !.
+%% Convertit True/False en T/F
+format_value(true, 'T') :- !.
+format_value('True', 'T') :- !.
+format_value(false, 'F') :- !.
+format_value('False', 'F') :- !.
 format_value(V, V).

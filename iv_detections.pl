@@ -190,9 +190,6 @@ known_predicate(s).
 known_predicate(h).
 known_predicate(m).
 
-clear_predicates :-
-    retractall(known_predicate(_)).
-
 % =========================================================================
 % MAIN VALIDATION ENTRY POINT
 % =========================================================================
@@ -203,16 +200,8 @@ validate_and_warn(Formula, ValidatedFormula) :-
     % Check 1: Sequent syntax confusion (ALWAYS check, even in propositional logic)
     check_sequent_syntax_confusion(Formula, SyntaxWarnings),
 
-    % Check 2: Biconditional misuse (only in FOL context)
-/*
-    detect_fol_context(Formula, IsFOL),
-    (   IsFOL ->
-        check_bicond_misuse(Formula, BicondWarnings)
-    ;   BicondWarnings = []
-    ),
-*/
     % Combine warnings
-    append(SyntaxWarnings, _BicondWarnings, AllWarnings),
+    append(SyntaxWarnings, [], AllWarnings),
 
     % Handle combined warnings
     handle_warnings(AllWarnings, Mode, ValidatedFormula, Formula).
@@ -225,7 +214,7 @@ handle_warnings(Warnings, permissive, Formula, Formula) :-
     prompt_continue.
 handle_warnings(Warnings, strict, _, _) :-
     report_warnings(Warnings),
-    write('? Validation failed in strict mode. Formula rejected.'), nl,
+    write('  Validation failed (strict mode). Formula rejected.'), nl,
     fail.
 
 % Prompt user to continue
@@ -234,25 +223,8 @@ prompt_continue :-
     read(Response),
     (   Response = y -> true
     ;   Response = yes -> true
-    ;   write('? Proof attempt cancelled.'), nl, fail
+    ;   write('  Proof attempt cancelled.'), nl, fail
     ).
-% =========================================================================
-% FOL CONTEXT DETECTION
-% =========================================================================
-% A formula is in FOL context if it contains:
-%   - Quantifiers (?, ?)
-%   - Predicate applications p(t1,...,tn) with n > 0
-%   - Equality between terms
-%   - Function symbols (including Skolem functions)
-
-detect_fol_context(Formula, true) :-
-    (   contains_quantifier(Formula)
-    ;   contains_predicate_application(Formula)
-    ;   contains_equality(Formula)
-    ;   contains_function_symbol(Formula)
-    ), !.
-detect_fol_context(_, false).
-
 % Logical connective identification
 is_logical_connective(_ => _).
 is_logical_connective(_ & _).
@@ -262,84 +234,6 @@ is_logical_connective(~ _).
 is_logical_connective(#).
 is_logical_connective(![_-_]:_).
 is_logical_connective(?[_-_]:_).
-
-% =========================================================================
-% BICONDITIONAL MISUSE DETECTION
-% =========================================================================
-% Detects <=> used between terms instead of formulas
-% Example: (a <=> b) should likely be (a = b) in FOL
-
-check_bicond_misuse(Formula, Warnings) :-
-    findall(Warning, detect_bicond_in_terms(Formula, Warning), Warnings).
-
-% =========================================================================
-% BICONDITIONAL MISUSE DETECTION (IMPROVED)
-% =========================================================================
-% Only warn if <=> appears in a TERM CONTEXT (not formula context)
-
-detect_bicond_in_terms(A <=> B, warning(bicond_between_terms, A, B)) :-
-    % Both sides are clearly terms (constants or function applications)
-    is_definitely_term(A),
-    is_definitely_term(B),
-    !.
-
-detect_bicond_in_terms(Term, Warning) :-
-    compound(Term),
-    Term \= (_ <=> _),  % Don't recurse into biconditionals we already checked
-    Term =.. [_|Args],
-    member(Arg, Args),
-    detect_bicond_in_terms(Arg, Warning).
-
-% =========================================================================
-% DEFINITELY A TERM (not a formula)
-% =========================================================================
-% Conservative: only flag obvious cases
-is_definitely_term(![_]:_) :- !, fail.  % Universal quantification = formula
-is_definitely_term(?[_]:_) :- !, fail.  % Existential quantification = formula
-
-is_definitely_term(X) :-
-    var(X), !.  % Variable (term)
-
-is_definitely_term(X) :-
-    atomic(X),
-    \+ known_predicate(X),  % Constant, not predicate
-    !.
-
-is_definitely_term(f_sk(_)) :- !.  % Skolem function (single arg)
-is_definitely_term(f_sk(_,_)) :- !.  % Skolem function
-
-is_definitely_term(Term) :-
-    compound(Term),
-    \+ is_logical_connective(Term),
-    Term =.. [F|Args],
-    Args \= [],
-    % Must be a KNOWN function symbol (not predicate)
-    is_known_function(F),
-    !.
-
-% =========================================================================
-% KNOWN FUNCTION REGISTRY
-% =========================================================================
-% Users can register function symbols to improve detection
-
-:- dynamic known_function/1.
-
-% Default common function symbols
-known_function(succ).   % Successor
-known_function(plus).
-known_function(times).
-known_function(father).  % father(x) is a term
-known_function(mother).
-
-is_known_function(F) :-
-    known_function(F), !.
-
-% Heuristic fallback: if NOT a known predicate, assume function
-% (This is conservative - avoid false positives)
-is_known_function(F) :-
-    \+ known_predicate(F),
-    \+ member(F, [f, g, h, i, j, k, p, q, r, s]),  % Ambiguous symbols
-    !.
 
 % =========================================================================
 % SEQUENT SYNTAX CONFUSION DETECTION
@@ -406,42 +300,42 @@ report_warnings([]) :- !.
 report_warnings(Warnings) :-
     length(Warnings, N),
     nl,
-    format('?  ~d WARNING(S) DETECTED:~n', [N]),
+    format('  ~d warning(s) detected:~n', [N]),
     nl,
     maplist(print_warning, Warnings),
     nl,
-    write('? TIPS:'), nl,
+    write('  Tips:'), nl,
     write('   o Theorems:  prove(p => q).        % implication'), nl,
     write('   o Sequents:  prove([p] > [q]).     % turnstile ?'), nl,
     write('   o FOL:       use = for equality, <=> for biconditional'), nl,
     nl.
 
 print_warning(warning(bicond_between_terms, A, B)) :-
-    format('   ?  (~w <=> ~w): biconditional between terms detected.~n', [A, B]),
+    format('  warning: (~w <=> ~w): biconditional between terms detected.~n', [A, B]),
     format('      -> Did you mean (~w = ~w)?~n', [A, B]).
 
 % NEW: Sequent syntax warnings
 print_warning(warning(list_implication, Msg)) :-
-    format('   ?  Syntax error: ~w~n', [Msg]),
+    format('  syntax warning: ~w~n', [Msg]),
     write('      Example: prove([p, q] > [p & q]).  % CORRECT'), nl,
     write('               prove([p, q] => [p & q]). % WRONG'), nl.
 
 print_warning(warning(list_implication_left, Msg)) :-
-    format('   ?  Syntax error: ~w~n', [Msg]),
+    format('  syntax warning: ~w~n', [Msg]),
     write('      -> Use [Premisses] > [Conclusion] for sequents'), nl.
 
 print_warning(warning(list_implication_right, Msg)) :-
-    format('   ?  Syntax error: ~w~n', [Msg]),
+    format('  syntax warning: ~w~n', [Msg]),
     write('      -> Use [Premisses] > [Conclusion] for sequents'), nl.
 
 print_warning(warning(atom_turnstile, Msg)) :-
-    format('   ?  Syntax error: ~w~n', [Msg]),
+    format('  syntax warning: ~w~n', [Msg]),
     write('      Example: prove(p => q).       % CORRECT (implication)'), nl,
     write('               prove(p > q).        % WRONG'), nl,
     write('               prove([p] > [q]).    % CORRECT (sequent)'), nl.
 
 print_warning(warning(formula_turnstile, Msg)) :-
-    format('   ?  Syntax error: ~w~n', [Msg]),
+    format('  syntax warning: ~w~n', [Msg]),
     write('      -> Use => for implications, > only for sequents'), nl,
     write('      -> Sequent syntax: [Premisses] > [Conclusions]'), nl.
 

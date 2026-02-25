@@ -2,6 +2,7 @@
 % NATURAL DEDUCTION PRINTER IN FLAG STYLE
 % =========================================================================
 :- dynamic fitch_line/4.
+:- dynamic fitch_line_latex/2.
 :- dynamic abbreviated_line/1.
 % =========================================================================
 % FROM G4 Sequent Calculus To Natural Deduction in Fitch Style
@@ -23,9 +24,9 @@
 % 5. Generate LaTeX using fitch.sty package syntax
 %
 % Rule mappings:
-% - Sequent right rules → Introduction rules
-% - Sequent left rules → Elimination rules
-% - Structural rules → Reiteration and assumption management
+% - Sequent right rules -> Introduction rules
+% - Sequent left rules -> Elimination rules
+% - Structural rules -> Reiteration and assumption management
 %
 % The resulting Fitch proof is more intuitive than raw sequent calculus
 % and suitable for teaching and publication.
@@ -33,10 +34,11 @@
 % g4_to_fitch_theorem/1 : For theorems
 g4_to_fitch_theorem(Proof) :-
     retractall(fitch_line(_, _, _, _)),
+    retractall(fitch_line_latex(_, _)),
     retractall(abbreviated_line(_)),
     fitch_g4_proof(Proof, [], 1, 0, _, _, 0, _).
 % =========================================================================
-% ASSERTION SÉCURISÉE
+% ASSERTION SECURISEE
 % =========================================================================
 assert_safe_fitch_line(N, Formula, Just, Scope) :-
     catch(
@@ -86,7 +88,7 @@ fitch_g4_proof(ax((Premisses > [Goal])), Context, _Scope, CurLine, NextLine, Res
 % =========================================================================
 % PROPOSITIONAL RULES
 % =========================================================================
-% L0→
+% L0->
 fitch_g4_proof(l0cond((Premisss > _), SubProof), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :-
     !,
     select((Ant => Cons), Premisss, Remaining),
@@ -99,7 +101,7 @@ fitch_g4_proof(l0cond((Premisss > _), SubProof), Context, Scope, CurLine, NextLi
     assert_safe_fitch_line(DerLine, Cons, l0cond(MajLine, MinLine), Scope),
     fitch_g4_proof(SubProof, [DerLine:Cons|Context], Scope, DerLine, NextLine, ResLine, V1, VarOut).
 
-% L∧→
+% L/\->
 fitch_g4_proof(landto((Premisses > _), SubProof), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- !,
     extract_new_formula(Premisses, SubProof, NewFormula),
     select(((A & B) => C), Premisses, _),
@@ -107,7 +109,7 @@ fitch_g4_proof(landto((Premisses > _), SubProof), Context, Scope, CurLine, NextL
     derive_and_continue(Scope, NewFormula, '$ \\land \\to E $ ~w', [ImpLine],
                        landto(ImpLine), SubProof, Context, CurLine, NextLine, ResLine, VarIn, VarOut).
 
-% L∨→ : Disjunction to implications
+% L\/-> : Disjunction to implications
 fitch_g4_proof(lorto((Premisses > _), SubProof), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- !,
     SubProof =.. [_Rule|[(SubPremisses > _SubGoal)|_]],
     findall(F, (member(F, SubPremisses), \+ member(F, Premisses)), NewFormulas),
@@ -129,7 +131,8 @@ fitch_g4_proof(lorto((Premisses > _), SubProof), Context, Scope, CurLine, NextLi
         fitch_g4_proof(SubProof, Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut)
     ).
 
-% L∧ : Conjunction elimination
+
+% L/\ : Conjunction elimination
 fitch_g4_proof(land((Premisses > [Goal]), SubProof), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- !,
     select((A & B), Premisses, _),
    % member(ConjLine:(A & B), Context), corrected by next line
@@ -143,7 +146,7 @@ fitch_g4_proof(land((Premisses > [Goal]), SubProof), Context, Scope, CurLine, Ne
         fitch_g4_proof(SubProof, NewCtx, Scope, LastLine, NextLine, ResLine, V1, VarOut)
     ).
 
-% L⊥ : Explosion
+% L_|_ : Explosion
 fitch_g4_proof(lbot((Premisss > [Goal]), _), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :-
     !,
     member(#, Premisss),
@@ -155,7 +158,7 @@ fitch_g4_proof(lbot((Premisss > [Goal]), _), Context, Scope, CurLine, NextLine, 
     NextLine = DerLine,
     ResLine = DerLine.
 
-% R∨ : Disjunction introduction
+% R\/ : Disjunction introduction
 fitch_g4_proof(ror((_ > [Goal]), SubProof), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :-
     !,
     ( Goal = (_ | _), try_derive_immediately(Goal, Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) ->
@@ -173,7 +176,7 @@ fitch_g4_proof(ror((_ > [Goal]), SubProof), Context, Scope, CurLine, NextLine, R
 % RULES WITH ASSUMPTIONS (ASSUME-DISCHARGE)
 % =========================================================================
 
-% R→ : Implication introduction
+% R-> : Implication introduction
 fitch_g4_proof(rcond((_ > [A => B]), SubProof), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :-
     !,
     HypLine is CurLine + 1,
@@ -225,18 +228,18 @@ fitch_g4_proof(ip((_ > [Goal]), SubProof), Context, Scope, CurLine, NextLine, Re
     NextLine = IPLine,
     ResLine = IPLine.
 
-% L∨ : Disjunction elimination
+% L\/ : Disjunction elimination
 % L-or: Disjunction elimination with DS optimization
-% DISJUNCTIVE SYLLOGISM (DS): If we have A ∨ B and ¬A, derive B directly
+% DISJUNCTIVE SYLLOGISM (DS): If we have A \/ B and ~A, derive B directly
 % Valid in intuitionistic and classical logic (not minimal logic)
-% Pattern: One branch uses explosion (¬A with A), other branch derives Goal from B
+% Pattern: One branch uses explosion (~A with A), other branch derives Goal from B
 fitch_g4_proof(lor((Premisss > [_Goal]), SP1, SP2), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :-
-    % Try DS optimization: Check if we have A ∨ B and ¬A (A => #)
+    % Try DS optimization: Check if we have A \/ B and ~A (A => #)
     select((A | B), Premisss, _),
-    % Check if ¬A (i.e., A => #) is available
+    % Check if ~A (i.e., A => #) is available
     ( member((A => #), Premisss) ->
-        % We have A ∨ B and ¬A, so we can use DS to derive B directly
-        % This is valid because SP1 would just derive ⊥ from A and ¬A, then Goal by ⊥E
+        % We have A \/ B and ~A, so we can use DS to derive B directly
+        % This is valid because SP1 would just derive _|_ from A and ~A, then Goal by _|_E
         % Find the disjunction and negation in context
         ( find_disj_context(A, B, Context, DisjLine) -> true
         ; find_context_line((A | B), Context, DisjLine)
@@ -244,7 +247,7 @@ fitch_g4_proof(lor((Premisss > [_Goal]), SP1, SP2), Context, Scope, CurLine, Nex
         % CORRECTION: Chercher explicitement (A => #) dans le contexte
         % Do not use find_context_line which could match another implication
         member(NegLine:NegFormula, Context),
-        NegFormula = (A => #),  % Vérifier EXACTEMENT que c'est bien A => #
+        NegFormula = (A => #),  % Verifier EXACTEMENT que c'est bien A => #
         % Derive B by DS (without showing the explosion subproof)
         DerLine is CurLine + 1,
         assert_safe_fitch_line(DerLine, B, ds(DisjLine, NegLine), Scope),
@@ -254,13 +257,13 @@ fitch_g4_proof(lor((Premisss > [_Goal]), SP1, SP2), Context, Scope, CurLine, Nex
         fitch_g4_proof(SP2, [DerLine:B|Context], Scope, DerLine, NextLine, ResLine, V1, VarOut),
         !
     ; member((B => #), Premisss) ->
-        % Symmetric case: We have A ∨ B and ¬B, derive A by DS
+        % Symmetric case: We have A \/ B and ~B, derive A by DS
         ( find_disj_context(A, B, Context, DisjLine) -> true
         ; find_context_line((A | B), Context, DisjLine)
         ),
         % CORRECTION: Chercher explicitement (B => #) dans le contexte
         member(NegLine:NegFormula, Context),
-        NegFormula = (B => #),  % Vérifier EXACTEMENT que c'est bien B => #
+        NegFormula = (B => #),  % Verifier EXACTEMENT que c'est bien B => #
         DerLine is CurLine + 1,
         assert_safe_fitch_line(DerLine, A, ds(DisjLine, NegLine), Scope),
         format(atom(Just), '$ DS $ ~w,~w', [DisjLine, NegLine]),
@@ -268,10 +271,10 @@ fitch_g4_proof(lor((Premisss > [_Goal]), SP1, SP2), Context, Scope, CurLine, Nex
         fitch_g4_proof(SP1, [DerLine:A|Context], Scope, DerLine, NextLine, ResLine, V1, VarOut),
         !
     ;
-        fail  % DS not applicable, fall through to regular ∨E
+        fail  % DS not applicable, fall through to regular \/E
     ).
 
-% L-or: Disjunction elimination (regular case with full ∨E)
+% L-or: Disjunction elimination (regular case with full \/E)
 fitch_g4_proof(lor((Premisss > [Goal]), SP1, SP2), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :-
     !,
     ( try_derive_immediately(Goal, Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) ->
@@ -300,7 +303,7 @@ fitch_g4_proof(lor((Premisss > [Goal]), SP1, SP2), Context, Scope, CurLine, Next
 % BINARY RULES
 % =========================================================================
 
-% R∧ : Conjunction introduction
+% R/\ : Conjunction introduction
 fitch_g4_proof(rand((_ > [Goal]), SP1, SP2), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- !,
     Goal = (L & _R),
     ( try_derive_immediately(Goal, Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) -> true
@@ -310,12 +313,12 @@ fitch_g4_proof(rand((_ > [Goal]), SP1, SP2), Context, Scope, CurLine, NextLine, 
                     End2, NextLine, ResLine, V2, VarOut)
     ).
 
-% L→→ : Special G4 rule
+% L->-> : Special G4 rule
 fitch_g4_proof(ltoto((Premisses > _), SP1, SP2), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- !,
     select(((Ant => Inter) => Cons), Premisses, _),
     find_context_line(((Ant => Inter) => Cons), Context, ComplexLine),
 
-    % STEP 1: Derive (Inter => Cons) by L→→
+    % STEP 1: Derive (Inter => Cons) by L->->
     ExtractLine is CurLine + 1,
     format(atom(ExtractJust), '\\to \\to E $ ~w', [ComplexLine]),
     render_have(Scope, (Inter => Cons), ExtractJust, CurLine, ExtractLine, VarIn, V1),
@@ -331,13 +334,13 @@ fitch_g4_proof(ltoto((Premisses > _), SP1, SP2), Context, Scope, CurLine, NextLi
     fitch_g4_proof(SP1, [AssLine:Ant, ExtractLine:(Inter => Cons)|Context],
                   NewScope, AssLine, SubEnd, InterLine, V2, V3),
 
-    % STEP 4: Derive (Ant => Inter) by →I
+    % STEP 4: Derive (Ant => Inter) by ->I
     ImpLine is SubEnd + 1,
     assert_safe_fitch_line(ImpLine, (Ant => Inter), rcond(AssLine, InterLine), Scope),
     format(atom(Just1), '$ \\to I $ ~w-~w', [AssLine, InterLine]),
     render_have(Scope, (Ant => Inter), Just1, SubEnd, ImpLine, V3, V4),
 
-    % STEP 5: Derive Cons by →E
+    % STEP 5: Derive Cons by ->E
     MPLine is ImpLine + 1,
     assert_safe_fitch_line(MPLine, Cons, l0cond(ComplexLine, ImpLine), Scope),
     format(atom(Just2), '$ \\to E $ ~w,~w', [ComplexLine, ImpLine]),
@@ -349,12 +352,14 @@ fitch_g4_proof(ltoto((Premisses > _), SP1, SP2), Context, Scope, CurLine, NextLi
 % =========================================================================
 % QUANTIFICATION RULES
 % =========================================================================
-% R∀
+% Rforall
+
 fitch_g4_proof(rall((_ > [(![Z-X]:A)]), SubProof), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- !,
     fitch_g4_proof(SubProof, Context, Scope, CurLine, SubEnd, BodyLine, VarIn, V1),
     derive_formula(Scope, (![Z-X]:A), '$ \\forall I $ ~w', [BodyLine], rall(BodyLine),
-                  SubEnd, NextLine, ResLine, V1, VarOut).
-% L∀ : Universal Elimination
+                   SubEnd, NextLine, ResLine, V1, VarOut).
+
+% Lforall : Universal Elimination
 fitch_g4_proof(lall((Premisses > _), SubProof), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- !,
     extract_new_formula(Premisses > _, SubProof, NewFormula),
 
@@ -384,13 +389,13 @@ fitch_g4_proof(lall((Premisses > _), SubProof), Context, Scope, CurLine, NextLin
     derive_and_continue(Scope, NewFormula, '$ \\forall E $ ~w', [UnivLine], lall(UnivLine),
                        SubProof, Context, CurLine, NextLine, ResLine, VarIn, VarOut).
 
-% R∃
+% Rexists
 fitch_g4_proof(rex((_ > [Goal]), SubProof), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- !,
     fitch_g4_proof(SubProof, Context, Scope, CurLine, SubEnd, _WitnessLine, VarIn, V1),
     % CORRECTION: Reference SubEnd (witness line), not WitnessLine
     derive_formula(Scope, Goal, '$ \\exists I $ ~w', [SubEnd], rex(SubEnd),
                   SubEnd, NextLine, ResLine, V1, VarOut).
-% L∃
+% Lexists
 fitch_g4_proof(lex((Premisses > [Goal]), SubProof), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- !,
     select((?[Z-X]:Body), Premisses, _),
     find_context_line(?[Z-X]:Body, Context, ExistLine),
@@ -410,7 +415,7 @@ fitch_g4_proof(lex((Premisses > [Goal]), SubProof), Context, Scope, CurLine, Nex
       render_have(Scope, Goal, Just, SubEnd, ElimLine, V2, VarOut),
       NextLine = ElimLine, ResLine = ElimLine
     ).
-% L∃∨ : Combined existential-disjunction
+% Lexists\/ : Combined existential-disjunction
 fitch_g4_proof(lex_lor((Premisses > [Goal]), SP1, SP2), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- !,
     SP1 =.. [_, (Prem1 > _)|_],
     SP2 =.. [_, (Prem2 > _)|_],

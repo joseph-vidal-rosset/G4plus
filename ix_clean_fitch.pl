@@ -189,6 +189,9 @@ rn(X, X).  % fallback: keep unchanged if not in map
 
 % =========================================================================
 % RENDER CLEAN FITCH OUTPUT
+% Uses the LaTeX lines captured during pass 1 (fitch_line_latex/2).
+% For each live line, keeps the formula part (before &) from pass 1
+% and only replaces the justification part (after &) with renumbered refs.
 % =========================================================================
 render_clean_output :-
     write('\\begin{fitch}'), nl,
@@ -199,46 +202,34 @@ render_clean_output :-
 
 render_clean_lines([]).
 render_clean_lines([N|Rest]) :-
-    clean_line(N, Formula, Just, Scope),
-    render_one_clean_line(Formula, Just, Scope),
+    clean_line(N, _, Just, _),
+    renum(OldN, N),
+    ( fitch_line_latex(OldN, LatexLine) ->
+        atom_string(LatexLine, LatexStr),
+        ( split_on_ampersand(LatexStr, FormulaPart, _) ->
+            write(FormulaPart),
+            write(' &  '),
+            ( Just = assumption -> write('AS')
+            ; Just = premise -> write('PR')
+            ; Just = premiss -> write('PR')
+            ; render_clean_just(Just)
+            ),
+            write('\\\\'), nl
+        ;
+            write(LatexLine)
+        )
+    ;
+        write('% ERROR: missing fitch_line_latex for line '), write(OldN), nl
+    ),
     render_clean_lines(Rest).
 
-% render_one_clean_line: MUST exactly match the LaTeX output of
-% render_hypo (for assumptions) and render_have (for derived lines).
-% Any divergence will break fitch.sty scope rendering.
-
-render_one_clean_line(Formula, Just, Scope) :-
-    ( Just = assumption ->
-        % MATCH render_hypo(Scope, Formula, 'AS', ...):
-        %   render_fitch_indent(Scope), write(' \\fh '), Formula, write(' &  AS\\\\')
-        render_fitch_indent(Scope),
-        write(' \\fh '),
-        rewrite(Formula, 0, _, LatexFormula),
-        write_formula_with_parens(LatexFormula),
-        write(' &  AS\\\\'), nl
-    ; Just = premise ->
-        render_fitch_indent(Scope),
-        write(' \\fj '),
-        rewrite(Formula, 0, _, LatexFormula),
-        write_formula_with_parens(LatexFormula),
-        write(' &  PR\\\\'), nl
-    ; Just = premiss ->
-        render_fitch_indent(Scope),
-        write(' \\fj '),
-        rewrite(Formula, 0, _, LatexFormula),
-        write_formula_with_parens(LatexFormula),
-        write(' &  PR\\\\'), nl
-    ;
-        % MATCH render_have(Scope, Formula, Just, ...):
-        %   render_fitch_indent(Scope), (Scope=0 -> write('\\fa ') ; true), Formula, write(' &  Just\\\\')
-        render_fitch_indent(Scope),
-        ( Scope = 0 -> write('\\fa ') ; true ),
-        rewrite(Formula, 0, _, LatexFormula),
-        write_formula_with_parens(LatexFormula),
-        write(' &  '),
-        render_clean_just(Just),
-        write('\\\\'), nl
-    ).
+% Split a string on the first occurrence of ' & '
+split_on_ampersand(Str, Before, After) :-
+    sub_string(Str, Pos, 3, _, " & "),
+    !,
+    sub_string(Str, 0, Pos, _, Before),
+    Pos3 is Pos + 3,
+    sub_string(Str, Pos3, _, 0, After).
 
 % =========================================================================
 % RENDER JUSTIFICATIONS WITH NEW LINE NUMBERS

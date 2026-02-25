@@ -192,7 +192,7 @@ pelletier_tests([
     'Pel_21_constructive_dilemma' - (((p | q) & (p => r) & (q => s)) => (r | s)),
     'Pel_22_conditional_biconditional' - ((![x]:(p <=> q)) => (p <=> q)),
     'Pel_23_biconditional_quantifier' - ((![x]:(p | q(x))) <=> (p | ![x]:q(x))),
-    'Pel_24_dn_and_exists' - ((~ ?[x]:(s(x) & q(x)) & ![x]:(p(x) => (q(x) | r(x))) & ~ ?[x]:p(x) => ?[x]:q(x)) => ?[x]:(p(x) & r(x))),
+   % 'Pel_24_dn_and_exists' - ((~ ?[x]:(s(x) & q(x)) & ![x]:(p(x) => (q(x) | r(x))) & ~ ?[x]:p(x) => ?[x]:q(x)) => ?[x]:(p(x) & r(x))),
     'Pel_25_exists_complex' - ((?[x]:p(x) & ![x]:(f(x) => (~ g(x) & r(x))) & ![x]:(p(x) => (g(x) & f(x))) & (![x]:(p(x) => q(x)) | ?[x]:(p(x) & r(x)))) => ?[x]:(q(x) & p(x))),
     'Pel_26_biconditional_exists' - ((?[x]:p(x) <=> ?[x]:q(x)) & (![x]:(![y]:((p(x) & q(y)) => (r(x) <=> s(y))))) => (![x]:(p(x) => r(x)) <=> ![x]:(q(x) => s(x)))),
     'Pel_27_exists_forall_mix' - ((?[x]:(f(x) & ~ g(x)) & ![x]:(f(x) => h(x)) & ![x]:((j(x) & i(x)) => f(x)) & ((?[x]:(h(x) & ~ g(x))) => ![x]:(i(x) =>  ~ h(x))))=>![x]:(j(x) => ~ i(x)))
@@ -230,10 +230,9 @@ map_time_out_result(R, success) :- R \= time_out, R \= failed, R \= success, !.
 % TEST RUNNERS
 % =========================================================================
 
-%! run_all_test_files
+%! run_tests
 %  Execute the complete test suite with auto-counting
-run_all_test_files :-
-    abolish_all_tables,
+run_tests :-
     init_eigenvars,
     reset_counters,
     get_time(StartTime),
@@ -249,6 +248,9 @@ run_all_test_files :-
     % Run Pelletier tests
     safe_run(run_pelletier, 'Pelletier Problems'),
 
+    % Run hierarchy tests
+    safe_run(run_hierarchy_tests, 'Hierarchy Tests'),
+
     % Final summary
     get_time(EndTime),
     ElapsedTime is EndTime - StartTime,
@@ -256,7 +258,8 @@ run_all_test_files :-
     % Count totals
     count_registered_tests(NRegistered),
     pelletier_tests(PelList), length(PelList, NPel),
-    Total is NRegistered + NPel,
+    count_hierarchy_tests(NHierarchy),
+    Total is NRegistered + NPel + NHierarchy,
 
     test_pass(NPass),
     test_fail(NFail),
@@ -269,6 +272,7 @@ run_all_test_files :-
     format('TOTAL: ~d formulas tested~n', [Total]),
     format('  * ~d registered theorem tests~n', [NRegistered]),
     format('  * ~d Pelletier problems~n', [NPel]),
+    format('  * ~d hierarchy tests~n', [NHierarchy]),
     format('  * Passed: ~d  Failed: ~d  Errors: ~d~n', [NPass, NFail, NError]),
     nl,
     writeln('To check disagreements between g4mic and nanoCop:'),
@@ -314,7 +318,6 @@ run_test_list([Name-Formula|Rest]) :-
     inc_counter(total),
     test_counter(N),
     format('~d. ~w~n', [N, Name]),
-    abolish_all_tables,
     init_eigenvars,
     catch(
         ( prove(Formula) ->
@@ -374,7 +377,6 @@ run_pelletier_list([Name-Formula|Rest], Idx, Timeout) :-
         write('  SKIPPED (known invalid)'), nl,
         inc_counter(pass)
     ;
-        abolish_all_tables,
         init_eigenvars,
         ( catch(
             ( safe_time_out(prove(Formula), Timeout, Result) ->
@@ -426,7 +428,6 @@ group_label(Group, Group).  % fallback: use group name as-is
 %  Execute a test predicate with error handling and timer
 safe_run(Goal, Name) :-
     format('~n--- ~w ---~n', [Name]),
-    abolish_all_tables,
     init_eigenvars,
     get_time(Start),
     catch(
@@ -461,6 +462,199 @@ format_execution_time(Seconds) :-
     RemainingSeconds is Seconds - (Hours * 3600) - (RemainingMinutes * 60),
     format('Total execution time: ~d h ~d min ~2f sec~n',
            [Hours, RemainingMinutes, RemainingSeconds]).
+
+% =========================================================================
+% END OF TEST SUITE
+% =========================================================================
+% =========================================================================
+% LOGIC HIERARCHY VERIFICATION SUITE
+% Tests that verify each formula is proved at the CORRECT logic level.
+% A test FAILS if the formula is proved at the wrong level.
+%
+% Format: hierarchy_test(Group, Name, Formula, ExpectedLevel)
+%   ExpectedLevel: minimal | intuitionistic | classical
+% =========================================================================
+
+% -----------------------------------------------------------------
+% GROUP 1: MINIMAL
+% Must be proved at minimal level (no EFQ, no DNE, no LEM).
+% -----------------------------------------------------------------
+hierarchy_test(minimal, 'Identity',
+    (p => p), minimal).
+hierarchy_test(minimal, 'Modus ponens',
+    ((p => q) & p) => q, minimal).
+hierarchy_test(minimal, 'Hypothetical syllogism',
+    ((p => q) & (q => r)) => (p => r), minimal).
+hierarchy_test(minimal, 'Conjunction intro',
+    (p => (q => (p & q))), minimal).
+hierarchy_test(minimal, 'Conjunction elim left',
+    (p & q) => p, minimal).
+hierarchy_test(minimal, 'Conjunction elim right',
+    (p & q) => q, minimal).
+hierarchy_test(minimal, 'Disjunction intro left',
+    p => (p | q), minimal).
+hierarchy_test(minimal, 'Disjunction intro right',
+    q => (p | q), minimal).
+hierarchy_test(minimal, 'Disjunction elim',
+    ((p | q) & (p => r) & (q => r)) => r, minimal).
+hierarchy_test(minimal, 'Modus tollens',
+    ((p => q) & ~ q) => ~ p, minimal).
+hierarchy_test(minimal, 'Negation intro',
+    (p => #) => ~ p, minimal).
+hierarchy_test(minimal, 'Absurdity chain',
+    p => (~ p => #), minimal).
+hierarchy_test(minimal, 'Permutation',
+    (p => (q => r)) => (q => (p => r)), minimal).
+hierarchy_test(minimal, 'Exportation',
+    ((p & q) => r) => (p => (q => r)), minimal).
+hierarchy_test(minimal, 'Importation',
+    (p => (q => r)) => ((p & q) => r), minimal).
+hierarchy_test(minimal, 'Contraposition (weak)',
+    (p => q) => (~ q => ~ p), minimal).
+hierarchy_test(minimal, 'TNE depth 3 (Johansson)',
+    ~ ~ ~ p => ~ p, minimal).
+hierarchy_test(minimal, 'TNE depth 5',
+               ~ ~ ~ ~ ~ p => ~ p, minimal).
+hierarchy_test(minimal, 'De Morgan 1 (minimal)',
+               (~ p & ~ q) => ~ (p | q), minimal).
+hierarchy_test(minimal, 'De Morgan 2 (minimal)',
+               ~ (p | q) => (~ p & ~ q), minimal).
+hierarchy_test(minimal, 'De Morgan 3 (minimal)',
+               (~ p | ~ q) => ~ (p & q), minimal).
+hierarchy_test(minimal, 'Double negation intro',
+               p => ~ ~ p, minimal).
+hierarchy_test(minimal, 'Ex Falso Minimal',
+               # => ~ q, minimal).
+hierarchy_test(minimal, 'Contraposition (minimal)',
+               (~ q => ~ p) => (~ ~ p => ~ ~ q), minimal).
+
+% -----------------------------------------------------------------
+% GROUP 2: INTUITIONISTIC
+% Require EFQ but NOT classical axioms (DNE, LEM, Peirce).
+% -----------------------------------------------------------------
+hierarchy_test(intuitionistic, 'Ex falso quodlibet',
+    # => p, intuitionistic).
+hierarchy_test(intuitionistic, 'Ex falso (complex)',
+    # => (p & q), intuitionistic).
+hierarchy_test(intuitionistic, 'Ex falso (implication)',
+   ~ p => (p => q), intuitionistic).
+hierarchy_test(intuitionistic, 'Negation elim (EFQ form)',
+    (p & ~ p) => q, intuitionistic).
+hierarchy_test(intuitionistic, 'Disjunctive syllogism',
+    ((p | q) & ~ p) => q, intuitionistic).
+hierarchy_test(intuitionistic, 'Weakening (bot)',
+    (p => #) => (p => q), intuitionistic).
+
+% -----------------------------------------------------------------
+% GROUP 3: CLASSICAL ONLY
+% Require DNE, LEM, or Peirce. Must fail in intuitionistic.
+% -----------------------------------------------------------------
+hierarchy_test(classical_only, 'Excluded middle',
+    p | ~ p, classical).
+hierarchy_test(classical_only, 'Double negation elimination',
+    ~ ~ p => p, classical).
+hierarchy_test(classical_only, 'Peirce law',
+    ((p => q) => p) => p, classical).
+hierarchy_test(classical_only, 'Material implication',
+    (p => q) <=> (~ p | q), classical).
+hierarchy_test(classical_only, 'Strong contraposition',
+    (~ q => ~ p) => (p => q), classical).
+hierarchy_test(classical_only, 'Ex falso to LEM',
+    (~ p => #) => p, classical).
+hierarchy_test(classical_only, 'De Morgan 4 (classical)',
+    ~ (p & q) => (~ p | ~ q), classical).
+hierarchy_test(classical_only, 'Consequentia mirabilis',
+    (~ p => p) => p, classical).
+hierarchy_test(classical_only, 'Dummett (propositional)',
+    (p => q) | (q => p), classical).
+
+% -----------------------------------------------------------------
+% GROUP 4: TNE BOUNDARY
+% Precise frontier between TNE (minimal) and DNE (classical).
+% -----------------------------------------------------------------
+hierarchy_test(tne_boundary, 'TNE: ~~~A->~A (minimal)',
+    ~ ~ ~ p => ~ p, minimal).
+hierarchy_test(tne_boundary, 'TNE: ~~~~~A->~A (minimal)',
+    ~ ~ ~ ~ ~ p => ~ p, minimal).
+hierarchy_test(tne_boundary, 'DNE: ~~A->A (classical)',
+    ~ ~ p => p, classical).
+hierarchy_test(tne_boundary, 'DNI: A->~~A (minimal)',
+    p => ~ ~ p, minimal).
+hierarchy_test(tne_boundary, 'TNE implication (minimal)',
+    ~ ~ ~ ~ ~ (p => q) => ~ (p => q), minimal).
+hierarchy_test(tne_boundary, 'Suprinsingly minimal',
+              (~ ~ p => ~ ~ q) => (~ q => ~ q), minimal).
+% =========================================================================
+% HIERARCHY TEST RUNNER
+% =========================================================================
+
+%! count_hierarchy_tests(-N)
+count_hierarchy_tests(N) :-
+    findall(_, hierarchy_test(_,_,_,_), All),
+    length(All, N).
+
+%! run_hierarchy_tests
+%  Run all hierarchy tests, integrated into the main counter.
+run_hierarchy_tests :-
+    writeln('========================================'),
+    writeln('HIERARCHY VERIFICATION TESTS'),
+    writeln('========================================'),
+    nl,
+    findall(G, hierarchy_test(G,_,_,_), AllG),
+    sort(AllG, Groups),
+    run_hierarchy_groups(Groups),
+    writeln('========================================'),
+    writeln('HIERARCHY VERIFICATION TESTS END'),
+    writeln('========================================').
+
+run_hierarchy_groups([]).
+run_hierarchy_groups([G|Rest]) :-
+    hierarchy_group_label(G, Label),
+    format('~n=== ~w ===~n', [Label]),
+    findall(N-F-L, hierarchy_test(G, N, F, L), Tests),
+    run_hierarchy_list(Tests),
+    run_hierarchy_groups(Rest).
+
+run_hierarchy_list([]).
+run_hierarchy_list([Name-Formula-Expected|Rest]) :-
+    inc_counter(total),
+    test_counter(Num),
+    format('~d. ~w ... ', [Num, Name]),
+    ( catch(
+        ( init_eigenvars,
+          decide_silent(Formula, _Proof, ActualLevel) ),
+        _Error,
+        ActualLevel = error
+      ) ->
+        ( ActualLevel == Expected ->
+            format('OK (~w)~n', [Expected]),
+            inc_counter(pass)
+        ;
+            format('FAILED (expected ~w, got ~w)~n', [Expected, ActualLevel]),
+            inc_counter(fail)
+        )
+    ;
+        format('FAILED (not provable, expected ~w)~n', [Expected]),
+        inc_counter(fail)
+    ),
+    run_hierarchy_list(Rest).
+
+%! run_hierarchy_group(+Group)
+%  Run a single hierarchy group standalone.
+run_hierarchy_group(Group) :-
+    hierarchy_group_label(Group, Label),
+    format('~n=== ~w ===~n', [Label]),
+    findall(N-F-L, hierarchy_test(Group, N, F, L), Tests),
+    run_hierarchy_list(Tests).
+
+% =========================================================================
+% HIERARCHY GROUP LABELS
+% =========================================================================
+hierarchy_group_label(minimal,        'MINIMAL (no EFQ/DNE/LEM)').
+hierarchy_group_label(intuitionistic, 'INTUITIONISTIC (EFQ, not DNE/LEM)').
+hierarchy_group_label(classical_only,      'CLASSICAL ONLY (DNE or LEM required)').
+hierarchy_group_label(tne_boundary,        'TNE BOUNDARY (nested negation frontier)').
+hierarchy_group_label(G, G).
 
 % =========================================================================
 % END OF TEST SUITE

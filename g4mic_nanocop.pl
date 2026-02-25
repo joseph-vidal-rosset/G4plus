@@ -435,10 +435,10 @@ show_banner :-
 % ITERATION LIMITS CONFIGURATION  (DO NOT CHANGE THESE VALUES !)
 % =========================================================================
 
-logic_iteration_limit(constructive, 3).
+logic_iteration_limit(constructive, 4).
+logic_iteration_limit(minimal, 4).
+logic_iteration_limit(intuitionistic, 4).
 logic_iteration_limit(classical, 4).
-logic_iteration_limit(minimal, 5).
-logic_iteration_limit(intuitionistic, 3).
 logic_iteration_limit(fol, 4).
 
 % =========================================================================
@@ -482,78 +482,6 @@ for(Threshold, M, N) :- M < N, M1 is M+1, for(Threshold, M1, N).
 % to avoid false positives.
 % =========================================================================
 
-% normalize_double_negations/2: Simplify ~~A patterns in safe contexts
-normalize_double_negations(((A => #) => #), A) :-
-    A \= (_ => #), !.
-normalize_double_negations(A & B, NA & NB) :- !,
-    normalize_double_negations(A, NA),
-    normalize_double_negations(B, NB).
-normalize_double_negations(A | B, NA | NB) :- !,
-    normalize_double_negations(A, NA),
-    normalize_double_negations(B, NB).
-normalize_double_negations(A => B, NA => NB) :- !,
-    normalize_double_negations(A, NA),
-    normalize_double_negations(B, NB).
-normalize_double_negations(A <=> B, NA <=> NB) :- !,
-    normalize_double_negations(A, NA),
-    normalize_double_negations(B, NB).
-normalize_double_negations(![X]:A, ![X]:NA) :- !,
-    normalize_double_negations(A, NA).
-normalize_double_negations(?[X]:A, ?[X]:NA) :- !,
-    normalize_double_negations(A, NA).
-normalize_double_negations(F, F).
-
-% normalize_biconditional_order/2: Order biconditionals by complexity
-normalize_biconditional_order(A <=> B, B <=> A) :-
-    formula_complexity(A, CA),
-    formula_complexity(B, CB),
-    CB < CA, !.
-normalize_biconditional_order(A <=> B, NA <=> NB) :- !,
-    normalize_biconditional_order(A, NA),
-    normalize_biconditional_order(B, NB).
-normalize_biconditional_order(A & B, NA & NB) :- !,
-    normalize_biconditional_order(A, NA),
-    normalize_biconditional_order(B, NB).
-normalize_biconditional_order(A | B, NA | NB) :- !,
-    normalize_biconditional_order(A, NA),
-    normalize_biconditional_order(B, NB).
-normalize_biconditional_order(A => B, NA => NB) :- !,
-    normalize_biconditional_order(A, NA),
-    normalize_biconditional_order(B, NB).
-normalize_biconditional_order(![X]:A, ![X]:NA) :- !,
-    normalize_biconditional_order(A, NA).
-normalize_biconditional_order(?[X]:A, ?[X]:NA) :- !,
-    normalize_biconditional_order(A, NA).
-normalize_biconditional_order(F, F).
-
-% formula_complexity/2: Heuristic complexity measure
-formula_complexity((A => #), C) :- !,
-    formula_complexity(A, CA),
-    C is CA + 2.
-formula_complexity(A => B, C) :- !,
-    formula_complexity(A, CA),
-    formula_complexity(B, CB),
-    C is CA + CB + 3.
-formula_complexity(A & B, C) :- !,
-    formula_complexity(A, CA),
-    formula_complexity(B, CB),
-    C is CA + CB + 2.
-formula_complexity(A | B, C) :- !,
-    formula_complexity(A, CA),
-    formula_complexity(B, CB),
-    C is CA + CB + 2.
-formula_complexity(A <=> B, C) :- !,
-    formula_complexity(A, CA),
-    formula_complexity(B, CB),
-    C is CA + CB + 4.
-formula_complexity(![_]:A, C) :- !,
-    formula_complexity(A, CA),
-    C is CA + 5.
-formula_complexity(?[_]:A, C) :- !,
-    formula_complexity(A, CA),
-    C is CA + 5.
-formula_complexity(_, 1).
-
 % =========================================================================
 % CLASSICAL PATTERN DETECTION (Core)
 % =========================================================================
@@ -575,6 +503,7 @@ binary_connective(A | B, A, B).
 binary_connective(A => B, A, B).
 binary_connective(A <=> B, A, B).
 
+
 % BASIC CLASSICAL PATTERNS
 is_basic_classical_pattern(A | (A => #)) :- !.
 is_basic_classical_pattern((A => #) | A) :- !.
@@ -585,11 +514,11 @@ is_basic_classical_pattern((A => B) => ((A => #) | B)) :- !.
 is_basic_classical_pattern((A => B) => (B | (A => #))) :- !.
 is_basic_classical_pattern((A => B) | (B => A)) :- !.
 is_basic_classical_pattern(((B => #) => (A => #)) => (A => B)) :- !.
-is_basic_classical_pattern((A => B) => ((B => #) => (A => #))) :- !.
 is_basic_classical_pattern(((A => B) => #) => (A & (B => #))) :- !.
 is_basic_classical_pattern(((A & B) => #) => ((A => #) | (B => #))) :- !.
 is_basic_classical_pattern((((A => #) => B) & (A => B)) => B) :- !.
 is_basic_classical_pattern(((A => B) & ((A => #) => B)) => B) :- !.
+
 
 % FOL STRUCTURAL PATTERNS
 is_fol_structural_pattern(((![_-_]:_ => _) => (?[_-_]:(_ => _)))) :- !.
@@ -991,6 +920,17 @@ output_proof_results(Proof, LogicType, _OriginalFormula) :-
     % Display logic label
     output_logic_label(LogicType),
 
+    % Display raw Prolog proof term
+    nl, write('=== RAW PROLOG PROOF TERM ==='), nl,
+    write('    '), portray_clause(Proof), nl, nl,
+    ( catch(
+          (copy_term(Proof, ProofCopy),
+           numbervars(ProofCopy, 0, _),
+           nl, nl),
+          error(cyclic_term, _),
+          (write('%% WARNING: Cannot represent proof term due to cyclic_term.'), nl, nl)
+      ) -> true ; true ),
+
     % Sequent Calculus
     write('--- Sequent Calculus Proof ---'), nl, nl,
     write('\\begin{prooftree}'), nl,
@@ -1075,12 +1015,6 @@ output_logic_label(intuitionistic) :-
 output_logic_label(classical) :-
     write('G4+IP proofs in classical logic'), nl, nl.
 
-proof_uses_lbot(lbot(_,_)) :- !.
-proof_uses_lbot(Term) :-
-    compound(Term),
-    Term =.. [_|Args],
-    member(Arg, Args),
-    proof_uses_lbot(Arg).
 
 % =========================================================================
 % MINIMAL INTERFACE g4mic_decides/1
@@ -1115,15 +1049,11 @@ g4mic_decides(Formula) :-
     (   F2 = ((A => #) => #), A \= (_ => #)  ->
         % Double negation detected - try constructive first
         write('- Double negation detected -> Trying constructive logic first'), nl,
-        ((time(provable_at_level([] > [F2], constructive, Proof1))) ->
+        ((time(provable_at_level([] > [F2], constructive, _))) ->
             ((time(provable_at_level([] > [F2], minimal, _))) ->
                 write('Valid in minimal logic'), nl
             ;
-                ( proof_uses_lbot(Proof1) ->
-                    write('Valid in intuitionistic logic'), nl
-                ;
-                    write('Valid in intuitionistic logic'), nl
-                )
+                write('Valid in intuitionistic logic'), nl
             )
         ;
             time(provable_at_level([] > [F2], classical, _)),
@@ -1132,15 +1062,11 @@ g4mic_decides(Formula) :-
     ; is_classical_pattern(F2) ->
         % Classical pattern detected - but still try constructive first!
         write('- Classical pattern detected -> Trying constructive logic first'), nl,
-        ((time(provable_at_level([] > [F2], constructive, Proof2))) ->
+        ((time(provable_at_level([] > [F2], constructive, _))) ->
             ((time(provable_at_level([] > [F2], minimal, _))) ->
                 write('Valid in minimal logic'), nl
             ;
-                ( proof_uses_lbot(Proof2) ->
-                    write('Valid in intuitionistic logic'), nl
-                ;
-                    write('Valid in intuitionistic logic'), nl
-                )
+                write('Valid in intuitionistic logic'), nl
             )
         ;
             time(provable_at_level([] > [F2], classical, _)),
@@ -1150,12 +1076,8 @@ g4mic_decides(Formula) :-
         % Normal progression: minimal -> intuitionistic -> classical
         ( time(provable_at_level([] > [F2], minimal, _)) ->
             write('Valid in minimal logic'), nl
-        ; time(provable_at_level([] > [F2], constructive, Proof3)) ->
-            ( proof_uses_lbot(Proof3) ->
-                write('Valid in intuitionistic logic'), nl
-            ;
-                write('Valid in intuitionistic logic'), nl
-            )
+        ; time(provable_at_level([] > [F2], constructive, _)) ->
+            write('Valid in intuitionistic logic'), nl
         ; time(provable_at_level([] > [F2], classical, _)) ->
             write('Valid in classical logic'), nl
         ;
@@ -1345,7 +1267,7 @@ member_check(Term, List) :-
     Term =@= Elem, !.
 
 % =========================================================================
-% RULE 0: AXIOM (separate predicate, not tabled)
+% RULE 0: AXIOM
 % =========================================================================
 
 g4mic_ax(Gamma > Delta, _, _, SkolemIn, SkolemIn, _, ax(Gamma>Delta, ax)) :-
@@ -1364,51 +1286,50 @@ g4mic_ax(Gamma > Delta, _, _, SkolemIn, SkolemIn, _, ax(Gamma>Delta, ax)) :-
 %              LogicLevel, Proof)
 % =========================================================================
 
-% :- table g4mic_proves/7.
-
 % --- Rule 0: Axiom (tested first, non-tabled) ----------------------------
 g4mic_proves(Seq, FV, Th, SI, SO, LL, Proof) :-
     g4mic_ax(Seq, FV, Th, SI, SO, LL, Proof), !.
 
-% =========================================================================
-% QUANTIFIER RIGHT RULE (before all left rules)
-% Rforall fires first: eigenvariable is immediately available for left rules
-% =========================================================================
+% --- Rule 1: L-bot -----------------------------------------------------
+g4mic_proves(Gamma>Delta, _, _, SI, SI, LL, lbot(Gamma>Delta, #)) :-
+    member(LL, [intuitionistic, classical]),
+    member(#, Gamma), !.
 
-% --- Rule 1: Rforall -----------------------------------------------------------
-g4mic_proves(Gamma > Delta, FV, Th, SI, SO, LL, rall(Gamma>Delta, P)) :-
-    select((![_Z-X]:A), Delta, D1), !,
-    copy_term((X:A, FV), (f_sk(SI, FV):A1, FV)),
-    (catch(b_getval(g4_eigenvars, UsedVars), _, UsedVars = [])),
-    \+ member_check(f_sk(SI, FV), UsedVars),
-    b_setval(g4_eigenvars, [f_sk(SI, FV) | UsedVars]),
-    J1 is SI + 1,
-    g4mic_proves(Gamma > [A1 | D1], FV, Th, J1, SO, LL, P).
-
-% =========================================================================
+% --- Rule 2: R-> ---------------------------------------------------------
+g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, rcond(Gamma>Delta, P)) :-
+    Delta = [A => B], !,
+    g4mic_proves([A | Gamma]>[B], FV, Th, SI, SO, LL, P).
+% =====================================================================
 % PROPOSITIONAL RULES (deterministic, no branching)
-%=========================================================================
+%======================================================================
 % LEFT RULES
-%========================================================================
-
-% --- Rule 2: L& -----------------------------------------------------------
+%======================================================================
+% --- Rule 3: L& -----------------------------------------------------------
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, land(Gamma>Delta, P)) :-
     select((A & B), Gamma, G1), !,
     g4mic_proves([A, B | G1]>Delta, FV, Th, SI, SO, LL, P).
 
-% --- Rule 3: L0-> (modus ponens on context) -------------------------------
+% --- Rule 4: TNE (triple negation elimination) ----------------------------
+g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, tne(Gamma>Delta, P)) :-
+    Delta = [(A => B)],
+    member(LongNeg, Gamma),
+    is_nested_negation(LongNeg, A => B, Depth),
+    Depth >= 2, !,
+    g4mic_proves([A | Gamma]>[B], FV, Th, SI, SO, LL, P).
+
+% --- Rule 5: L0-> (modus ponens on context) -------------------------------
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, l0cond(Gamma>Delta, P)) :-
     select((A => B), Gamma, G1),
     member(A, G1),
     !,
     g4mic_proves([B | G1]>Delta, FV, Th, SI, SO, LL, P).
 
-% --- Rule 4: L&-> ---------------------------------------------------------
+% --- Rule 6: L&-> ---------------------------------------------------------
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, landto(Gamma>Delta, P)) :-
     select(((A & B) => C), Gamma, G1), !,
     g4mic_proves([(A => (B => C)) | G1]>Delta, FV, Th, SI, SO, LL, P).
 
-% --- Rule 6: L\/-> (optimized) --------------------------------------------
+% --- Rule 7: L\/-> (optimized) --------------------------------------------
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, lorto(Gamma>Delta, P)) :-
     select(((A | B) => C), Gamma, G1), !,
     ( member(A, G1), member(B, G1) ->
@@ -1424,10 +1345,6 @@ g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, lorto(Gamma>Delta, P)) :-
 % =========================================================================
 % Intuitionistic rule Lbot and classical rule IP
 % =========================================================================
-% --- Rule 7: L-bot -----------------------------------------------------
-g4mic_proves(Gamma>Delta, _, _, SI, SI, LL, lbot(Gamma>Delta, #)) :-
-    member(LL, [intuitionistic, classical]),
-    member(#, Gamma), !.
 
 % --- Rule 8: IP (indirect proof -- classical only) ------------------------
 % Placed just before R->: classical law applied before decomposition
@@ -1443,6 +1360,7 @@ g4mic_proves(Gamma>Delta, FV, Th, SI, SO, classical, ip(Gamma>Delta, P)) :-
 % =========================================================================
 %% Left rules first
 %==========================================================================
+
 % --- Rule 9: L->-> --------------------------------------------------------
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, ltoto(Gamma>Delta, P1, P2)) :-
     select(((A => B) => C), Gamma, G1),
@@ -1461,27 +1379,31 @@ g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, lor(Gamma>Delta, P1, P2)) :-
 % RIGHT RULES
 %========================================================================
 
-% --- Rule 11: R-> ---------------------------------------------------------
-g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, rcond(Gamma>Delta, P)) :-
-    Delta = [A => B], !,
-    g4mic_proves([A | Gamma]>[B], FV, Th, SI, SO, LL, P).
-
-% --- Rule 12: R\/ ----------------------------------------------------------
+% --- Rule 11: R\/ ----------------------------------------------------------
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, ror(Gamma>Delta, P)) :-
     Delta = [(A | B)], !,
     (   g4mic_proves(Gamma>[A], FV, Th, SI, SO, LL, P)
     ;   g4mic_proves(Gamma>[B], FV, Th, SI, SO, LL, P)
     ).
 
-% --- Rule 13: R& ----------------------------------------------------------
+% --- Rule 12: R& ----------------------------------------------------------
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, rand(Gamma>Delta, P1, P2)) :-
     Delta = [(A & B)], !,
     g4mic_proves(Gamma>[A], FV, Th, SI, J1, LL, P1),
     g4mic_proves(Gamma>[B], FV, Th, J1, SO, LL, P2).
 
 % =========================================================================
-% QUANTIFIER  RULES (except Rforall which is above)
+% QUANTIFIER  RULES
 % =========================================================================
+% --- Rule 13: Rforall -----------------------------------------------------------
+g4mic_proves(Gamma > Delta, FV, Th, SI, SO, LL, rall(Gamma>Delta, P)) :-
+    select((![_Z-X]:A), Delta, D1), !,
+    copy_term((X:A, FV), (f_sk(SI, FV):A1, FV)),
+    (catch(b_getval(g4_eigenvars, UsedVars), _, UsedVars = [])),
+    \+ member_check(f_sk(SI, FV), UsedVars),
+    b_setval(g4_eigenvars, [f_sk(SI, FV) | UsedVars]),
+    J1 is SI + 1,
+    g4mic_proves(Gamma > [A1 | D1], FV, Th, J1, SO, LL, P).
 
 % --- Rule 14: Lexists ----------------------------------------------------------
 g4mic_proves(Gamma > Delta, FV, Th, SI, SO, LL, lex(Gamma>Delta, P)) :-
@@ -2436,9 +2358,6 @@ known_predicate(s).
 known_predicate(h).
 known_predicate(m).
 
-clear_predicates :-
-    retractall(known_predicate(_)).
-
 % =========================================================================
 % MAIN VALIDATION ENTRY POINT
 % =========================================================================
@@ -2449,16 +2368,8 @@ validate_and_warn(Formula, ValidatedFormula) :-
     % Check 1: Sequent syntax confusion (ALWAYS check, even in propositional logic)
     check_sequent_syntax_confusion(Formula, SyntaxWarnings),
 
-    % Check 2: Biconditional misuse (only in FOL context)
-/*
-    detect_fol_context(Formula, IsFOL),
-    (   IsFOL ->
-        check_bicond_misuse(Formula, BicondWarnings)
-    ;   BicondWarnings = []
-    ),
-*/
     % Combine warnings
-    append(SyntaxWarnings, _BicondWarnings, AllWarnings),
+    append(SyntaxWarnings, [], AllWarnings),
 
     % Handle combined warnings
     handle_warnings(AllWarnings, Mode, ValidatedFormula, Formula).
@@ -2482,23 +2393,6 @@ prompt_continue :-
     ;   Response = yes -> true
     ;   write('  Proof attempt cancelled.'), nl, fail
     ).
-% =========================================================================
-% FOL CONTEXT DETECTION
-% =========================================================================
-% A formula is in FOL context if it contains:
-%   - Quantifiers (?, ?)
-%   - Predicate applications p(t1,...,tn) with n > 0
-%   - Equality between terms
-%   - Function symbols (including Skolem functions)
-
-detect_fol_context(Formula, true) :-
-    (   contains_quantifier(Formula)
-    ;   contains_predicate_application(Formula)
-    ;   contains_equality(Formula)
-    ;   contains_function_symbol(Formula)
-    ), !.
-detect_fol_context(_, false).
-
 % Logical connective identification
 is_logical_connective(_ => _).
 is_logical_connective(_ & _).
@@ -2508,84 +2402,6 @@ is_logical_connective(~ _).
 is_logical_connective(#).
 is_logical_connective(![_-_]:_).
 is_logical_connective(?[_-_]:_).
-
-% =========================================================================
-% BICONDITIONAL MISUSE DETECTION
-% =========================================================================
-% Detects <=> used between terms instead of formulas
-% Example: (a <=> b) should likely be (a = b) in FOL
-
-check_bicond_misuse(Formula, Warnings) :-
-    findall(Warning, detect_bicond_in_terms(Formula, Warning), Warnings).
-
-% =========================================================================
-% BICONDITIONAL MISUSE DETECTION (IMPROVED)
-% =========================================================================
-% Only warn if <=> appears in a TERM CONTEXT (not formula context)
-
-detect_bicond_in_terms(A <=> B, warning(bicond_between_terms, A, B)) :-
-    % Both sides are clearly terms (constants or function applications)
-    is_definitely_term(A),
-    is_definitely_term(B),
-    !.
-
-detect_bicond_in_terms(Term, Warning) :-
-    compound(Term),
-    Term \= (_ <=> _),  % Don't recurse into biconditionals we already checked
-    Term =.. [_|Args],
-    member(Arg, Args),
-    detect_bicond_in_terms(Arg, Warning).
-
-% =========================================================================
-% DEFINITELY A TERM (not a formula)
-% =========================================================================
-% Conservative: only flag obvious cases
-is_definitely_term(![_]:_) :- !, fail.  % Universal quantification = formula
-is_definitely_term(?[_]:_) :- !, fail.  % Existential quantification = formula
-
-is_definitely_term(X) :-
-    var(X), !.  % Variable (term)
-
-is_definitely_term(X) :-
-    atomic(X),
-    \+ known_predicate(X),  % Constant, not predicate
-    !.
-
-is_definitely_term(f_sk(_)) :- !.  % Skolem function (single arg)
-is_definitely_term(f_sk(_,_)) :- !.  % Skolem function
-
-is_definitely_term(Term) :-
-    compound(Term),
-    \+ is_logical_connective(Term),
-    Term =.. [F|Args],
-    Args \= [],
-    % Must be a KNOWN function symbol (not predicate)
-    is_known_function(F),
-    !.
-
-% =========================================================================
-% KNOWN FUNCTION REGISTRY
-% =========================================================================
-% Users can register function symbols to improve detection
-
-:- dynamic known_function/1.
-
-% Default common function symbols
-known_function(succ).   % Successor
-known_function(plus).
-known_function(times).
-known_function(father).  % father(x) is a term
-known_function(mother).
-
-is_known_function(F) :-
-    known_function(F), !.
-
-% Heuristic fallback: if NOT a known predicate, assume function
-% (This is conservative - avoid false positives)
-is_known_function(F) :-
-    \+ known_predicate(F),
-    \+ member(F, [f, g, h, i, j, k, p, q, r, s]),  % Ambiguous symbols
-    !.
 
 % =========================================================================
 % SEQUENT SYNTAX CONFUSION DETECTION
@@ -5443,11 +5259,6 @@ prove_tptp_internal(Formula, has_conjecture) :-
     tptp_validation_phase(Formula, 'Theorem').
 
 % =========================================================================
-% UTILITY: AUTO-SUGGESTION (optional feature)
-% =========================================================================
-%%% END OF g4mic PROVER
-
-% =========================================================================
 % SHARED VALIDATION PHASE
 % =========================================================================
 % Called after every successful g4mic proof (prove/1 and prove_tptp_internal).
@@ -5502,3 +5313,5 @@ szs_disproved_status(Formula, Status) :-
     ;
       Status = 'CounterSatisfiable'
     ).
+
+%%% END OF g4mic PROVER

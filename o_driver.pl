@@ -83,7 +83,6 @@
 :-[nanocop20_swi].
 :-[nanocop_proof].
 :-[nanocop_tptp2].
-
 % Activer le format d'explication complete d'Otten
 :-retractall(proof(_)).
 :-assert(proof(readable)).
@@ -417,10 +416,10 @@ show_banner :-
 % ITERATION LIMITS CONFIGURATION  (DO NOT CHANGE THESE VALUES !)
 % =========================================================================
 
-logic_iteration_limit(constructive, 3).
+logic_iteration_limit(constructive, 4).
+logic_iteration_limit(minimal, 4).
+logic_iteration_limit(intuitionistic, 4).
 logic_iteration_limit(classical, 4).
-logic_iteration_limit(minimal, 5).
-logic_iteration_limit(intuitionistic, 3).
 logic_iteration_limit(fol, 4).
 
 % =========================================================================
@@ -464,78 +463,6 @@ for(Threshold, M, N) :- M < N, M1 is M+1, for(Threshold, M1, N).
 % to avoid false positives.
 % =========================================================================
 
-% normalize_double_negations/2: Simplify ~~A patterns in safe contexts
-normalize_double_negations(((A => #) => #), A) :-
-    A \= (_ => #), !.
-normalize_double_negations(A & B, NA & NB) :- !,
-    normalize_double_negations(A, NA),
-    normalize_double_negations(B, NB).
-normalize_double_negations(A | B, NA | NB) :- !,
-    normalize_double_negations(A, NA),
-    normalize_double_negations(B, NB).
-normalize_double_negations(A => B, NA => NB) :- !,
-    normalize_double_negations(A, NA),
-    normalize_double_negations(B, NB).
-normalize_double_negations(A <=> B, NA <=> NB) :- !,
-    normalize_double_negations(A, NA),
-    normalize_double_negations(B, NB).
-normalize_double_negations(![X]:A, ![X]:NA) :- !,
-    normalize_double_negations(A, NA).
-normalize_double_negations(?[X]:A, ?[X]:NA) :- !,
-    normalize_double_negations(A, NA).
-normalize_double_negations(F, F).
-
-% normalize_biconditional_order/2: Order biconditionals by complexity
-normalize_biconditional_order(A <=> B, B <=> A) :-
-    formula_complexity(A, CA),
-    formula_complexity(B, CB),
-    CB < CA, !.
-normalize_biconditional_order(A <=> B, NA <=> NB) :- !,
-    normalize_biconditional_order(A, NA),
-    normalize_biconditional_order(B, NB).
-normalize_biconditional_order(A & B, NA & NB) :- !,
-    normalize_biconditional_order(A, NA),
-    normalize_biconditional_order(B, NB).
-normalize_biconditional_order(A | B, NA | NB) :- !,
-    normalize_biconditional_order(A, NA),
-    normalize_biconditional_order(B, NB).
-normalize_biconditional_order(A => B, NA => NB) :- !,
-    normalize_biconditional_order(A, NA),
-    normalize_biconditional_order(B, NB).
-normalize_biconditional_order(![X]:A, ![X]:NA) :- !,
-    normalize_biconditional_order(A, NA).
-normalize_biconditional_order(?[X]:A, ?[X]:NA) :- !,
-    normalize_biconditional_order(A, NA).
-normalize_biconditional_order(F, F).
-
-% formula_complexity/2: Heuristic complexity measure
-formula_complexity((A => #), C) :- !,
-    formula_complexity(A, CA),
-    C is CA + 2.
-formula_complexity(A => B, C) :- !,
-    formula_complexity(A, CA),
-    formula_complexity(B, CB),
-    C is CA + CB + 3.
-formula_complexity(A & B, C) :- !,
-    formula_complexity(A, CA),
-    formula_complexity(B, CB),
-    C is CA + CB + 2.
-formula_complexity(A | B, C) :- !,
-    formula_complexity(A, CA),
-    formula_complexity(B, CB),
-    C is CA + CB + 2.
-formula_complexity(A <=> B, C) :- !,
-    formula_complexity(A, CA),
-    formula_complexity(B, CB),
-    C is CA + CB + 4.
-formula_complexity(![_]:A, C) :- !,
-    formula_complexity(A, CA),
-    C is CA + 5.
-formula_complexity(?[_]:A, C) :- !,
-    formula_complexity(A, CA),
-    C is CA + 5.
-formula_complexity(_, 1).
-
 % =========================================================================
 % CLASSICAL PATTERN DETECTION (Core)
 % =========================================================================
@@ -557,6 +484,7 @@ binary_connective(A | B, A, B).
 binary_connective(A => B, A, B).
 binary_connective(A <=> B, A, B).
 
+
 % BASIC CLASSICAL PATTERNS
 is_basic_classical_pattern(A | (A => #)) :- !.
 is_basic_classical_pattern((A => #) | A) :- !.
@@ -567,11 +495,11 @@ is_basic_classical_pattern((A => B) => ((A => #) | B)) :- !.
 is_basic_classical_pattern((A => B) => (B | (A => #))) :- !.
 is_basic_classical_pattern((A => B) | (B => A)) :- !.
 is_basic_classical_pattern(((B => #) => (A => #)) => (A => B)) :- !.
-is_basic_classical_pattern((A => B) => ((B => #) => (A => #))) :- !.
 is_basic_classical_pattern(((A => B) => #) => (A & (B => #))) :- !.
 is_basic_classical_pattern(((A & B) => #) => ((A => #) | (B => #))) :- !.
 is_basic_classical_pattern((((A => #) => B) & (A => B)) => B) :- !.
 is_basic_classical_pattern(((A => B) & ((A => #) => B)) => B) :- !.
+
 
 % FOL STRUCTURAL PATTERNS
 is_fol_structural_pattern(((![_-_]:_ => _) => (?[_-_]:(_ => _)))) :- !.
@@ -645,6 +573,7 @@ prove(Left <=> Right) :-
     nanocop_proves(Left <=> Right),
 
     write('==============================================================='), nl,
+    write('% SZS status Theorem'), nl,
     write('Q.E.D.'), nl, nl,!.
 
 %  ALTERNATIVE Clause - no equality/functions: g4mic
@@ -813,39 +742,16 @@ prove(Left <=> Right) :-
         ; write('  failed')
         ), nl, nl,
 
+        % SZS status
+        ( Direction1Valid = true, Direction2Valid = true ->
+            write('% SZS status Theorem'), nl
+        ;
+            write('% SZS status CounterSatisfiable'), nl
+        ),
+
         % Validation
-        nl,
-        write('--- Validation ---'), nl,
-        nl,
-        write('g4mic_decides:   '),
-        ( catch(g4mic_decides(Left <=> Right), _, fail) ->
-            write('true'), nl,
-            G4micResult = valid
-        ;
-            write('false'), nl,
-            G4micResult = invalid
-        ),
-        write('nanocop_decides: '),
-        ( catch(time(nanocop_decides(Left <=> Right)), _, fail) ->
-            write('true'), nl,
-            NanoCopResult = valid
-        ;
-            write('false'), nl,
-            NanoCopResult = invalid
-        ),
-        nl,
-        ( G4micResult = valid, NanoCopResult = valid ->
-            write('Both provers agree: valid.'), nl
-        ; G4micResult = invalid, NanoCopResult = invalid ->
-            write('Both provers agree: invalid.'), nl
-        ; G4micResult = valid, NanoCopResult = invalid ->
-            write('[!] SOUNDNESS BUG: g4mic=true, nanoCoP=false'), nl,
-            write('    Please report to: joseph@vidal-rosset.net'), nl
-        ; G4micResult = invalid, NanoCopResult = valid ->
-            write('[!] COMPLETENESS ISSUE: g4mic=false, nanoCoP=true'), nl,
-            write('    Please report to: joseph@vidal-rosset.net'), nl
-        ),
-        nl, nl, !.
+        tptp_validation_phase(Left <=> Right, 'Theorem'),
+        nl, !.
 
 
 % =========================================================================
@@ -873,6 +779,7 @@ prove(Formula) :-
     nanocop_proves(Formula),
 
     write('==============================================================='), nl,
+    write('% SZS status Theorem'), nl,
     write('Q.E.D.'), nl, nl,!.
 
 % ALTERNATIVE CLAUSE: No equality/functions -> normal g4mic flow
@@ -896,8 +803,20 @@ prove(Formula) :-
       ) ->
       true
     ;
+    % nanocop_decides failed: formula is not valid.
+    % Distinguish CounterSatisfiable vs Unsatisfiable, and for the latter
+    % produce a full proof of the negation (=> #) with validation.
     szs_disproved_status(Formula, DisprStatus),
-    format('% SZS status ~w~n', [DisprStatus]), !, fail
+    format('% SZS status ~w~n', [DisprStatus]),
+    ( DisprStatus = 'Unsatisfiable' ->
+        % Formula is a contradiction: prove (Formula => #) and show full proof
+        NegFormula = (Formula => #),
+        nl,
+        write('[ Contradiction detected -- proving (Formula => #) ]'), nl,
+        nl,
+        prove_tptp_internal(NegFormula, no_conjecture)
+    ; true ),
+    !, fail
     ),
 
     % ===============================================================
@@ -954,8 +873,6 @@ prove(Formula) :-
     format('G4mic time: ~3f seconds~n', [Time]),
     nl,
     format("% SZS status Theorem~n"), nl, output_proof_results(OutputProof, Logic, Formula),
-    !,
-
 
     % ===============================================================
     % PHASE 3: EXTERNAL VALIDATION (displayed)
@@ -964,70 +881,8 @@ prove(Formula) :-
     write('================================================================'), nl,
     write('                  - PHASE 3: VALIDATION                         '), nl,
     write('================================================================'), nl,
-    nl,
-
-    % g4mic VALIDATION
-    write('==============================================================='), nl,
-    write('- g4mic_decides output'), nl,
-    write('==============================================================='), nl,
-    ( catch(g4mic_decides(Formula), _, fail) ->
-        write('true.'), nl,
-        G4micResult = valid
-    ;
-        write('false. '), nl,
-        G4micResult = invalid
-    ),
-    nl,
-
-    % NANOCOP VALIDATION (SILENCIEUX mais avec time/1)
-    write('==============================================================='), nl,
-    write('- nanocop_decides output'), nl,
-    write('==============================================================='), nl,
-    ( catch(time(nanocop_decides(Formula)), _, fail) ->
-        write('true.'), nl,
-        NanoCopResult = valid
-    ;
-        write('false.'), nl,
-        NanoCopResult = invalid
-    ),
-    nl,
-
-    % VALIDATION SUMMARY
-    write('==============================================================='), nl,
-    write('- Validation Summary'), nl,
-    write('==============================================================='), nl,
-    ( G4micResult = valid, NanoCopResult = valid ->
-        write('  Both provers agree: '), write('true'), nl
-    ; G4micResult = invalid, NanoCopResult = invalid ->
-        write('  Both provers agree: '), write('false'), nl
-    ; G4micResult = valid, NanoCopResult = invalid ->
-        nl,
-        write('============================================================='), nl,
-        write('  DISAGREEMENT: g4mic=true, nanoCoP=false'), nl,
-        write('============================================================='), nl,
-        nl,
-        write('This is a SOUNDNESS BUG in G4-mic (false positive).'), nl,
-        write('G4-mic proved an invalid formula!'), nl,
-        nl,
-        write('URGENT: Please report this issue immediately:'), nl,
-        write('  *  Email: joseph@vidal-rosset.net'), nl,
-        write('  -  Include: the formula and full output'), nl,
-        nl
-    ; G4micResult = invalid, NanoCopResult = valid ->
-        nl,
-        write('============================================================='), nl,
-        write('  DISAGREEMENT: g4mic=false, nanoCoP=true'), nl,
-        write('============================================================='), nl,
-        nl,
-        write('This is a COMPLETENESS issue in G4-mic (false negative).'), nl,
-        write('G4-mic failed to prove a valid formula.'), nl,
-        nl,
-        write('Please help improve G4-mic by reporting this:'), nl,
-        write('  *  Email: joseph@vidal-rosset.net'), nl,
-        write('  -  Include: the formula and validation output'), nl,
-        nl
-    ),
-    nl, nl.
+    tptp_validation_phase(Formula, 'Theorem'),
+    nl.
 % =========================================================================
 % HELPERS
 % =========================================================================
@@ -1045,6 +900,17 @@ output_proof_results(Proof, LogicType, _OriginalFormula) :-
 
     % Display logic label
     output_logic_label(LogicType),
+
+    % Display raw Prolog proof term
+    nl, write('=== RAW PROLOG PROOF TERM ==='), nl,
+    write('    '), portray_clause(Proof), nl, nl,
+    ( catch(
+          (copy_term(Proof, ProofCopy),
+           numbervars(ProofCopy, 0, _),
+           nl, nl),
+          error(cyclic_term, _),
+          (write('%% WARNING: Cannot represent proof term due to cyclic_term.'), nl, nl)
+      ) -> true ; true ),
 
     % Sequent Calculus
     write('--- Sequent Calculus Proof ---'), nl, nl,
@@ -1130,12 +996,6 @@ output_logic_label(intuitionistic) :-
 output_logic_label(classical) :-
     write('G4+IP proofs in classical logic'), nl, nl.
 
-proof_uses_lbot(lbot(_,_)) :- !.
-proof_uses_lbot(Term) :-
-    compound(Term),
-    Term =.. [_|Args],
-    member(Arg, Args),
-    proof_uses_lbot(Arg).
 
 % =========================================================================
 % MINIMAL INTERFACE g4mic_decides/1
@@ -1170,15 +1030,11 @@ g4mic_decides(Formula) :-
     (   F2 = ((A => #) => #), A \= (_ => #)  ->
         % Double negation detected - try constructive first
         write('- Double negation detected -> Trying constructive logic first'), nl,
-        ((time(provable_at_level([] > [F2], constructive, Proof1))) ->
+        ((time(provable_at_level([] > [F2], constructive, _))) ->
             ((time(provable_at_level([] > [F2], minimal, _))) ->
                 write('Valid in minimal logic'), nl
             ;
-                ( proof_uses_lbot(Proof1) ->
-                    write('Valid in intuitionistic logic'), nl
-                ;
-                    write('Valid in intuitionistic logic'), nl
-                )
+                write('Valid in intuitionistic logic'), nl
             )
         ;
             time(provable_at_level([] > [F2], classical, _)),
@@ -1187,15 +1043,11 @@ g4mic_decides(Formula) :-
     ; is_classical_pattern(F2) ->
         % Classical pattern detected - but still try constructive first!
         write('- Classical pattern detected -> Trying constructive logic first'), nl,
-        ((time(provable_at_level([] > [F2], constructive, Proof2))) ->
+        ((time(provable_at_level([] > [F2], constructive, _))) ->
             ((time(provable_at_level([] > [F2], minimal, _))) ->
                 write('Valid in minimal logic'), nl
             ;
-                ( proof_uses_lbot(Proof2) ->
-                    write('Valid in intuitionistic logic'), nl
-                ;
-                    write('Valid in intuitionistic logic'), nl
-                )
+                write('Valid in intuitionistic logic'), nl
             )
         ;
             time(provable_at_level([] > [F2], classical, _)),
@@ -1205,12 +1057,8 @@ g4mic_decides(Formula) :-
         % Normal progression: minimal -> intuitionistic -> classical
         ( time(provable_at_level([] > [F2], minimal, _)) ->
             write('Valid in minimal logic'), nl
-        ; time(provable_at_level([] > [F2], constructive, Proof3)) ->
-            ( proof_uses_lbot(Proof3) ->
-                write('Valid in intuitionistic logic'), nl
-            ;
-                write('Valid in intuitionistic logic'), nl
-            )
+        ; time(provable_at_level([] > [F2], constructive, _)) ->
+            write('Valid in intuitionistic logic'), nl
         ; time(provable_at_level([] > [F2], classical, _)) ->
             write('Valid in classical logic'), nl
         ;
