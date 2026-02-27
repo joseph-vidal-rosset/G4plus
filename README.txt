@@ -132,7 +132,7 @@ Exit codes:
    2 - Timeout/Unknown/Error
 
 ================================================================================
-SYSTEMONTP INTEGRATION
+SystemOnTPTP INTEGRATION
 ================================================================================
 
 G4+ is designed to work with SystemOnTPTP. The interface is compatible
