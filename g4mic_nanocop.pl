@@ -95,8 +95,10 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % End of operators list
 %% File: minimal_driver_equal.pl  -  Version: 7.3 FINAL (time seulement dans proves)
-
+	   
 :-style_check(-singleton).
+
+	   :- (getenv('TPTP', _) -> true ; setenv('TPTP', '/home/joseph/src/TPTP-v9.2.1')).
 
 :-[nanocop20_swi].
 :-[nanocop_proof].
@@ -111,6 +113,14 @@
 % =========================================================================
 % MAIN INTERFACE
 % =========================================================================
+
+% Wrapper public: catchee nanocop_gave_up pour appels directs
+nanocop_proves_safe(Formula) :-
+    catch(
+        nanocop_proves(Formula),
+        nanocop_gave_up,
+        ( format('% SZS status GaveUp~n', []), fail )
+    ).
 
 nanocop_proves(Formula) :-
     % Forcer l'affichage
@@ -149,7 +159,16 @@ nanocop_proves(Formula) :-
         2000000,
         InfResult
     ),
-    ( InfResult == inference_limit_exceeded -> fail ; true ),!.
+    ( InfResult == inference_limit_exceeded ->
+        % Limite atteinte: verifier avec nanocop_decides si c'est quand meme un theoreme
+        ( nanocop_decides(Formula) ->
+            write('% SZS status Theorem'), nl,
+            write('% Proof validated by nanoCoP (nanoCoP proof generation not available for this formula)'), nl,
+            nl
+        ;
+            format('% SZS status GaveUp~n', []), !, fail
+        )
+    ; true ),!.
 
 % =========================================================================
 % nanocop_decides/1 :   Version SILENCIEUSE (avec stats)
@@ -233,8 +252,7 @@ output_result(Formula, Matrix, Proof, Result) :-
         format('================================================================~n'),
         format('                     NANOCOP THEOREM PROVER~n'),
         format('================================================================~n~n'),
-        write('Formula:         '), write(Formula), nl,
-        write('Result:    '), write(Result), nl, nl,
+        write('Formula:         '), write(Formula), nl, nl,
         ( var(Proof) ->
             write('No proof found.      '), nl
         ;
@@ -2252,18 +2270,23 @@ contains_equality(Term) :-
 %   - A quantifier
 %   - An internal Skolem function (f_sk)
 %   - A predicate at top level
+% Recurse into quantifiers
+contains_user_function(![_]:A) :- !, contains_user_function(A).
+contains_user_function(?[_]:A) :- !, contains_user_function(A).
+contains_user_function(all _:A) :- !, contains_user_function(A).
+contains_user_function(ex _:A)  :- !, contains_user_function(A).
+% Recurse into logical connectives
+contains_user_function(~A)    :- !, contains_user_function(A).
+contains_user_function(A & B) :- !, (contains_user_function(A) ; contains_user_function(B)).
+contains_user_function(A | B) :- !, (contains_user_function(A) ; contains_user_function(B)).
+contains_user_function(A => B) :- !, (contains_user_function(A) ; contains_user_function(B)).
+contains_user_function(A <=> B) :- !, (contains_user_function(A) ; contains_user_function(B)).
+% Base case: compound term that is not a logical operator => check for function symbols
 contains_user_function(Term) :-
     compound(Term),
     Term \= f_sk(_),
     Term \= f_sk(_,_),
     Term \= (_ = _),
-    Term \= (~ _),
-    Term \= (_ & _),
-    Term \= (_ | _),
-    Term \= (_ => _),
-    Term \= (_ <=> _),
-    Term \= (![_]:_),
-    Term \= (?[_]:_),
     % Now check if Term or its arguments contain functions
     (   has_function_in_args(Term)
     ;   Term =.. [_F|Args],
@@ -4774,69 +4797,68 @@ read_tptp_formulas(Stream, FileDir, Formulas) :-
 read_tptp_formulas(_, _, []).
 
 % Process list of TPTP formulas - collect axioms and combine with conjecture
+% Two-pass: first collect ALL axioms, then process conjecture.
+% This handles files where the conjecture appears before some or all axioms.
 process_tptp_formulas(Formulas) :-
-    process_tptp_formulas(Formulas, []).
-
-% process_tptp_formulas(Formulas, AccumulatedAxioms)
-%
-% No conjecture found: test satisfiability of the axiom set.
-% SZS Unsatisfiable if axioms are inconsistent, SZS Satisfiable otherwise.
-process_tptp_formulas([], Axioms) :-
-    (   Axioms \= [] ->
-        length(Axioms, NumAxioms),
-        format('~nSatisfiability check: ~w axiom(s) without conjecture~n', [NumAxioms]),
-        maplist(convert_axiom_formula, Axioms, G4micAxioms),
-        combine_axioms(G4micAxioms, Combined),
-        NegCombined = (Combined => #),
-        ( prove_tptp_internal(NegCombined, no_conjecture) -> true ; true )
-    ;   true
+    collect_all_axioms(Formulas, AllAxioms, Conjectures),
+    ( Conjectures = [] ->
+        % No conjecture: satisfiability check on axioms only
+        ( AllAxioms \= [] ->
+            length(AllAxioms, NumAxioms),
+            format('~nSatisfiability check: ~w axiom(s) without conjecture~n', [NumAxioms]),
+            maplist(convert_axiom_formula, AllAxioms, G4micAxioms),
+            combine_axioms(G4micAxioms, Combined),
+            NegCombined = (Combined => #),
+            ( prove_tptp_internal(NegCombined, no_conjecture) -> true ; true )
+        ; true
+        )
+    ;
+        process_tptp_formulas_with_axioms(Conjectures, AllAxioms)
     ).
 
-process_tptp_formulas([fof(Name, Role, Formula)|Rest], AccAxioms) :-
-    (   Role = axiom ->
-        % Accumulate axiom for later combination with conjecture
-        process_tptp_formulas(Rest, [fof(Name, axiom, Formula)|AccAxioms])
-
-    ;   Role = conjecture ->
-        % Found conjecture - combine with accumulated axioms
-        nl,
-        format('===============================================================~n', []),
-        (   AccAxioms = [] ->
-            format('TPTP Problem: ~w (conjecture, no axioms)~n', [Name])
-        ;   length(AccAxioms, NumAxioms),
-            format('TPTP Problem: ~w (conjecture with ~w axiom(s))~n', [Name, NumAxioms]),
-            % Display axiom names
-            extract_axiom_names(AccAxioms, AxiomNames),
-            format('  Axioms: ~w~n', [AxiomNames])
-        ),
-        format('===============================================================~n', []),
-        nl,
-
-        % Convert all formulas (axioms and conjecture)
-        convert_tptp_formula(Formula, G4micConjecture),
-        maplist(convert_axiom_formula, AccAxioms, G4micAxioms),
-
-        % Combine: (axiom1 & axiom2 & ...) => conjecture
-        (   G4micAxioms = [] ->
-            % No axioms - just prove conjecture
-            CombinedFormula = G4micConjecture
-        ;   % Combine axioms with &
-            combine_axioms(G4micAxioms, CombinedAxioms),
-            CombinedFormula = (CombinedAxioms => G4micConjecture),
-            length(G4micAxioms, NumAx),
-            format('Combined formula: ~w axiom(s) => conjecture~n~n', [NumAx])
-        ),
-
-        % Prove the combined formula - SZS: Theorem / CounterSatisfiable
-        ( prove_tptp_internal(CombinedFormula, has_conjecture) -> true ; true ),
-
-        % Clear accumulated axioms and continue
-        process_tptp_formulas(Rest, [])
-
-    ;   % Unknown role - skip
+% Collect all axioms and conjectures from formula list (order-independent)
+collect_all_axioms([], [], []).
+collect_all_axioms([fof(Name, Role, Formula)|Rest], Axioms, Conjectures) :-
+    collect_all_axioms(Rest, RestAxioms, RestConjectures),
+    ( memberchk(Role, [axiom, hypothesis, lemma, definition, assumption]) ->
+        Axioms = [fof(Name, axiom, Formula)|RestAxioms],
+        Conjectures = RestConjectures
+    ; Role = conjecture ->
+        Axioms = RestAxioms,
+        Conjectures = [fof(Name, conjecture, Formula)|RestConjectures]
+    ;
         format('Skipping ~w with role ~w~n', [Name, Role]),
-        process_tptp_formulas(Rest, AccAxioms)
+        Axioms = RestAxioms,
+        Conjectures = RestConjectures
     ).
+
+% Process conjectures with the full axiom set already collected
+process_tptp_formulas_with_axioms([], _AllAxioms).
+process_tptp_formulas_with_axioms([fof(Name, conjecture, Formula)|Rest], AllAxioms) :-
+    nl,
+    format('===============================================================~n', []),
+    ( AllAxioms = [] ->
+        format('TPTP Problem: ~w (conjecture, no axioms)~n', [Name])
+    ;   length(AllAxioms, NumAxioms),
+        format('TPTP Problem: ~w (conjecture with ~w axiom(s))~n', [Name, NumAxioms]),
+        extract_axiom_names(AllAxioms, AxiomNames),
+        format('  Axioms: ~w~n', [AxiomNames])
+    ),
+    format('===============================================================~n', []),
+    nl,
+    convert_tptp_formula(Formula, G4micConjecture),
+    maplist(convert_axiom_formula, AllAxioms, G4micAxioms),
+    ( G4micAxioms = [] ->
+        CombinedFormula = G4micConjecture
+    ;   combine_axioms(G4micAxioms, CombinedAxioms),
+        CombinedFormula = (CombinedAxioms => G4micConjecture),
+        length(G4micAxioms, NumAx),
+        format('Combined formula: ~w axiom(s) => conjecture~n~n', [NumAx])
+    ),
+    ( prove_tptp_internal(CombinedFormula, has_conjecture) -> true ; true ),
+    process_tptp_formulas_with_axioms(Rest, AllAxioms).
+
+
 
 % Convert a single TPTP formula to G4-mic syntax
 convert_tptp_formula(Formula, G4micFormula) :-
@@ -5127,14 +5149,20 @@ prove_tptp_internal(Formula, ProblemType) :-
     write('[ Equality/functions detected -- routing to nanoCoP ]'), nl,
     nl,
     write('Calling nanoCoP...'), nl, nl,
-    ( nanocop_proves(Formula) ->
-      szs_status(ProblemType, proved, SZSStatus),
-      format('% SZS status ~w~n', [SZSStatus]),
-      write('Q.E.D.'), nl, nl
-    ;
-      szs_status(ProblemType, disproved, SZSStatus),
-      format('% SZS status ~w~n', [SZSStatus]),
-      fail
+    catch(
+        (
+            ( nanocop_proves(Formula) ->
+              szs_status(ProblemType, proved, SZSStatus),
+              format('% SZS status ~w~n', [SZSStatus]),
+              write('Q.E.D.'), nl, nl
+            ;
+              % nanoCoP a echoue: G4+ ne peut pas conclure pour FOL avec foncteurs
+              format('% SZS status GaveUp~n', []),
+              fail
+            )
+        ),
+        nanocop_gave_up,
+        ( format('% SZS status GaveUp~n', []), fail )
     ).
 
 % Case 2a: no conjecture - test unsatisfiability, output proof if found
@@ -5199,8 +5227,7 @@ prove_tptp_internal(Formula, has_conjecture) :-
       ) ->
       true
     ;
-    szs_disproved_status(Formula, DisprStatus2),
-    format('% SZS status ~w~n', [DisprStatus2]), !, fail
+    format('% SZS status GaveUp~n', []), !, fail
     ),
 
     write('--- G4 Proof for: '), write(Formula), nl,
@@ -5217,32 +5244,26 @@ prove_tptp_internal(Formula, has_conjecture) :-
 
     statistics(walltime, [Start|_]),
 
-    ( provable_at_level([] > [F2], minimal, Proof) ->
+    ( catch(call_with_time_limit(10, provable_at_level([] > [F2], minimal, Proof)), _, fail) ->
         write('--- Minimal logic ---'), nl,
         Logic = minimal,
         OutputProof = Proof
 
-    ; provable_at_level([] > [F2], constructive, Proof) ->
+    ; catch(call_with_time_limit(10, provable_at_level([] > [F2], constructive, Proof)), _, fail) ->
         write('--- Intuitionistic logic ---'), nl,
         Logic = intuitionistic,
         OutputProof = Proof
 
-    ; provable_at_level([] > [F2], classical, Proof) ->
+    ; catch(call_with_time_limit(10, provable_at_level([] > [F2], classical, Proof)), _, fail) ->
         write('--- Classical logic ---'), nl,
         Logic = classical,
         OutputProof = Proof
 
     ;
+        % G4 ne peut pas construire la preuve mais nanoCoP a valide
         nl,
-        write('[!] UNEXPECTED: g4mic failed but nanoCoP validated!'), nl,
-        nl,
-        write('This is likely a BUG in G4-mic.'), nl,
-        write('Please help improve G4-mic by reporting this issue:'), nl,
-        nl,
-        write('  *  Email: joseph@vidal-rosset.net'), nl,
-        write('  -  Include: the formula and this error message'), nl,
-        nl,
-        write('Thank you for your contribution!'), nl,
+        write('% SZS status Theorem'), nl,
+        write('% Proof validated by nanoCoP (G4 proof generation not available for this formula)'), nl,
         nl,
         fail
     ),

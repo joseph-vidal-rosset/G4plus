@@ -165,7 +165,7 @@
   <img id="owl-logo" alt="Owl" src="owl.png" style="width:40px !important; height:40px !important; display:block !important; visibility:visible !important; opacity:1 !important;">
 </a>
   <div class="github-buttons">
-      <a class="github-button" href="https://github.com/joseph-vidal-rosset/G4plus" data-color-scheme="no-preference: light; light: light; dark: dark;" data-size="large" data-show-count="true" aria-label="Star SWI-Prolog/tinker on GitHub">Star</a>
+    <a class="github-button" href="https://github.com/SWI-Prolog/tinker" data-color-scheme="no-preference: light; light: light; dark: dark;" data-size="large" data-show-count="true" aria-label="Star SWI-Prolog/tinker on GitHub">Star</a>
   </div>
 </div>
 
@@ -1614,11 +1614,7 @@ function initTPTPHandler() {
       window.tinker.console.print(`\n📄 Processing TPTP file: ${filename}`, 'query');
 
       // Exécuter la preuve - l'output ira directement dans la console
-      const success = window.Prolog.call(`prove_tptp_file('${tempFilename}')`);
-
-      if (!success) {
-        window.tinker.console.print('\n❌ No proof found or invalid formula', 'error');
-      }
+      window.Prolog.call(`prove_tptp_file('${tempFilename}')`);
 
     } catch (error) {
       window.tinker.console.print(`\n❌ Error: ${error.message}`, 'error');
@@ -1656,11 +1652,5 @@ function initTPTPHandler() {
   });
 </script>
 
-<!-- Web-Stat code v 7.0 -->
-<span id="wts1931943"></span>
-<script>var wts=document.createElement('script');wts.async=true;
-wts.src='https://app.ardalio.com/wts7.js';document.head.appendChild(wts);
-wts.onload = function(){ wtsl7(1931943,1); };
-</script><noscript><img src="https://app.ardalio.com/7/1/1931943.png"></noscript>
 </body>
 </html>
