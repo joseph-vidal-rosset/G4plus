@@ -393,12 +393,13 @@ nanocop_decides_silent(Formula) :-
     catch(
         setup_call_cleanup(
             true,
-            call_with_inference_limit(nanocop_decides(Formula), 2000000, _Result),
+            call_with_inference_limit(nanocop_decides(Formula), 2000000, InfResult),
             set_prolog_flag(occurs_check, OriginalFlag)
         ),
         _Error,
         (set_prolog_flag(occurs_check, OriginalFlag), fail)
-    ).
+    ),
+    InfResult \== inference_limit_exceeded.  % Fail if inference limit was exceeded
 
 % =========================================================================
 % NANOCOP REFUTATION ANALYSIS
@@ -631,12 +632,14 @@ prove(Left <=> Right) :-
               setup_call_cleanup(
                   true,
                   % Use inference limit here as well
-                  call_with_inference_limit(nanocop_decides(Left <=> Right), 2000000, _),
+                  call_with_inference_limit(nanocop_decides(Left <=> Right), 2000000, InfResult_bic),
                   set_prolog_flag(occurs_check, OriginalFlag)
               ),
               _,
               (set_prolog_flag(occurs_check, OriginalFlag), fail)
-          ) ->
+          ),
+          InfResult_bic \== inference_limit_exceeded  % Fail if inference limit was exceeded
+        ->
           true
         ;
         szs_disproved_status(Left <=> Right, DisprStatus694),
@@ -832,12 +835,14 @@ prove(Formula) :-
           setup_call_cleanup(
               true,
               % Use inference limit here as well
-              call_with_inference_limit(nanocop_decides(Formula), 2000000, _),
+              call_with_inference_limit(nanocop_decides(Formula), 2000000, InfResult_prove),
               set_prolog_flag(occurs_check, OriginalFlag)
           ),
           _,
           (set_prolog_flag(occurs_check, OriginalFlag), fail)
-      ) ->
+      ),
+      InfResult_prove \== inference_limit_exceeded  % Fail if inference limit was exceeded
+    ->
       true
     ;
     % nanocop_decides failed: formula is not valid.
@@ -846,12 +851,11 @@ prove(Formula) :-
     szs_disproved_status(Formula, DisprStatus),
     format('% SZS status ~w~n', [DisprStatus]),
     ( DisprStatus = 'Unsatisfiable' ->
-        % Formula is a contradiction: prove (Formula => #) and show full proof
-        NegFormula = (Formula => #),
+        % Formula is a contradiction: prove_tptp_internal will prove (Formula => #)
         nl,
         write('[ Contradiction detected -- proving (Formula => #) ]'), nl,
         nl,
-        prove_tptp_internal(NegFormula, no_conjecture)
+        prove_tptp_internal(Formula, no_conjecture)
     ; true ),
     !, fail
     ),
@@ -4808,8 +4812,7 @@ process_tptp_formulas(Formulas) :-
             format('~nSatisfiability check: ~w axiom(s) without conjecture~n', [NumAxioms]),
             maplist(convert_axiom_formula, AllAxioms, G4micAxioms),
             combine_axioms(G4micAxioms, Combined),
-            NegCombined = (Combined => #),
-            ( prove_tptp_internal(NegCombined, no_conjecture) -> true ; true )
+            ( prove_tptp_internal(Combined, no_conjecture) -> true ; true )
         ; true
         )
     ;
@@ -5166,19 +5169,23 @@ prove_tptp_internal(Formula, ProblemType) :-
     ).
 
 % Case 2a: no conjecture - test unsatisfiability, output proof if found
+% To check unsatisfiability of Formula, we prove its negation (Formula => #).
 prove_tptp_internal(Formula, no_conjecture) :-
     !,
+    NegFormula = (Formula => #),
     ( catch(
-          call_with_inference_limit(nanocop_decides(Formula), 2000000, _),
+          call_with_inference_limit(nanocop_decides(NegFormula), 2000000, InfResult_nc),
           _,
           fail
-      ) ->
-      write('--- G4 Proof for: '), write(Formula), nl,
+      ),
+      InfResult_nc \== inference_limit_exceeded  % Fail if inference limit was exceeded
+    ->
+      write('--- G4 Proof for: '), write(NegFormula), nl,
       write('-----------------------------------------------------------'), nl,
       nl,
       retractall(premiss_list(_)),
       retractall(current_proof_sequent(_)),
-      copy_term(Formula, FormulaCopy),
+      copy_term(NegFormula, FormulaCopy),
       prepare(FormulaCopy, [], F0),
       subst_neg(F0, F1),
       subst_bicond(F1, F2),
@@ -5207,8 +5214,8 @@ prove_tptp_internal(Formula, no_conjecture) :-
       nl,
       write('% SZS status Unsatisfiable'), nl,
       nl,
-      output_proof_results(OutputProof, Logic, Formula),
-      tptp_validation_phase(Formula, 'Unsatisfiable')
+      output_proof_results(OutputProof, Logic, NegFormula),
+      tptp_validation_phase(NegFormula, 'Unsatisfiable')
     ;
       write('% SZS status Satisfiable'), nl
     ).
@@ -5219,15 +5226,24 @@ prove_tptp_internal(Formula, has_conjecture) :-
     ( catch(
           setup_call_cleanup(
               true,
-              call_with_inference_limit(nanocop_decides(Formula), 2000000, _),
+              call_with_inference_limit(nanocop_decides(Formula), 2000000, InfResult_hc),
               set_prolog_flag(occurs_check, OriginalFlag)
           ),
           _,
           (set_prolog_flag(occurs_check, OriginalFlag), fail)
-      ) ->
+      ),
+      InfResult_hc \== inference_limit_exceeded  % Fail if inference limit was exceeded
+    ->
       true
     ;
-    format('% SZS status GaveUp~n', []), !, fail
+    % nanoCoP failed: distinguish "not a theorem" from "inference limit exceeded"
+    ( InfResult_hc == inference_limit_exceeded ->
+        format('% SZS status GaveUp~n', [])
+    ;
+        szs_disproved_status(Formula, DisprStatus),
+        format('% SZS status ~w~n', [DisprStatus])
+    ),
+    !, fail
     ),
 
     write('--- G4 Proof for: '), write(Formula), nl,
@@ -5244,40 +5260,50 @@ prove_tptp_internal(Formula, has_conjecture) :-
 
     statistics(walltime, [Start|_]),
 
-    ( catch(call_with_time_limit(10, provable_at_level([] > [F2], minimal, Proof)), _, fail) ->
+    % NOTE: use call_with_inference_limit (not call_with_time_limit)
+    %       for WASM compatibility (no call_with_time_limit in WASM)
+    ( catch(call_with_inference_limit(provable_at_level([] > [F2], minimal, Proof), 5000000, InfRes_m), _, fail),
+      InfRes_m \== inference_limit_exceeded ->
         write('--- Minimal logic ---'), nl,
         Logic = minimal,
-        OutputProof = Proof
+        OutputProof = Proof,
+        G4Success = true
 
-    ; catch(call_with_time_limit(10, provable_at_level([] > [F2], constructive, Proof)), _, fail) ->
+    ; catch(call_with_inference_limit(provable_at_level([] > [F2], constructive, Proof), 5000000, InfRes_c), _, fail),
+      InfRes_c \== inference_limit_exceeded ->
         write('--- Intuitionistic logic ---'), nl,
         Logic = intuitionistic,
-        OutputProof = Proof
+        OutputProof = Proof,
+        G4Success = true
 
-    ; catch(call_with_time_limit(10, provable_at_level([] > [F2], classical, Proof)), _, fail) ->
+    ; catch(call_with_inference_limit(provable_at_level([] > [F2], classical, Proof), 5000000, InfRes_cl), _, fail),
+      InfRes_cl \== inference_limit_exceeded ->
         write('--- Classical logic ---'), nl,
         Logic = classical,
-        OutputProof = Proof
+        OutputProof = Proof,
+        G4Success = true
 
     ;
-        % G4 ne peut pas construire la preuve mais nanoCoP a valide
+        G4Success = false
+    ),
+
+    ( G4Success = true ->
+        statistics(walltime, [End|_]),
+        Time is (End - Start) / 1000,
+        nl,
+        format('G4mic time: ~3f seconds~n', [Time]),
+        nl,
+        write('% SZS status Theorem'), nl,
+        nl,
+        output_proof_results(OutputProof, Logic, Formula),
+        tptp_validation_phase(Formula, 'Theorem')
+    ;
+        % G4 cannot build proof but nanoCoP validated: it IS a Theorem
         nl,
         write('% SZS status Theorem'), nl,
         write('% Proof validated by nanoCoP (G4 proof generation not available for this formula)'), nl,
-        nl,
-        fail
-    ),
-
-    statistics(walltime, [End|_]),
-    Time is (End - Start) / 1000,
-
-    nl,
-    format('G4mic time: ~3f seconds~n', [Time]),
-    nl,
-    write('% SZS status Theorem'), nl,
-    nl,
-    output_proof_results(OutputProof, Logic, Formula),
-    tptp_validation_phase(Formula, 'Theorem').
+        nl
+    ).
 
 % =========================================================================
 % SHARED VALIDATION PHASE
@@ -5326,10 +5352,12 @@ tptp_validation_phase(Formula, SZSStatus) :-
 % Otherwise F is coherent but not valid: status is 'CounterSatisfiable'.
 szs_disproved_status(Formula, Status) :-
     ( catch(
-          call_with_inference_limit(nanocop_decides(~Formula), 2000000, _),
+          call_with_inference_limit(nanocop_decides(~Formula), 2000000, InfResult_disp),
           _,
           fail
-      ) ->
+      ),
+      InfResult_disp \== inference_limit_exceeded  % Fail if inference limit was exceeded
+    ->
       Status = 'Unsatisfiable'
     ;
       Status = 'CounterSatisfiable'
