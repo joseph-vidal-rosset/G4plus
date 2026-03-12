@@ -634,15 +634,19 @@ function shareURL() {
 
       const X_NUM = 30, X_START = 60, INDENT_WIDTH = 20;
       const Y_START = 30, LINE_HEIGHT = 35, FLAG_WIDTH = 30;
+      const FORMULA_OFFSET = 9; // écart entre la vline et la formule
 
-      // Calculer la position X_JUSTIF dynamiquement
-      // En fonction de la longueur maximale des formules + leur indentation
-      const maxIndent = Math.max(...lines.map(l => l.indentLevel));
-      const maxFormulaLength = Math.max(...lines.map(l => l.formula.length));
-      // Estimation très compacte: ~5 pixels par caractère
-      // MathJax compresse beaucoup, surtout les longues formules
-      const formulaWidth = X_START + (maxIndent * INDENT_WIDTH) + (maxFormulaLength * 5);
-      const X_JUSTIF = Math.max(290, formulaWidth + 15); // Au moins 290, marge confortable de 15px
+      // Calculer X_JUSTIF: colonne alignée basée sur la formule la plus « lointaine »
+      // (indentation + longueur de formule), avec estimation ~9px/char MathJax
+      const maxFormulaRight = Math.max(...lines.map(l => {
+        const xPos = X_START + ((l.indentLevel - 1) * INDENT_WIDTH) + FORMULA_OFFSET;
+        return xPos + (l.formula.length * 9);
+      }));
+      const X_JUSTIF = maxFormulaRight + 30; // marge confortable entre formule et justification
+
+      // Calculer la largeur SVG en fonction des formules + justifications
+      const maxJustifLength = Math.max(...lines.map(l => l.justification ? l.justification.length : 0));
+      const svgWidth = Math.max(650, X_JUSTIF + (maxJustifLength * 8) + 40);
 
       // Calculer les espaces supplémentaires pour estimer la hauteur
       let estimatedExtraSpace = 0;
@@ -659,7 +663,6 @@ function shareURL() {
       }
 
       const svgHeight = Y_START + (lines.length * LINE_HEIGHT) + estimatedExtraSpace + 50;
-      const svgWidth = Math.max(650, X_JUSTIF + 200); // Au moins 650, ou assez pour les justifications
 
       let svg = `<svg width="${svgWidth}" height="${svgHeight}" xmlns="http://www.w3.org/2000/svg">`;
       svg += `<defs><style>
@@ -685,7 +688,7 @@ function shareURL() {
       }
 
       // DESSIN DES LIGNES VERTICALES avec gaps pour sous-preuves
-      // maxIndent déjà calculé ligne 640
+      const maxIndent = Math.max(...lines.map(l => l.indentLevel));
       for (let level = 1; level <= maxIndent; level++) {
         const x = X_START + ((level - 1) * INDENT_WIDTH);
         let segmentStart = null;
@@ -723,7 +726,8 @@ function shareURL() {
       // DESSIN DU TEXTE, DRAPEAUX ET FORMULES
       lines.forEach((line, index) => {
         const y = lineYPositions[index];
-        const xBase = X_START + (line.indentLevel * INDENT_WIDTH);
+        // Position de la formule: juste à droite de sa ligne verticale de portée
+        const xBase = X_START + ((line.indentLevel - 1) * INDENT_WIDTH) + FORMULA_OFFSET;
 
         // Numéro de ligne
         svg += `<text x="${X_NUM}" y="${y}" class="line-num">${line.lineNumber}</text>`;
@@ -737,16 +741,14 @@ function shareURL() {
           svg += `<line x1="${x}" y1="${y + 5}" x2="${x + FLAG_WIDTH}" y2="${y + 5}" stroke="black" stroke-width="1"/>`;
         }
 
-        // FORMULE avec MathJax via foreignObject
-        const xFormula = xBase;  // Directement sur xBase, pas de décalage
-        // Largeur dynamique pour accommoder les longues formules
-        const formulaBoxWidth = Math.max(400, X_JUSTIF - xFormula - 20);
-        // Hauteur parfaite à y-20, on ne touche plus !
+        // FORMULE via foreignObject
+        const xFormula = xBase;
+        const formulaBoxWidth = X_JUSTIF - xFormula - 5;
         svg += `<foreignObject x="${xFormula}" y="${y - 20}" width="${formulaBoxWidth}" height="25">
           <div xmlns="http://www.w3.org/1999/xhtml" style="font-size: 16px;">\\(${line.formula}\\)</div>
         </foreignObject>`;
 
-        // JUSTIFICATION
+        // JUSTIFICATION en colonne alignée à X_JUSTIF
         if (line.justification) {
           let cleanJustif = line.justification
             .replace(/-/g, '\\text{-}')
@@ -755,7 +757,7 @@ function shareURL() {
             .replace(/I\s+/g, 'I\\,')
             .replace(/DS\s+/g, 'DS\\,');
 
-          svg += `<foreignObject x="${X_JUSTIF}" y="${y - 20}" width="150" height="25">
+          svg += `<foreignObject x="${X_JUSTIF}" y="${y - 20}" width="200" height="25">
             <div xmlns="http://www.w3.org/1999/xhtml" style="font-size: 14px; color: #555;">\\(${cleanJustif}\\)</div>
           </foreignObject>`;
         }
