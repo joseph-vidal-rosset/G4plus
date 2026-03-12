@@ -95,12 +95,12 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % End of operators list
 %% File: minimal_driver_equal.pl  -  Version: 7.3 FINAL (time seulement dans proves)
-	   
+
 :-style_check(-singleton).
 
 	   :- (getenv('TPTP', _) -> true ; setenv('TPTP', '/home/joseph/src/TPTP-v9.2.1')).
 
-:-[nanocop20_swi].
+:-[nanocop20_swi_for_g4plus].
 :-[nanocop_proof].
 :-[nanocop_tptp2].
 
@@ -161,7 +161,11 @@ nanocop_proves(Formula) :-
     ),
     ( InfResult == inference_limit_exceeded ->
         % Limite atteinte: verifier avec nanocop_decides si c'est quand meme un theoreme
-        ( nanocop_decides(Formula) ->
+        ( catch(
+              ( call_with_inference_limit(nanocop_decides(Formula), 5000000, InfResult2),
+                InfResult2 \== inference_limit_exceeded ),
+              _, fail
+          ) ->
             write('% SZS status Theorem'), nl,
             write('% Proof validated by nanoCoP (nanoCoP proof generation not available for this formula)'), nl,
             nl
@@ -194,8 +198,67 @@ nanocop_decides(Formula) :-
     ),
 
     % IMPORTANT : PAS DE NEGATION - prove2 gere la refutation en interne
+    retractall(nanocop_depth_limited),
     prove2(FormulaToProve, [cut,comp(7)], _Proof),
     retractall(g4mic_silent_mode), !.
+
+% =========================================================================
+% NANOCOP PROBE (sans cut) - pour determiner si la recherche est exhaustive
+% =========================================================================
+% Runs prove2 WITHOUT cut under inference limit. The result tells us:
+%   proved          - formula is provable
+%   depth_limited   - search was truncated by comp(7)
+%   exhausted       - search space fully explored, no proof exists
+%   inference_limit - inference limit reached before conclusion
+%
+% This is used by szs_disproved_status to distinguish CounterSatisfiable
+% from GaveUp: with [cut], nanoCoP may prune branches and miss the
+% depth limit, so we probe without cut for a reliable answer.
+
+nanocop_probe(Formula, Result) :-
+    assertz(g4mic_silent_mode),
+    current_prolog_flag(occurs_check, OriginalFlag),
+    (nanocop_contains_equality(Formula) ->
+        HasEquality = true
+    ;
+        HasEquality = false
+    ),
+    translate_formula(Formula, InternalFormula),
+    (HasEquality = true ->
+        leancop_equal(InternalFormula, FormulaToProve)
+    ;
+        FormulaToProve = InternalFormula
+    ),
+    retractall(nanocop_depth_limited),
+    % Probe with [comp(7)] (no cut) under strict limits.
+    % Uses time limit (2s) as safety net on native SWI,
+    % falls back to inference limit only for WASM.
+    ProbeGoal = call_with_inference_limit(
+                    prove2(FormulaToProve, [comp(7)], _Proof),
+                    50000, InfResult),
+    ( predicate_property(call_with_time_limit(_,_), defined) ->
+        TimedGoal = call_with_time_limit(2, ProbeGoal)
+    ;
+        TimedGoal = ProbeGoal   % WASM: no time limit available
+    ),
+    ( catch(TimedGoal, _AnyException, (InfResult = timeout))
+    ->
+        ( InfResult == inference_limit_exceeded ->
+            Result = depth_limited   % ran out of inferences: assume incomplete
+        ; InfResult == timeout ->
+            Result = depth_limited   % ran out of time: assume incomplete
+        ;
+            Result = proved
+        )
+    ;
+        ( nanocop_depth_limited ->
+            Result = depth_limited
+        ;
+            Result = exhausted
+        )
+    ),
+    set_prolog_flag(occurs_check, OriginalFlag),
+    retractall(g4mic_silent_mode).
 
 % =========================================================================
 % EQUALITY DETECTION (copie de minimal_driver.pl)
@@ -278,13 +341,13 @@ translate_formula(F, F_out) :-
 % Bottom/falsum: # is translated to ~(p0 => p0) which represents _|_
 translate_operators(F, (~(p0 => p0))) :-
     nonvar(F),
-    (F == '#' ; F == f ; F == bot ; F == bottom ; F == falsum),
+    (F == '#' ; F == f ; F == bot ; F == bottom ; F == falsum ; F == '$false' ; F == $false),
     !.
 
 % Top/verum: t is translated to (p0 => p0) which represents T
 translate_operators(F, (p0 => p0)) :-
     nonvar(F),
-    (F == t ; F == top ; F == verum),
+    (F == t ; F == top ; F == verum ; F == '$true' ; F == $true),
     !.
 
 % Atomic formulas
@@ -362,6 +425,12 @@ substitute_var_in_formula(Atom, _OldVar, _NewVar, Atom) :-
 
 substitute_var_in_formula(Var, _OldVar, _NewVar, Var) :-
     var(Var), !.
+
+% Capture avoidance: stop substitution at inner quantifier that shadows the same variable
+substitute_var_in_formula(![Var]:Body, OldVar, _NewVar, ![Var]:Body) :-
+    atomic(Var), Var == OldVar, !.
+substitute_var_in_formula(?[Var]:Body, OldVar, _NewVar, ?[Var]:Body) :-
+    atomic(Var), Var == OldVar, !.
 
 substitute_var_in_formula(Term, OldVar, NewVar, NewTerm) :-
     compound(Term), !,
@@ -5348,19 +5417,40 @@ tptp_validation_phase(Formula, SZSStatus) :-
     nl.
 
 % Determine SZS status for a formula that failed to prove.
-% If ~F is provable (i.e. F is a contradiction), status is 'Unsatisfiable'.
-% Otherwise F is coherent but not valid: status is 'CounterSatisfiable'.
+% Uses nanocop_probe/2 (prove2 WITHOUT cut, with time+inference limits)
+% for reliable depth-limit detection.
+% With [cut,comp(7)], nanoCoP may prune branches and never hit the depth
+% limit, so we probe without cut to get a trustworthy answer.
+%
+% nanocop_probe returns: proved | depth_limited | exhausted
+%
+% Logic:
+%   1. Probe F without cut:
+%      - proved       -> Theorem (cut-free search found proof that cut missed)
+%      - depth_limited -> GaveUp (comp(7) insufficient, skip ~F test)
+%      - exhausted    -> F genuinely not provable, proceed to test ~F
+%   2. Probe ~F without cut:
+%      - proved       -> Unsatisfiable (F is a contradiction)
+%      - depth_limited -> GaveUp
+%      - exhausted    -> CounterSatisfiable (both searches exhaustive)
+
 szs_disproved_status(Formula, Status) :-
-    ( catch(
-          call_with_inference_limit(nanocop_decides(~Formula), 2000000, InfResult_disp),
-          _,
-          fail
-      ),
-      InfResult_disp \== inference_limit_exceeded  % Fail if inference limit was exceeded
-    ->
-      Status = 'Unsatisfiable'
+    nanocop_probe(Formula, ProbeF),
+    ( ProbeF = depth_limited ->
+        Status = 'GaveUp'
+    ; ProbeF = proved ->
+        Status = 'Theorem'
     ;
-      Status = 'CounterSatisfiable'
+        % ProbeF = exhausted: F is genuinely not provable. Test ~F.
+        nanocop_probe(~Formula, ProbeNegF),
+        ( ProbeNegF = proved ->
+            Status = 'Unsatisfiable'
+        ; ProbeNegF = depth_limited ->
+            Status = 'GaveUp'
+        ;
+            % Both exhausted: genuine non-theorem
+            Status = 'CounterSatisfiable'
+        )
     ).
 
 %%% END OF g4mic PROVER

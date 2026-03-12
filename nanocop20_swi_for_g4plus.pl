@@ -1,6 +1,6 @@
 %% File: nanocop20_swi.pl  -  Version: 2.0  -  Date: 1 May 2021
 %%
-%% Purpose: nanocop: A Non-clausal Connection Prover
+%% Purpose: nanoCoP: A Non-clausal Connection Prover
 %%
 %% Author:  Jens Otten
 %% Web:     www.leancop.de/nanocop/
@@ -15,70 +15,24 @@
 :- set_prolog_flag(occurs_check,true).  % global occurs check on
 
 :- dynamic(pathlim/0), dynamic(lit/4).
+:- dynamic(nanocop_depth_limited/0).  % persistent flag: search was truncated by depth limit
 
 % definitions of logical connectives and quantifiers
 
 :- op(1130,xfy,<=>). :- op(1110,xfy,=>). :- op(500, fy,'~').
 :- op( 500, fy,all). :- op( 500, fy,ex). :- op(500,xfy,:).
-% : - op(200,xfy,^).    % <- AJOUTER CETTE LIGNE pour indexation (I^K)^V
 
 :- [operators].
-
 % -----------------------------------------------------------------
 % prove(F,Proof) - prove formula F
 
-
-
 prove(F,Proof) :- prove2(F,[cut,comp(7)],Proof).
 
-/*
 prove2(F,Set,Proof) :-
     bmatrix(F,Set,Mat), retractall(lit(_,_,_,_)),
     assert_matrix(Mat), prove(Mat,1,Set,Proof).
-*/
-% --- Semantic Interpreter (English & Skolem Cleanup) ---
-g4mic_interpret_path([], []).
-g4mic_interpret_path([Lit|Rest], [Interpretation|Interps]) :-
-    ( Lit = -Atom ->
-        clean_skolem(Atom, CleanAtom),
-        Interpretation = (CleanAtom = 'True')
-    ;   clean_skolem(Lit, CleanLit),
-        Interpretation = (CleanLit = 'False')
-    ),
-    g4mic_interpret_path(Rest, Interps).
 
-% Helper to make Skolem terms (ID^[Args]) readable as skID(Args)
-clean_skolem(Term, CleanTerm) :-
-    ( var(Term) -> CleanTerm = 'X'
-    ; compound(Term) ->
-        Term =.. [F|Args],
-        ( F = (^), Args = [ID|SubArgs] ->
-            atomic_list_concat([sk, ID], SkName),
-            maplist(clean_skolem, SubArgs, CleanArgs),
-            CleanTerm =.. [SkName|CleanArgs]
-        ; maplist(clean_skolem, Args, CleanArgs),
-          CleanTerm =.. [F|CleanArgs]
-        )
-    ; CleanTerm = Term ).
-
-% --- Main Engine Hook ---
-prove2(F, Set, Proof) :-
-    bmatrix(F, Set, Mat),
-    nb_setval(g4mic_matrix, Mat),
-    retractall(lit(_,_,_,_)),
-    assert_matrix(Mat),
-    prove(Mat, 1, Set, Proof).
-
-%% is_nested_axiom_structure(+Term)
-%% Detecte les structures avec axiomes imbriques (UNA, etc.)
-is_nested_axiom_structure([H|_]) :-
-    is_list(H), !.
-is_nested_axiom_structure([H|_]) :-
-    compound(H),
-    H = (_^_: _), !.
-
-
-% start rule  (nanocop code again !!!!!!!!)
+% start rule
 prove(Mat,PathLim,Set,[(I^0)^V:Proof]) :-
     ( member(scut,Set) -> ( append([(I^0)^V:Cla1|_],[!|_],Mat) ;
         member((I^0)^V:Cla,Mat), positiveC(Cla,Cla1) ) -> true ;
@@ -114,7 +68,9 @@ prove([Lit|Cla],MI,Path,PI,PathLim,Lem,Set,Proof) :-
          ;
          lit(NegLit,ClaB,Cla1,Grnd1),
          ( Grnd1=g -> true ; length(Path,K), K<PathLim -> true ;
-           \+ pathlim -> assert(pathlim), fail ),
+           \+ pathlim -> assert(pathlim),
+           ( nanocop_depth_limited -> true ; assertz(nanocop_depth_limited) ),
+           fail ),
          prove_ec(ClaB,Cla1,MI,PI,I^V:ClaB1,MI1),
          prove(ClaB1,MI1,[Lit|Path],[I|PI],PathLim,Lem,Set,Proof1)
        ),
@@ -159,10 +115,10 @@ bmatrix(F,Set,M) :-
       ; bmatrix(F1,0,M1,[],[],_,1,_,_), ( member(reo(I),Set) ->
         reorderC([M1],[_:M],I) ; _:M=M1 ) ).
 
-%% Ajout
+%% Ajout 
 bmatrix(![X]:F1, Pol, M, FreeV, FV, Paths, I, I1, K) :- !,
     bmatrix(all X:F1, Pol, M, FreeV, FV, Paths, I, I1, K).
-
+    
 bmatrix(?[X]:F1, Pol, M, FreeV, FV, Paths, I, I1, K) :- !,
     bmatrix(ex X:F1, Pol, M, FreeV, FV, Paths, I, I1, K).
 %%% fin de l'ajout
@@ -262,57 +218,3 @@ univar(F,Q,F1) :-
 delete2([],_,[]).
 delete2([X|T],Y,T1) :- X==Y, !, delete2(T,Y,T1).
 delete2([X|T],Y,[X|T1]) :- delete2(T,Y,T1).
-
-
-% =========================================================================
-% PRETTY-PRINTER FOR COUNTER-MODELS (minimaliste)
-% =========================================================================
-
-%% pretty_print_countermodel(+Model)
-pretty_print_countermodel([]) :-
-    write('     {}'), nl, nl, !.
-
-pretty_print_countermodel(Model) :-
-    is_list(Model),
-    Model \= [],
-    ! ,
-    write('     '),
-    format_model_compact(Model),
-    nl, nl.
-
-pretty_print_countermodel(Model) :-
-    format('     ~w~n~n', [Model]).
-
-%% format_model_compact(+List)
-%% Affiche le mod?le sur une ligne :  a = T, b = F, ...
-format_model_compact([Interp]) :-
-    ! ,
-    format_compact_assignment(Interp).
-
-format_model_compact([Interp|Rest]) :-
-    format_compact_assignment(Interp),
-    write(', '),
-    format_model_compact(Rest).
-
-%% format_compact_assignment(+Assignment)
-%% Formate une assignation :  a = T ou p(x) = F
-format_compact_assignment((Atom = Value)) :-
-    Atom = (A = B),  % Cas egalite
-    !,
-    format_value(Value, DisplayValue),
-    format('(~w = ~w) = ~w', [A, B, DisplayValue]).
-
-format_compact_assignment((Pred = Value)) :-
-    format_value(Value, DisplayValue),
-    format('~w = ~w', [Pred, DisplayValue]).
-
-format_compact_assignment(Other) :-
-    format('~w', [Other]).
-
-%% format_value(+Value, -DisplayValue)
-%% Convertit True/False en T/F
-format_value(true, 'T') :- !.
-format_value('True', 'T') :- !.
-format_value(false, 'F') :- !.
-format_value('False', 'F') :- !.
-format_value(V, V).
