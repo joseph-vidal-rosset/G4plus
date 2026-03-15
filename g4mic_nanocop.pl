@@ -1183,6 +1183,37 @@ g4mic_decides(Formula) :-
 % decide/1 is kept as an alias for g4mic_decides/1
 decide(X) :- g4mic_decides(X).
 
+% =========================================================================
+% g4mic_logic_level/2 — Determine the logic level WITHOUT building a proof term.
+% =========================================================================
+% Used by the TPTP path after nanoCoP validation.
+% Returns: minimal | intuitionistic | classical
+% Fails if G4+ cannot determine the level within the inference limit.
+%
+% Because no proof term is constructed, we can afford a much higher
+% inference limit (10M) than the proof-building path (5M).
+
+g4mic_logic_level(Formula, Logic) :-
+    copy_term(Formula, FC),
+    prepare(FC, [], F0),
+    subst_neg(F0, F1),
+    subst_bicond(F1, F2),
+    g4mic_logic_level_internal(F2, Logic).
+
+g4mic_logic_level_internal(F2, minimal) :-
+    catch(call_with_inference_limit(
+        provable_at_level([] > [F2], minimal, _), 10000000, InfRes), _, fail),
+    InfRes \== inference_limit_exceeded, !.
+
+g4mic_logic_level_internal(F2, intuitionistic) :-
+    catch(call_with_inference_limit(
+        provable_at_level([] > [F2], constructive, _), 10000000, InfRes), _, fail),
+    InfRes \== inference_limit_exceeded, !.
+
+g4mic_logic_level_internal(F2, classical) :-
+    catch(call_with_inference_limit(
+        provable_at_level([] > [F2], classical, _), 10000000, InfRes), _, fail),
+    InfRes \== inference_limit_exceeded, !.
 
 % =========================================================================
 % HELP SYSTEM
@@ -1433,12 +1464,14 @@ g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, lorto(Gamma>Delta, P)) :-
         g4mic_proves([A=>C, B=>C | G1]>Delta, FV, Th, SI, SO, LL, P)
     ).
 
-% =========================================================================
-% Intuitionistic rule Lbot and classical rule IP
-% =========================================================================
 
-% --- Rule 8: IP (indirect proof -- classical only) ------------------------
-% Placed just before R->: classical law applied before decomposition
+% --- Rule 8: L\/ (left disjunction) ---------------------------------------
+g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, lor(Gamma>Delta, P1, P2)) :-
+    select((A | B), Gamma, G1), !,
+    g4mic_proves([A | G1]>Delta, FV, Th, SI, J1, LL, P1),
+    g4mic_proves([B | G1]>Delta, FV, Th, J1, SO, LL, P2).
+
+% --- Rule 9: IP (indirect proof -- classical only, must be before rule L->->)
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, classical, ip(Gamma>Delta, P)) :-
     Delta = [A],
     A \= #,
@@ -1446,25 +1479,14 @@ g4mic_proves(Gamma>Delta, FV, Th, SI, SO, classical, ip(Gamma>Delta, P)) :-
     Th > 0,
     g4mic_proves([(A => #) | Gamma]>[#], FV, Th, SI, SO, classical, P).
 
-% =========================================================================
-% BRANCHING RULES
-% =========================================================================
-%% Left rules first
-%==========================================================================
 
-% --- Rule 9: L->-> --------------------------------------------------------
+% --- Rule 10: L->-> --------------------------------------------------------
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, ltoto(Gamma>Delta, P1, P2)) :-
     select(((A => B) => C), Gamma, G1),
     \+ (B = #, member(A, G1)),
     !,
     g4mic_proves([A, (B => C) | G1]>[B], FV, Th, SI, J1, LL, P1),
     g4mic_proves([C | G1]>Delta, FV, Th, J1, SO, LL, P2).
-
-% --- Rule 10: L\/ (left disjunction) ---------------------------------------
-g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, lor(Gamma>Delta, P1, P2)) :-
-    select((A | B), Gamma, G1), !,
-    g4mic_proves([A | G1]>Delta, FV, Th, SI, J1, LL, P1),
-    g4mic_proves([B | G1]>Delta, FV, Th, J1, SO, LL, P2).
 
 %=========================================================================
 % RIGHT RULES
@@ -5212,90 +5234,86 @@ prove_tptp(fof(Name, Role, Formula)) :-
     prove_tptp_internal(G4micFormula, has_conjecture).
 
 % Internal prove for TPTP (bypasses validate_and_warn)
-% Case 1: equality/functions detected - delegate to nanoCoP
+% Case 1: equality/functions detected - delegate to nanoCoP (oracle mode)
 prove_tptp_internal(Formula, ProblemType) :-
     % Check if needs nanoCoP (equality/functions)
     g4mic_needs_nanocop(Formula),
     !,
-    nl,
-    write('[ Equality/functions detected -- routing to nanoCoP ]'), nl,
-    nl,
-    write('Calling nanoCoP...'), nl, nl,
     catch(
         (
-            ( nanocop_proves(Formula) ->
-              szs_status(ProblemType, proved, SZSStatus),
-              format('% SZS status ~w~n', [SZSStatus]),
-              write('Q.E.D.'), nl, nl
+            ( write('nanoCoP : '), nl,
+              time(call_with_inference_limit(nanocop_decides(Formula), 2000000, InfResult_eq)),
+              InfResult_eq \== inference_limit_exceeded ->
+                szs_status(ProblemType, proved, SZSStatus),
+                nl,
+                format('% SZS status ~w~n', [SZSStatus]),
+                format('% nanoCoP proof (equality/functions)~n', []),
+                nl
             ;
-              % nanoCoP a echoue: G4+ ne peut pas conclure pour FOL avec foncteurs
-              format('% SZS status GaveUp~n', []),
-              fail
+                format('% SZS status GaveUp~n', []),
+                fail
             )
         ),
         nanocop_gave_up,
         ( format('% SZS status GaveUp~n', []), fail )
     ).
 
-% Case 2a: no conjecture - test unsatisfiability, output proof if found
+% Case 2a: no conjecture - nanoCoP validates unsatisfiability, G4+ classifies logic level
 % To check unsatisfiability of Formula, we prove its negation (Formula => #).
 prove_tptp_internal(Formula, no_conjecture) :-
     !,
     NegFormula = (Formula => #),
     ( catch(
-          call_with_inference_limit(nanocop_decides(NegFormula), 2000000, InfResult_nc),
+          (write('nanoCoP : '), nl,
+           time(call_with_inference_limit(nanocop_decides(NegFormula), 2000000, InfResult_nc))),
           _,
           fail
       ),
       InfResult_nc \== inference_limit_exceeded  % Fail if inference limit was exceeded
     ->
-      write('--- G4 Proof for: '), write(NegFormula), nl,
-      write('-----------------------------------------------------------'), nl,
-      nl,
-      retractall(premiss_list(_)),
-      retractall(current_proof_sequent(_)),
-      copy_term(NegFormula, FormulaCopy),
-      prepare(FormulaCopy, [], F0),
-      subst_neg(F0, F1),
-      subst_bicond(F1, F2),
-      statistics(walltime, [Start|_]),
-      ( provable_at_level([] > [F2], minimal, Proof) ->
-          write('--- Minimal logic ---'), nl,
-          Logic = minimal,
-          OutputProof = Proof
-      ; provable_at_level([] > [F2], constructive, Proof) ->
-          write('--- Intuitionistic logic ---'), nl,
-          Logic = intuitionistic,
-          OutputProof = Proof
-      ; provable_at_level([] > [F2], classical, Proof) ->
-          write('--- Classical logic ---'), nl,
-          Logic = classical,
-          OutputProof = Proof
-      ;
+      % nanoCoP validated: now determine the logic level (no proof term)
+      ( write('g4mic : '), nl,
+        time(g4mic_logic_level(NegFormula, Logic)) ->
           nl,
-          write('[!] UNEXPECTED: g4mic failed but nanoCoP validated!'), nl,
-          fail
-      ),
-      statistics(walltime, [End|_]),
-      Time is (End - Start) / 1000,
-      nl,
-      format('G4mic time: ~3f seconds~n', [Time]),
-      nl,
-      write('% SZS status Unsatisfiable'), nl,
-      nl,
-      output_proof_results(OutputProof, Logic, NegFormula),
-      tptp_validation_phase(NegFormula, 'Unsatisfiable')
+          format('--- ~w logic ---~n', [Logic]),
+          nl,
+          format('% SZS status Unsatisfiable~n', []),
+          nl
+      ;
+          % G4+ could not classify but nanoCoP validated: still Unsatisfiable
+          nl,
+          format('% SZS status Unsatisfiable~n', []),
+          format('% Validated by nanoCoP (G4+ logic classification exceeded limits)~n', []),
+          nl
+      )
     ;
-      write('% SZS status Satisfiable'), nl
+      % nanoCoP could not prove NegFormula within limits.
+      % Never claim Satisfiable without proof.
+      ( InfResult_nc == inference_limit_exceeded ->
+          format('% SZS status GaveUp~n', [])
+      ;
+          % nanoCoP completed but failed: probe without cut for reliable status
+          nanocop_probe(NegFormula, ProbeResult),
+          ( ProbeResult = proved ->
+              format('% SZS status Unsatisfiable~n', [])
+          ; ProbeResult = depth_limited ->
+              format('% SZS status GaveUp~n', [])
+          ;
+              % ProbeResult = exhausted: search space fully explored,
+              % NegFormula genuinely not provable => axioms are satisfiable
+              format('% SZS status Satisfiable~n', [])
+          )
+      )
     ).
 
-% Case 2b: has conjecture - full g4mic proof flow
+% Case 2b: has conjecture - nanoCoP validates, G4+ classifies logic level
 prove_tptp_internal(Formula, has_conjecture) :-
     current_prolog_flag(occurs_check, OriginalFlag),
     ( catch(
           setup_call_cleanup(
               true,
-              call_with_inference_limit(nanocop_decides(Formula), 2000000, InfResult_hc),
+              (write('nanoCoP : '), nl,
+               time(call_with_inference_limit(nanocop_decides(Formula), 2000000, InfResult_hc))),
               set_prolog_flag(occurs_check, OriginalFlag)
           ),
           _,
@@ -5315,62 +5333,19 @@ prove_tptp_internal(Formula, has_conjecture) :-
     !, fail
     ),
 
-    write('--- G4 Proof for: '), write(Formula), nl,
-    write('-----------------------------------------------------------'), nl,
-    nl,
-
-    retractall(premiss_list(_)),
-    retractall(current_proof_sequent(_)),
-
-    copy_term(Formula, FormulaCopy),
-    prepare(FormulaCopy, [], F0),
-    subst_neg(F0, F1),
-    subst_bicond(F1, F2),
-
-    statistics(walltime, [Start|_]),
-
-    % NOTE: use call_with_inference_limit (not call_with_time_limit)
-    %       for WASM compatibility (no call_with_time_limit in WASM)
-    ( catch(call_with_inference_limit(provable_at_level([] > [F2], minimal, Proof), 5000000, InfRes_m), _, fail),
-      InfRes_m \== inference_limit_exceeded ->
-        write('--- Minimal logic ---'), nl,
-        Logic = minimal,
-        OutputProof = Proof,
-        G4Success = true
-
-    ; catch(call_with_inference_limit(provable_at_level([] > [F2], constructive, Proof), 5000000, InfRes_c), _, fail),
-      InfRes_c \== inference_limit_exceeded ->
-        write('--- Intuitionistic logic ---'), nl,
-        Logic = intuitionistic,
-        OutputProof = Proof,
-        G4Success = true
-
-    ; catch(call_with_inference_limit(provable_at_level([] > [F2], classical, Proof), 5000000, InfRes_cl), _, fail),
-      InfRes_cl \== inference_limit_exceeded ->
-        write('--- Classical logic ---'), nl,
-        Logic = classical,
-        OutputProof = Proof,
-        G4Success = true
-
+    % nanoCoP validated: now determine the logic level (no proof term)
+    ( write('g4mic : '), nl,
+      time(g4mic_logic_level(Formula, Logic)) ->
+        nl,
+        format('--- ~w logic ---~n', [Logic]),
+        nl,
+        format('% SZS status Theorem~n', []),
+        nl
     ;
-        G4Success = false
-    ),
-
-    ( G4Success = true ->
-        statistics(walltime, [End|_]),
-        Time is (End - Start) / 1000,
+        % G4+ could not classify but nanoCoP validated: still a Theorem
         nl,
-        format('G4mic time: ~3f seconds~n', [Time]),
-        nl,
-        write('% SZS status Theorem'), nl,
-        nl,
-        output_proof_results(OutputProof, Logic, Formula),
-        tptp_validation_phase(Formula, 'Theorem')
-    ;
-        % G4 cannot build proof but nanoCoP validated: it IS a Theorem
-        nl,
-        write('% SZS status Theorem'), nl,
-        write('% Proof validated by nanoCoP (G4 proof generation not available for this formula)'), nl,
+        format('% SZS status Theorem~n', []),
+        format('% Proof validated by nanoCoP (G4+ logic classification exceeded limits)~n', []),
         nl
     ).
 
