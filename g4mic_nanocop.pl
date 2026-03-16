@@ -344,8 +344,8 @@ translate_operators(F, (~(p0 => p0))) :-
     (F == '#' ; F == f ; F == bot ; F == bottom ; F == falsum ; F == '$false' ; F == $false),
     !.
 
-% Top/verum: t is translated to (p0 => p0) which represents T
-translate_operators(F, (p0 => p0)) :-
+% Top/verum: t is translated to (~(p0 => p0) => ~(p0 => p0)) i.e. (bot -> bot)
+translate_operators(F, (~(p0 => p0) => ~(p0 => p0))) :-
     nonvar(F),
     (F == t ; F == top ; F == verum ; F == '$true' ; F == $true),
     !.
@@ -740,6 +740,39 @@ prove(Left <=> Right) :-
         write('================================================================'), nl,
         write('           <->  BICONDITIONAL:  Proving Both Directions           '), nl,
         write('================================================================'), nl, nl,
+
+        % ===============================================================
+        % RAW PROLOG PROOF TERMS (both directions)
+        % ===============================================================
+        write('=== RAW PROLOG PROOF TERMS ==='), nl, nl,
+
+        % Direction 1 - Raw term
+        write('--- Direction 1: '), write(Left => Right), write(' ---'), nl,
+        ( Direction1Valid = true ->
+            write('    '), portray_clause(Proof1), nl,
+            ( catch(
+                  (copy_term(Proof1, ProofCopy1),
+                   numbervars(ProofCopy1, 0, _),
+                   nl),
+                  error(cyclic_term, _),
+                  (write('%% WARNING: Cannot represent proof term due to cyclic_term.'), nl, nl)
+              ) -> true ; true )
+        ; write('  failed'), nl, nl
+        ),
+
+        % Direction 2 - Raw term
+        write('--- Direction 2: '), write(Right => Left), write(' ---'), nl,
+        ( Direction2Valid = true ->
+            write('    '), portray_clause(Proof2), nl,
+            ( catch(
+                  (copy_term(Proof2, ProofCopy2),
+                   numbervars(ProofCopy2, 0, _),
+                   nl),
+                  error(cyclic_term, _),
+                  (write('%% WARNING: Cannot represent proof term due to cyclic_term.'), nl, nl)
+              ) -> true ; true )
+        ; write('  failed'), nl, nl
+        ),
 
         % ===============================================================
         % SEQUENT CALCULUS (both directions)
@@ -1421,6 +1454,8 @@ g4mic_proves(Gamma>Delta, _, _, SI, SI, LL, lbot(Gamma>Delta, #)) :-
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, rcond(Gamma>Delta, P)) :-
     Delta = [A => B], !,
     g4mic_proves([A | Gamma]>[B], FV, Th, SI, SO, LL, P).
+
+
 % =====================================================================
 % PROPOSITIONAL RULES (deterministic, no branching)
 %======================================================================
@@ -1464,14 +1499,20 @@ g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, lorto(Gamma>Delta, P)) :-
         g4mic_proves([A=>C, B=>C | G1]>Delta, FV, Th, SI, SO, LL, P)
     ).
 
-
 % --- Rule 8: L\/ (left disjunction) ---------------------------------------
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, lor(Gamma>Delta, P1, P2)) :-
     select((A | B), Gamma, G1), !,
     g4mic_proves([A | G1]>Delta, FV, Th, SI, J1, LL, P1),
     g4mic_proves([B | G1]>Delta, FV, Th, J1, SO, LL, P2).
 
-% --- Rule 9: IP (indirect proof -- classical only, must be before rule L->->)
+% --- Rule 09: R\/ ----------------------------------------------------------
+g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, ror(Gamma>Delta, P)) :-
+    Delta = [(A | B)],
+    (   g4mic_proves(Gamma>[A], FV, Th, SI, SO, LL, P)
+    ;   g4mic_proves(Gamma>[B], FV, Th, SI, SO, LL, P)
+    ).
+
+% --- Rule 10: IP (indirect proof -- classical only, must be before rule L->->)
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, classical, ip(Gamma>Delta, P)) :-
     Delta = [A],
     A \= #,
@@ -1479,8 +1520,7 @@ g4mic_proves(Gamma>Delta, FV, Th, SI, SO, classical, ip(Gamma>Delta, P)) :-
     Th > 0,
     g4mic_proves([(A => #) | Gamma]>[#], FV, Th, SI, SO, classical, P).
 
-
-% --- Rule 10: L->-> --------------------------------------------------------
+% --- Rule 11: L->-> --------------------------------------------------------
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, ltoto(Gamma>Delta, P1, P2)) :-
     select(((A => B) => C), Gamma, G1),
     \+ (B = #, member(A, G1)),
@@ -1488,16 +1528,6 @@ g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, ltoto(Gamma>Delta, P1, P2)) :-
     g4mic_proves([A, (B => C) | G1]>[B], FV, Th, SI, J1, LL, P1),
     g4mic_proves([C | G1]>Delta, FV, Th, J1, SO, LL, P2).
 
-%=========================================================================
-% RIGHT RULES
-%========================================================================
-
-% --- Rule 11: R\/ ----------------------------------------------------------
-g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, ror(Gamma>Delta, P)) :-
-    Delta = [(A | B)], !,
-    (   g4mic_proves(Gamma>[A], FV, Th, SI, SO, LL, P)
-    ;   g4mic_proves(Gamma>[B], FV, Th, SI, SO, LL, P)
-    ).
 
 % --- Rule 12: R& ----------------------------------------------------------
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, rand(Gamma>Delta, P1, P2)) :-
@@ -1889,7 +1919,6 @@ write_with_context(Formula, _Context) :-
 
 % rewrite/4 - Adapted version that handles formulas directly
 rewrite(#, J, J, '\\bot') :- !.
-rewrite(# => #, J, J, '\\top') :- !.
 
 % NEW CLAUSE TO HANDLE SKOLEM CONSTANTS
 % Converts f_sk(K) to a simple name like 'a', 'b', etc. (single argument version)
@@ -2189,6 +2218,16 @@ prepare_premisses_list([H|T], [PreparedH|PreparedT]) :-
     prepare_premisses_list(T, PreparedT).
 
 prepare(#, _, #) :- !.
+
+% Top/verum: translate to (# => #) i.e. (bot -> bot), a standard tautology
+prepare(F, _, (# => #)) :-
+    nonvar(F),
+    (F == t ; F == top ; F == verum ; F == '$true' ; F == $true), !.
+
+% Bottom/falsum synonyms: translate to #
+prepare(F, _, #) :-
+    nonvar(F),
+    (F == f ; F == bot ; F == bottom ; F == falsum ; F == '$false' ; F == $false), !.
 
 prepare((A & B), Q, (C & D)) :-
     !,
