@@ -3787,6 +3787,9 @@ fitch_g4_proof(ip((_ > [Goal]), SubProof), Context, Scope, CurLine, NextLine, Re
 % Valid in intuitionistic and classical logic (not minimal logic)
 % Pattern: One branch uses explosion (~A with A), other branch derives Goal from B
 fitch_g4_proof(lor((Premisss > [_Goal]), SP1, SP2), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :-
+    % DS is NOT valid in minimal logic — skip this optimization
+    current_logic_level(LogicLevel),
+    LogicLevel \= minimal,
     % Try DS optimization: Check if we have A \/ B and ~A (A => #)
     select((A | B), Premisss, _),
     % Check if ~A (i.e., A => #) is available
