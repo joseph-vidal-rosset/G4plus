@@ -84,18 +84,23 @@ contains_equality(Term) :-
 %   - A quantifier
 %   - An internal Skolem function (f_sk)
 %   - A predicate at top level
+% Recurse into quantifiers
+contains_user_function(![_]:A) :- !, contains_user_function(A).
+contains_user_function(?[_]:A) :- !, contains_user_function(A).
+contains_user_function(all _:A) :- !, contains_user_function(A).
+contains_user_function(ex _:A)  :- !, contains_user_function(A).
+% Recurse into logical connectives
+contains_user_function(~A)    :- !, contains_user_function(A).
+contains_user_function(A & B) :- !, (contains_user_function(A) ; contains_user_function(B)).
+contains_user_function(A | B) :- !, (contains_user_function(A) ; contains_user_function(B)).
+contains_user_function(A => B) :- !, (contains_user_function(A) ; contains_user_function(B)).
+contains_user_function(A <=> B) :- !, (contains_user_function(A) ; contains_user_function(B)).
+% Base case: compound term that is not a logical operator => check for function symbols
 contains_user_function(Term) :-
     compound(Term),
     Term \= f_sk(_),
     Term \= f_sk(_,_),
     Term \= (_ = _),
-    Term \= (~ _),
-    Term \= (_ & _),
-    Term \= (_ | _),
-    Term \= (_ => _),
-    Term \= (_ <=> _),
-    Term \= (![_]:_),
-    Term \= (?[_]:_),
     % Now check if Term or its arguments contain functions
     (   has_function_in_args(Term)
     ;   Term =.. [_F|Args],

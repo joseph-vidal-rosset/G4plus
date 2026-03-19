@@ -311,7 +311,6 @@ write_with_context(Formula, _Context) :-
 
 % rewrite/4 - Adapted version that handles formulas directly
 rewrite(#, J, J, '\\bot') :- !.
-rewrite(# => #, J, J, '\\top') :- !.
 
 % NEW CLAUSE TO HANDLE SKOLEM CONSTANTS
 % Converts f_sk(K) to a simple name like 'a', 'b', etc. (single argument version)
@@ -611,6 +610,16 @@ prepare_premisses_list([H|T], [PreparedH|PreparedT]) :-
     prepare_premisses_list(T, PreparedT).
 
 prepare(#, _, #) :- !.
+
+% Top/verum: translate to (# => #) i.e. (bot -> bot), a standard tautology
+prepare(F, _, (# => #)) :-
+    nonvar(F),
+    (F == t ; F == top ; F == verum ; F == '$true' ; F == $true), !.
+
+% Bottom/falsum synonyms: translate to #
+prepare(F, _, #) :-
+    nonvar(F),
+    (F == f ; F == bot ; F == bottom ; F == falsum ; F == '$false' ; F == $false), !.
 
 prepare((A & B), Q, (C & D)) :-
     !,

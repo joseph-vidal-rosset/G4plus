@@ -1,9 +1,8 @@
-%============================================================================
-% G4+: UNIFIED THEOREM PROVER FOR MINIMAL, INTUITIONISTIC AND CLASSICAL LOGIC
-%============================================================================
-%%==================================
-%              DRIVER
-%%==================================
+% G4+ : UNIFIED THEOREM PROVER FOR MINIMAL, INTUITIONISTIC AND CLASSICAL LOGIC
+% =========================================================================
+%%=====================================
+% DRIVER
+%%====================================
 % SYSTEM ARCHITECTURE:
 % -------------------
 % G4+ is a hybrid theorem prover combining:
@@ -14,7 +13,7 @@
 % PROOF STRATEGY:
 % --------------
 % Progressive logic escalation:
-%   Minimal → Intuitionistic → Classical
+%   Minimal -> Intuitionistic -> Classical
 % This maximizes constructive content while ensuring classical completeness.
 %
 % OUTPUT FORMATS:
@@ -42,27 +41,8 @@
 %
 % AUTHORS:
 % -------
-% Joseph Vidal-Rosset (Université de Lorraine)
+% Joseph Vidal-Rosset (Universite de Lorraine)
 % Built upon: G4 (Roy Dyckhoff), nanoCoP (Jens Otten), leanSeq (Jens Otten)
-%
-% =========================================================================
-% OPERATOR DECLARATIONS - Unified for g4mic + nanocop + TPTP
-% =========================================================================
-% The system integrates three components:
-% - G4 calculus prover (main system)
-% - nanoCoP connection prover (validation and filtering)
-% - TPTP format support (standard automated reasoning format)
-%
-% The minimal_driver (ii_minimal_driver) provides the bridge between
-% nanoCoP and G4, allowing nanoCoP to act as both a filter (rejecting
-% invalid formulas early) and a cross-validator (confirming G4 results).
-% =========================================================================
-% :- use_module(library(lists)).
-% :- use_module(library(statistics)).
-% :- use_module(library(terms)).
-% :- [i_operators].
-% :- [ii_minimal_driver].  % To translate nanocop into g4mic and to  use nanocop as filter
-% :- [vii_bis_clean_fitch].
 % =========================================================================
 % OPERATOR DECLARATIONS - Unified for g4mic + nanoCop + TPTP
 % =========================================================================
@@ -79,19 +59,31 @@
 :- [viii_tree_style].
 :- [ix_clean_fitch].
 :- [x_tptp].
+
 :-style_check(-singleton).
-:-[nanocop20_swi].
+
+:- (getenv('TPTP', _) -> true ; setenv('TPTP', '/home/joseph/src/TPTP-v9.2.1')).
+
+:-[nanocop20_swi_for_g4plus].
 :-[nanocop_proof].
 :-[nanocop_tptp2].
+
 % Activer le format d'explication complete d'Otten
 :-retractall(proof(_)).
 :-assert(proof(readable)).
 
 :-dynamic g4mic_silent_mode/0.
-
 % =========================================================================
 % MAIN INTERFACE
 % =========================================================================
+
+% Wrapper public: catchee nanocop_gave_up pour appels directs
+nanocop_proves_safe(Formula) :-
+    catch(
+        nanocop_proves(Formula),
+        nanocop_gave_up,
+        ( format('% SZS status GaveUp~n', []), fail )
+    ).
 
 nanocop_proves(Formula) :-
     % Forcer l'affichage
@@ -130,7 +122,20 @@ nanocop_proves(Formula) :-
         2000000,
         InfResult
     ),
-    ( InfResult == inference_limit_exceeded -> fail ; true ),!.
+    ( InfResult == inference_limit_exceeded ->
+        % Limite atteinte: verifier avec nanocop_decides si c'est quand meme un theoreme
+        ( catch(
+              ( call_with_inference_limit(nanocop_decides(Formula), 5000000, InfResult2),
+                InfResult2 \== inference_limit_exceeded ),
+              _, fail
+          ) ->
+            write('% SZS status Theorem'), nl,
+            write('% Proof validated by nanoCoP (nanoCoP proof generation not available for this formula)'), nl,
+            nl
+        ;
+            format('% SZS status GaveUp~n', []), !, fail
+        )
+    ; true ),!.
 
 % =========================================================================
 % nanocop_decides/1 :   Version SILENCIEUSE (avec stats)
@@ -156,8 +161,67 @@ nanocop_decides(Formula) :-
     ),
 
     % IMPORTANT : PAS DE NEGATION - prove2 gere la refutation en interne
+    retractall(nanocop_depth_limited),
     prove2(FormulaToProve, [cut,comp(7)], _Proof),
     retractall(g4mic_silent_mode), !.
+
+% =========================================================================
+% NANOCOP PROBE (sans cut) - pour determiner si la recherche est exhaustive
+% =========================================================================
+% Runs prove2 WITHOUT cut under inference limit. The result tells us:
+%   proved          - formula is provable
+%   depth_limited   - search was truncated by comp(7)
+%   exhausted       - search space fully explored, no proof exists
+%   inference_limit - inference limit reached before conclusion
+%
+% This is used by szs_disproved_status to distinguish CounterSatisfiable
+% from GaveUp: with [cut], nanoCoP may prune branches and miss the
+% depth limit, so we probe without cut for a reliable answer.
+
+nanocop_probe(Formula, Result) :-
+    assertz(g4mic_silent_mode),
+    current_prolog_flag(occurs_check, OriginalFlag),
+    (nanocop_contains_equality(Formula) ->
+        HasEquality = true
+    ;
+        HasEquality = false
+    ),
+    translate_formula(Formula, InternalFormula),
+    (HasEquality = true ->
+        leancop_equal(InternalFormula, FormulaToProve)
+    ;
+        FormulaToProve = InternalFormula
+    ),
+    retractall(nanocop_depth_limited),
+    % Probe with [comp(7)] (no cut) under strict limits.
+    % Uses time limit (2s) as safety net on native SWI,
+    % falls back to inference limit only for WASM.
+    ProbeGoal = call_with_inference_limit(
+                    prove2(FormulaToProve, [comp(7)], _Proof),
+                    50000, InfResult),
+    ( predicate_property(call_with_time_limit(_,_), defined) ->
+        TimedGoal = call_with_time_limit(2, ProbeGoal)
+    ;
+        TimedGoal = ProbeGoal   % WASM: no time limit available
+    ),
+    ( catch(TimedGoal, _AnyException, (InfResult = timeout))
+    ->
+        ( InfResult == inference_limit_exceeded ->
+            Result = depth_limited   % ran out of inferences: assume incomplete
+        ; InfResult == timeout ->
+            Result = depth_limited   % ran out of time: assume incomplete
+        ;
+            Result = proved
+        )
+    ;
+        ( nanocop_depth_limited ->
+            Result = depth_limited
+        ;
+            Result = exhausted
+        )
+    ),
+    set_prolog_flag(occurs_check, OriginalFlag),
+    retractall(g4mic_silent_mode).
 
 % =========================================================================
 % EQUALITY DETECTION (copie de minimal_driver.pl)
@@ -214,8 +278,7 @@ output_result(Formula, Matrix, Proof, Result) :-
         format('================================================================~n'),
         format('                     NANOCOP THEOREM PROVER~n'),
         format('================================================================~n~n'),
-        write('Formula:         '), write(Formula), nl,
-        write('Result:    '), write(Result), nl, nl,
+        write('Formula:         '), write(Formula), nl, nl,
         ( var(Proof) ->
             write('No proof found.      '), nl
         ;
@@ -241,13 +304,13 @@ translate_formula(F, F_out) :-
 % Bottom/falsum: # is translated to ~(p0 => p0) which represents _|_
 translate_operators(F, (~(p0 => p0))) :-
     nonvar(F),
-    (F == '#' ; F == f ; F == bot ; F == bottom ; F == falsum),
+    (F == '#' ; F == f ; F == bot ; F == bottom ; F == falsum ; F == '$false' ; F == $false),
     !.
 
-% Top/verum: t is translated to (p0 => p0) which represents T
-translate_operators(F, (p0 => p0)) :-
+% Top/verum: t is translated to (~(p0 => p0) => ~(p0 => p0)) i.e. (bot -> bot)
+translate_operators(F, (~(p0 => p0) => ~(p0 => p0))) :-
     nonvar(F),
-    (F == t ; F == top ; F == verum),
+    (F == t ; F == top ; F == verum ; F == '$true' ; F == $true),
     !.
 
 % Atomic formulas
@@ -326,6 +389,12 @@ substitute_var_in_formula(Atom, _OldVar, _NewVar, Atom) :-
 substitute_var_in_formula(Var, _OldVar, _NewVar, Var) :-
     var(Var), !.
 
+% Capture avoidance: stop substitution at inner quantifier that shadows the same variable
+substitute_var_in_formula(![Var]:Body, OldVar, _NewVar, ![Var]:Body) :-
+    atomic(Var), Var == OldVar, !.
+substitute_var_in_formula(?[Var]:Body, OldVar, _NewVar, ?[Var]:Body) :-
+    atomic(Var), Var == OldVar, !.
+
 substitute_var_in_formula(Term, OldVar, NewVar, NewTerm) :-
     compound(Term), !,
     Term =.. [F|Args],
@@ -356,12 +425,13 @@ nanocop_decides_silent(Formula) :-
     catch(
         setup_call_cleanup(
             true,
-            call_with_inference_limit(nanocop_decides(Formula), 2000000, _Result),
+            call_with_inference_limit(nanocop_decides(Formula), 2000000, InfResult),
             set_prolog_flag(occurs_check, OriginalFlag)
         ),
         _Error,
         (set_prolog_flag(occurs_check, OriginalFlag), fail)
-    ).
+    ),
+    InfResult \== inference_limit_exceeded.  % Fail if inference limit was exceeded
 
 % =========================================================================
 % NANOCOP REFUTATION ANALYSIS
@@ -393,7 +463,7 @@ show_banner :-
     format('SWI-Prolog version ~w.~w.~w~n', [Major, Minor, Patch]),
     nl,
     write('================================================================'), nl,
-    write('  G4+  --  Unified Prover for Minimal, Intuitionistic and'), nl,
+    write('  G4+ 1.4 -- Unified Prover for Minimal, Intuitionistic and'), nl,
     write('           Classical First-Order Logic (G4 + nanoCoP)'), nl,
     write('================================================================'), nl,
     write('  NOTE: Your formula must follow the correct syntax.'), nl,
@@ -594,12 +664,14 @@ prove(Left <=> Right) :-
               setup_call_cleanup(
                   true,
                   % Use inference limit here as well
-                  call_with_inference_limit(nanocop_decides(Left <=> Right), 2000000, _),
+                  call_with_inference_limit(nanocop_decides(Left <=> Right), 2000000, InfResult_bic),
                   set_prolog_flag(occurs_check, OriginalFlag)
               ),
               _,
               (set_prolog_flag(occurs_check, OriginalFlag), fail)
-          ) ->
+          ),
+          InfResult_bic \== inference_limit_exceeded  % Fail if inference limit was exceeded
+        ->
           true
         ;
         szs_disproved_status(Left <=> Right, DisprStatus694),
@@ -631,6 +703,39 @@ prove(Left <=> Right) :-
         write('================================================================'), nl,
         write('           <->  BICONDITIONAL:  Proving Both Directions           '), nl,
         write('================================================================'), nl, nl,
+
+        % ===============================================================
+        % RAW PROLOG PROOF TERMS (both directions)
+        % ===============================================================
+        write('=== RAW PROLOG PROOF TERMS ==='), nl, nl,
+
+        % Direction 1 - Raw term
+        write('--- Direction 1: '), write(Left => Right), write(' ---'), nl,
+        ( Direction1Valid = true ->
+            write('    '), portray_clause(Proof1), nl,
+            ( catch(
+                  (copy_term(Proof1, ProofCopy1),
+                   numbervars(ProofCopy1, 0, _),
+                   nl),
+                  error(cyclic_term, _),
+                  (write('%% WARNING: Cannot represent proof term due to cyclic_term.'), nl, nl)
+              ) -> true ; true )
+        ; write('  failed'), nl, nl
+        ),
+
+        % Direction 2 - Raw term
+        write('--- Direction 2: '), write(Right => Left), write(' ---'), nl,
+        ( Direction2Valid = true ->
+            write('    '), portray_clause(Proof2), nl,
+            ( catch(
+                  (copy_term(Proof2, ProofCopy2),
+                   numbervars(ProofCopy2, 0, _),
+                   nl),
+                  error(cyclic_term, _),
+                  (write('%% WARNING: Cannot represent proof term due to cyclic_term.'), nl, nl)
+              ) -> true ; true )
+        ; write('  failed'), nl, nl
+        ),
 
         % ===============================================================
         % SEQUENT CALCULUS (both directions)
@@ -795,12 +900,14 @@ prove(Formula) :-
           setup_call_cleanup(
               true,
               % Use inference limit here as well
-              call_with_inference_limit(nanocop_decides(Formula), 2000000, _),
+              call_with_inference_limit(nanocop_decides(Formula), 2000000, InfResult_prove),
               set_prolog_flag(occurs_check, OriginalFlag)
           ),
           _,
           (set_prolog_flag(occurs_check, OriginalFlag), fail)
-      ) ->
+      ),
+      InfResult_prove \== inference_limit_exceeded  % Fail if inference limit was exceeded
+    ->
       true
     ;
     % nanocop_decides failed: formula is not valid.
@@ -809,12 +916,11 @@ prove(Formula) :-
     szs_disproved_status(Formula, DisprStatus),
     format('% SZS status ~w~n', [DisprStatus]),
     ( DisprStatus = 'Unsatisfiable' ->
-        % Formula is a contradiction: prove (Formula => #) and show full proof
-        NegFormula = (Formula => #),
+        % Formula is a contradiction: prove_tptp_internal will prove (Formula => #)
         nl,
         write('[ Contradiction detected -- proving (Formula => #) ]'), nl,
         nl,
-        prove_tptp_internal(NegFormula, no_conjecture)
+        prove_tptp_internal(Formula, no_conjecture)
     ; true ),
     !, fail
     ),
@@ -841,7 +947,7 @@ prove(Formula) :-
         Logic = minimal,
         OutputProof = Proof
 
-    ; provable_at_level([] > [F2], constructive, Proof) ->
+    ; provable_at_level([] > [F2], intuitionistic, Proof) ->
         write('--- Intuitionistic logic ---'), nl,
         Logic = intuitionistic,
         OutputProof = Proof
@@ -852,37 +958,28 @@ prove(Formula) :-
         OutputProof = Proof
 
     ;
-        nl,
-        write('[!] UNEXPECTED: g4mic failed but nanoCoP validated!'), nl,
-        nl,
-        write('This is likely a BUG in G4-mic.'), nl,
-        write('Please help improve G4-mic by reporting this issue:'), nl,
-        nl,
-        write('  *  Email: joseph@vidal-rosset.net'), nl,
-        write('  -  Include: the formula and this error message'), nl,
-        nl,
-        write('Thank you for your contribution!'), nl,
-        nl,
-        fail
+        % G4+ incomplete on this formula (known FOL limitation).
+        % nanoCoP's result stands as the authority.
+        format('% SZS status Theorem~n', []),
+        format('% Proof validated by nanoCoP (G4+ proof search exceeded limits)~n', []),
+        nl
     ),
 
-    statistics(walltime, [End|_]),
-    Time is (End - Start) / 1000,
-
-    nl,
-    format('G4mic time: ~3f seconds~n', [Time]),
-    nl,
-    format("% SZS status Theorem~n"), nl, output_proof_results(OutputProof, Logic, Formula),
-
-    % ===============================================================
-    % PHASE 3: EXTERNAL VALIDATION (displayed)
-    % ===============================================================
-    nl,
-    write('================================================================'), nl,
-    write('                  - PHASE 3: VALIDATION                         '), nl,
-    write('================================================================'), nl,
-    tptp_validation_phase(Formula, 'Theorem'),
-    nl.
+    ( nonvar(OutputProof) ->
+        statistics(walltime, [End|_]),
+        Time is (End - Start) / 1000,
+        nl,
+        format('G4mic time: ~3f seconds~n', [Time]),
+        nl,
+        format("% SZS status Theorem~n"), nl,
+        output_proof_results(OutputProof, Logic, Formula),
+        nl,
+        write('================================================================'), nl,
+        write('                  - PHASE 3: VALIDATION                         '), nl,
+        write('================================================================'), nl,
+        tptp_validation_phase(Formula, 'Theorem'),
+        nl
+    ; true ).
 % =========================================================================
 % HELPERS
 % =========================================================================
@@ -1017,8 +1114,6 @@ g4mic_decides(Left <=> Right) :- ! ,
     write(Logic2), write(' logic'), nl,
     !.
 
-
-
 % g4mic_decides/1 for theorems (catch-all - must come last)
 g4mic_decides(Formula) :-
     copy_term(Formula, FormulaCopy),
@@ -1073,6 +1168,37 @@ g4mic_decides(Formula) :-
 % decide/1 is kept as an alias for g4mic_decides/1
 decide(X) :- g4mic_decides(X).
 
+% =========================================================================
+% g4mic_logic_level/2 — Determine the logic level WITHOUT building a proof term.
+% =========================================================================
+% Used by the TPTP path after nanoCoP validation.
+% Returns: minimal | intuitionistic | classical
+% Fails if G4+ cannot determine the level within the inference limit.
+%
+% Because no proof term is constructed, we can afford a much higher
+% inference limit (10M) than the proof-building path (5M).
+
+g4mic_logic_level(Formula, Logic) :-
+    copy_term(Formula, FC),
+    prepare(FC, [], F0),
+    subst_neg(F0, F1),
+    subst_bicond(F1, F2),
+    g4mic_logic_level_internal(F2, Logic).
+
+g4mic_logic_level_internal(F2, minimal) :-
+    catch(call_with_inference_limit(
+        provable_at_level([] > [F2], minimal, _), 10000000, InfRes), _, fail),
+    InfRes \== inference_limit_exceeded, !.
+
+g4mic_logic_level_internal(F2, intuitionistic) :-
+    catch(call_with_inference_limit(
+        provable_at_level([] > [F2], constructive, _), 10000000, InfRes), _, fail),
+    InfRes \== inference_limit_exceeded, !.
+
+g4mic_logic_level_internal(F2, classical) :-
+    catch(call_with_inference_limit(
+        provable_at_level([] > [F2], classical, _), 10000000, InfRes), _, fail),
+    InfRes \== inference_limit_exceeded, !.
 
 % =========================================================================
 % HELP SYSTEM

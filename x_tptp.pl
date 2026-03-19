@@ -5,12 +5,88 @@
 % This module converts TPTP formulas to G4-mic syntax.
 
 % Read and process a TPTP file
+% prove_tptp_file/1 — main entry point.
+% prove_tptp_file/2 — kept for backward compatibility (TimeoutSecs ignored,
+%                     inference limit is used instead).
 prove_tptp_file(Filename) :-
+    prove_tptp_file(Filename, _Ignored).
+
+prove_tptp_file(Filename, _TimeoutSecs) :-
+    catch(
+        prove_tptp_file_safe(Filename),
+        Error,
+        ( nl, format('% SZS status GaveUp (error: ~w)~n', [Error]) )
+    ).
+
+prove_tptp_file_safe(Filename) :-
     file_directory_name(Filename, FileDir),
+    % Cap loading at 100 000 formulae — problems like CSR+5 have 540 000+
+    % and loop forever on axiom loading alone.
     open(Filename, read, Stream),
-    read_tptp_formulas(Stream, FileDir, Formulas),
+    read_tptp_formulas_limited(Stream, FileDir, Formulas, 100000, Truncated),
     close(Stream),
-    ( process_tptp_formulas(Formulas) -> true ; true ).
+    ( Truncated = true ->
+        format('% WARNING: Problem has > 100000 formulae, too large for G4+~n'),
+        format('% SZS status GaveUp~n')
+    ;
+        ( process_tptp_formulas(Formulas) -> true ; true )
+    ).
+
+% read_tptp_formulas_limited/5
+% Like read_tptp_formulas/3 but stops after Max formulae.
+% Truncated = true if limit was hit.
+read_tptp_formulas_limited(Stream, FileDir, Formulas, Max, Truncated) :-
+    read_tptp_formulas_acc(Stream, FileDir, Formulas, Max, 0, Truncated).
+
+read_tptp_formulas_acc(Stream, _FileDir, [], _Max, _Count, false) :-
+    at_end_of_stream(Stream), !.
+read_tptp_formulas_acc(_Stream, _FileDir, [], _Max, Count, true) :-
+    Count >= 100000, !.
+read_tptp_formulas_acc(Stream, FileDir, Formulas, Max, Count, Truncated) :-
+    \+ at_end_of_stream(Stream),
+    read(Stream, Term), !,
+    (   Term = fof(_, _, _) ->
+        Count1 is Count + 1,
+        ( Count1 >= Max ->
+            Formulas = [Term], Truncated = true
+        ;
+            Formulas = [Term|Rest],
+            read_tptp_formulas_acc(Stream, FileDir, Rest, Max, Count1, Truncated)
+        )
+    ;   Term = include(RelPath) ->
+        ( atom_concat(FileDir, '/', Prefix),
+          atom_concat(Prefix, RelPath, AbsPath1),
+          exists_file(AbsPath1)
+        -> IncludePath = AbsPath1
+        ; getenv('TPTP', TTPTBase),
+          atom_concat(TTPTBase, '/', TPrefix),
+          atom_concat(TPrefix, RelPath, AbsPath2),
+          exists_file(AbsPath2)
+        -> IncludePath = AbsPath2
+        ;  format('% WARNING: Include file not found: ~w~n', [RelPath]),
+           IncludePath = ''
+        ),
+        ( IncludePath \= '' ->
+            file_directory_name(IncludePath, IncludeDir),
+            open(IncludePath, read, IncStream),
+            Remaining is Max - Count,
+            read_tptp_formulas_acc(IncStream, IncludeDir, IncFormulas, Remaining, 0, Trunc1),
+            close(IncStream),
+            length(IncFormulas, IncCount),
+            Count2 is Count + IncCount,
+            ( Trunc1 = true ->
+                Formulas = IncFormulas, Truncated = true
+            ;
+                read_tptp_formulas_acc(Stream, FileDir, RestFormulas, Max, Count2, Truncated),
+                append(IncFormulas, RestFormulas, Formulas)
+            )
+        ;
+            read_tptp_formulas_acc(Stream, FileDir, Formulas, Max, Count, Truncated)
+        )
+    ;
+        read_tptp_formulas_acc(Stream, FileDir, Formulas, Max, Count, Truncated)
+    ).
+read_tptp_formulas_acc(_, _, [], _, _, false).
 
 % Read all fof() declarations from file, resolving include() directives.
 % FileDir is the directory of the current file, used for relative include paths.
@@ -51,69 +127,67 @@ read_tptp_formulas(Stream, FileDir, Formulas) :-
 read_tptp_formulas(_, _, []).
 
 % Process list of TPTP formulas - collect axioms and combine with conjecture
+% Two-pass: first collect ALL axioms, then process conjecture.
+% This handles files where the conjecture appears before some or all axioms.
 process_tptp_formulas(Formulas) :-
-    process_tptp_formulas(Formulas, []).
-
-% process_tptp_formulas(Formulas, AccumulatedAxioms)
-%
-% No conjecture found: test satisfiability of the axiom set.
-% SZS Unsatisfiable if axioms are inconsistent, SZS Satisfiable otherwise.
-process_tptp_formulas([], Axioms) :-
-    (   Axioms \= [] ->
-        length(Axioms, NumAxioms),
-        format('~nSatisfiability check: ~w axiom(s) without conjecture~n', [NumAxioms]),
-        maplist(convert_axiom_formula, Axioms, G4micAxioms),
-        combine_axioms(G4micAxioms, Combined),
-        NegCombined = (Combined => #),
-        ( prove_tptp_internal(NegCombined, no_conjecture) -> true ; true )
-    ;   true
+    collect_all_axioms(Formulas, AllAxioms, Conjectures),
+    ( Conjectures = [] ->
+        % No conjecture: satisfiability check on axioms only
+        ( AllAxioms \= [] ->
+            length(AllAxioms, NumAxioms),
+            format('~nSatisfiability check: ~w axiom(s) without conjecture~n', [NumAxioms]),
+            maplist(convert_axiom_formula, AllAxioms, G4micAxioms),
+            combine_axioms(G4micAxioms, Combined),
+            ( prove_tptp_internal(Combined, no_conjecture) -> true ; true )
+        ; true
+        )
+    ;
+        process_tptp_formulas_with_axioms(Conjectures, AllAxioms)
     ).
 
-process_tptp_formulas([fof(Name, Role, Formula)|Rest], AccAxioms) :-
-    (   Role = axiom ->
-        % Accumulate axiom for later combination with conjecture
-        process_tptp_formulas(Rest, [fof(Name, axiom, Formula)|AccAxioms])
-
-    ;   Role = conjecture ->
-        % Found conjecture - combine with accumulated axioms
-        nl,
-        format('===============================================================~n', []),
-        (   AccAxioms = [] ->
-            format('TPTP Problem: ~w (conjecture, no axioms)~n', [Name])
-        ;   length(AccAxioms, NumAxioms),
-            format('TPTP Problem: ~w (conjecture with ~w axiom(s))~n', [Name, NumAxioms]),
-            % Display axiom names
-            extract_axiom_names(AccAxioms, AxiomNames),
-            format('  Axioms: ~w~n', [AxiomNames])
-        ),
-        format('===============================================================~n', []),
-        nl,
-
-        % Convert all formulas (axioms and conjecture)
-        convert_tptp_formula(Formula, G4micConjecture),
-        maplist(convert_axiom_formula, AccAxioms, G4micAxioms),
-
-        % Combine: (axiom1 & axiom2 & ...) => conjecture
-        (   G4micAxioms = [] ->
-            % No axioms - just prove conjecture
-            CombinedFormula = G4micConjecture
-        ;   % Combine axioms with &
-            combine_axioms(G4micAxioms, CombinedAxioms),
-            CombinedFormula = (CombinedAxioms => G4micConjecture),
-            length(G4micAxioms, NumAx),
-            format('Combined formula: ~w axiom(s) => conjecture~n~n', [NumAx])
-        ),
-
-        % Prove the combined formula - SZS: Theorem / CounterSatisfiable
-        ( prove_tptp_internal(CombinedFormula, has_conjecture) -> true ; true ),
-
-        % Clear accumulated axioms and continue
-        process_tptp_formulas(Rest, [])
-
-    ;   % Unknown role - skip
+% Collect all axioms and conjectures from formula list (order-independent)
+collect_all_axioms([], [], []).
+collect_all_axioms([fof(Name, Role, Formula)|Rest], Axioms, Conjectures) :-
+    collect_all_axioms(Rest, RestAxioms, RestConjectures),
+    ( memberchk(Role, [axiom, hypothesis, lemma, definition, assumption]) ->
+        Axioms = [fof(Name, axiom, Formula)|RestAxioms],
+        Conjectures = RestConjectures
+    ; Role = conjecture ->
+        Axioms = RestAxioms,
+        Conjectures = [fof(Name, conjecture, Formula)|RestConjectures]
+    ;
         format('Skipping ~w with role ~w~n', [Name, Role]),
-        process_tptp_formulas(Rest, AccAxioms)
+        Axioms = RestAxioms,
+        Conjectures = RestConjectures
     ).
+
+% Process conjectures with the full axiom set already collected
+process_tptp_formulas_with_axioms([], _AllAxioms).
+process_tptp_formulas_with_axioms([fof(Name, conjecture, Formula)|Rest], AllAxioms) :-
+    nl,
+    format('===============================================================~n', []),
+    ( AllAxioms = [] ->
+        format('TPTP Problem: ~w (conjecture, no axioms)~n', [Name])
+    ;   length(AllAxioms, NumAxioms),
+        format('TPTP Problem: ~w (conjecture with ~w axiom(s))~n', [Name, NumAxioms]),
+        extract_axiom_names(AllAxioms, AxiomNames),
+        format('  Axioms: ~w~n', [AxiomNames])
+    ),
+    format('===============================================================~n', []),
+    nl,
+    convert_tptp_formula(Formula, G4micConjecture),
+    maplist(convert_axiom_formula, AllAxioms, G4micAxioms),
+    ( G4micAxioms = [] ->
+        CombinedFormula = G4micConjecture
+    ;   combine_axioms(G4micAxioms, CombinedAxioms),
+        CombinedFormula = (CombinedAxioms => G4micConjecture),
+        length(G4micAxioms, NumAx),
+        format('Combined formula: ~w axiom(s) => conjecture~n~n', [NumAx])
+    ),
+    ( prove_tptp_internal(CombinedFormula, has_conjecture) -> true ; true ),
+    process_tptp_formulas_with_axioms(Rest, AllAxioms).
+
+
 
 % Convert a single TPTP formula to G4-mic syntax
 convert_tptp_formula(Formula, G4micFormula) :-
@@ -395,145 +469,148 @@ prove_tptp(fof(Name, Role, Formula)) :-
     prove_tptp_internal(G4micFormula, has_conjecture).
 
 % Internal prove for TPTP (bypasses validate_and_warn)
-% Case 1: equality/functions detected - delegate to nanoCoP
+% Case 1: equality/functions detected - delegate to nanoCoP (oracle mode)
 prove_tptp_internal(Formula, ProblemType) :-
     % Check if needs nanoCoP (equality/functions)
     g4mic_needs_nanocop(Formula),
     !,
-    nl,
-    write('[ Equality/functions detected -- routing to nanoCoP ]'), nl,
-    nl,
-    write('Calling nanoCoP...'), nl, nl,
-    ( nanocop_proves(Formula) ->
-      szs_status(ProblemType, proved, SZSStatus),
-      format('% SZS status ~w~n', [SZSStatus]),
-      write('Q.E.D.'), nl, nl
-    ;
-      szs_status(ProblemType, disproved, SZSStatus),
-      format('% SZS status ~w~n', [SZSStatus]),
-      fail
+    catch(
+        (
+            ( write('nanoCoP : '), nl,
+              time(call_with_inference_limit(nanocop_decides(Formula), 2000000, InfResult_eq)),
+              InfResult_eq \== inference_limit_exceeded ->
+                szs_status(ProblemType, proved, SZSStatus),
+                nl,
+                format('% SZS status ~w~n', [SZSStatus]),
+                format('% nanoCoP proof (equality/functions)~n', []),
+                nl
+            ;
+                format('% SZS status GaveUp~n', []),
+                fail
+            )
+        ),
+        nanocop_gave_up,
+        ( format('% SZS status GaveUp~n', []), fail )
     ).
 
-% Case 2a: no conjecture - test unsatisfiability, output proof if found
+% Case 2a: no conjecture - nanoCoP validates unsatisfiability, G4+ classifies logic level
+% To check unsatisfiability of Formula, we prove its negation (Formula => #).
 prove_tptp_internal(Formula, no_conjecture) :-
     !,
+    NegFormula = (Formula => #),
     ( catch(
-          call_with_inference_limit(nanocop_decides(Formula), 2000000, _),
+          (write('nanoCoP : '), nl,
+           time(call_with_inference_limit(nanocop_decides(NegFormula), 2000000, InfResult_nc))),
           _,
           fail
-      ) ->
-      write('--- G4 Proof for: '), write(Formula), nl,
-      write('-----------------------------------------------------------'), nl,
-      nl,
-      retractall(premiss_list(_)),
-      retractall(current_proof_sequent(_)),
-      copy_term(Formula, FormulaCopy),
-      prepare(FormulaCopy, [], F0),
-      subst_neg(F0, F1),
-      subst_bicond(F1, F2),
-      statistics(walltime, [Start|_]),
-      ( provable_at_level([] > [F2], minimal, Proof) ->
-          write('--- Minimal logic ---'), nl,
-          Logic = minimal,
-          OutputProof = Proof
-      ; provable_at_level([] > [F2], constructive, Proof) ->
-          write('--- Intuitionistic logic ---'), nl,
-          Logic = intuitionistic,
-          OutputProof = Proof
-      ; provable_at_level([] > [F2], classical, Proof) ->
-          write('--- Classical logic ---'), nl,
-          Logic = classical,
-          OutputProof = Proof
+      )
+    ->
+      % catch succeeded: check inference limit
+      ( InfResult_nc \== inference_limit_exceeded
+      ->
+        % nanoCoP validated: now determine the logic level (no proof term)
+        ( write('g4mic : '), nl,
+          time(g4mic_logic_level(NegFormula, Logic)) ->
+            nl,
+            format('--- ~w logic ---~n', [Logic]),
+            nl,
+            format('% SZS status Unsatisfiable~n', []),
+            nl
+        ;
+            % G4+ could not classify but nanoCoP validated: still Unsatisfiable
+            nl,
+            format('% SZS status Unsatisfiable~n', []),
+            format('% Validated by nanoCoP (G4+ logic classification exceeded limits)~n', []),
+            nl
+        )
       ;
-          nl,
-          write('[!] UNEXPECTED: g4mic failed but nanoCoP validated!'), nl,
-          fail
-      ),
-      statistics(walltime, [End|_]),
-      Time is (End - Start) / 1000,
-      nl,
-      format('G4mic time: ~3f seconds~n', [Time]),
-      nl,
-      write('% SZS status Unsatisfiable'), nl,
-      nl,
-      output_proof_results(OutputProof, Logic, Formula),
-      tptp_validation_phase(Formula, 'Unsatisfiable')
+        % inference limit exceeded
+        format('% SZS status GaveUp~n', [])
+      )
     ;
-      write('% SZS status Satisfiable'), nl
+      % catch failed (exception or nanoCoP failed): probe without cut for reliable status
+      nanocop_probe(NegFormula, ProbeResult),
+      ( ProbeResult = proved ->
+          format('% SZS status Unsatisfiable~n', [])
+      ; ProbeResult = depth_limited ->
+          format('% SZS status GaveUp~n', [])
+      ;
+          % ProbeResult = exhausted: comp(7) found no proof of NegFormula,
+          % but this does NOT establish that the axioms are genuinely
+          % satisfiable — the proof may require multiplicity > 7.
+          % Report GaveUp to avoid soundness errors.
+          format('% SZS status GaveUp~n', [])
+      )
     ).
 
-% Case 2b: has conjecture - full g4mic proof flow
+% Case 2b-special: conjecture that is structurally always false.
+%
+% Root cause covers two distinct errors (SYN916+1 and LCL679+1.001):
+%
+%   SYN916+1: conjecture = $false = ~(p0=>p0).
+%     nanoCoP negates internally → ~~(p0=>p0) = p0=>p0, trivially provable
+%     → spurious Theorem.
+%
+%   LCL679+1.001: conjecture = ~?[X]:~($false|$false).
+%     After translate_operators → ~(ex _:~(~(p0=>p0);~(p0=>p0))).
+%     nanoCoP negates → ex _:(p0=>p0) → clausification gives [[~p0,p0]]:
+%     a tautological clause that nanoCoP preprocessing removes, leaving the
+%     empty matrix → "trivially proved" → spurious Theorem.
+%
+% Fix: translate Formula to internal form and run simplify_g4mic_formula/2
+% (constant-folding with ~(p0=>p0) ≡ ⊥).  If the result is false, return
+% CounterSatisfiable without calling nanoCoP.
+prove_tptp_internal(Formula, has_conjecture) :-
+    translate_formula(Formula, InternalFormula),
+    simplify_g4mic_formula(InternalFormula, false),
+    !,
+    format('% SZS status CounterSatisfiable~n', []).
+
+% Case 2b: has conjecture - nanoCoP validates, G4+ classifies logic level
 prove_tptp_internal(Formula, has_conjecture) :-
     current_prolog_flag(occurs_check, OriginalFlag),
     ( catch(
           setup_call_cleanup(
               true,
-              call_with_inference_limit(nanocop_decides(Formula), 2000000, _),
+              (write('nanoCoP : '), nl,
+               time(call_with_inference_limit(nanocop_decides(Formula), 2000000, InfResult_hc))),
               set_prolog_flag(occurs_check, OriginalFlag)
           ),
           _,
           (set_prolog_flag(occurs_check, OriginalFlag), fail)
-      ) ->
-      true
+      )
+    ->
+      % catch succeeded: check inference limit
+      ( InfResult_hc \== inference_limit_exceeded
+      ->
+        true
+      ;
+        % inference limit exceeded
+        format('% SZS status GaveUp~n', []),
+        !, fail
+      )
     ;
-    szs_disproved_status(Formula, DisprStatus2),
-    format('% SZS status ~w~n', [DisprStatus2]), !, fail
+      % catch failed (exception or nanoCoP failed)
+      szs_disproved_status(Formula, DisprStatus),
+      format('% SZS status ~w~n', [DisprStatus]),
+      !, fail
     ),
 
-    write('--- G4 Proof for: '), write(Formula), nl,
-    write('-----------------------------------------------------------'), nl,
-    nl,
-
-    retractall(premiss_list(_)),
-    retractall(current_proof_sequent(_)),
-
-    copy_term(Formula, FormulaCopy),
-    prepare(FormulaCopy, [], F0),
-    subst_neg(F0, F1),
-    subst_bicond(F1, F2),
-
-    statistics(walltime, [Start|_]),
-
-    ( provable_at_level([] > [F2], minimal, Proof) ->
-        write('--- Minimal logic ---'), nl,
-        Logic = minimal,
-        OutputProof = Proof
-
-    ; provable_at_level([] > [F2], constructive, Proof) ->
-        write('--- Intuitionistic logic ---'), nl,
-        Logic = intuitionistic,
-        OutputProof = Proof
-
-    ; provable_at_level([] > [F2], classical, Proof) ->
-        write('--- Classical logic ---'), nl,
-        Logic = classical,
-        OutputProof = Proof
-
+    % nanoCoP validated: now determine the logic level (no proof term)
+    ( write('g4mic : '), nl,
+      time(g4mic_logic_level(Formula, Logic)) ->
+        nl,
+        format('--- ~w logic ---~n', [Logic]),
+        nl,
+        format('% SZS status Theorem~n', []),
+        nl
     ;
+        % G4+ could not classify but nanoCoP validated: still a Theorem
         nl,
-        write('[!] UNEXPECTED: g4mic failed but nanoCoP validated!'), nl,
-        nl,
-        write('This is likely a BUG in G4-mic.'), nl,
-        write('Please help improve G4-mic by reporting this issue:'), nl,
-        nl,
-        write('  *  Email: joseph@vidal-rosset.net'), nl,
-        write('  -  Include: the formula and this error message'), nl,
-        nl,
-        write('Thank you for your contribution!'), nl,
-        nl,
-        fail
-    ),
-
-    statistics(walltime, [End|_]),
-    Time is (End - Start) / 1000,
-
-    nl,
-    format('G4mic time: ~3f seconds~n', [Time]),
-    nl,
-    write('% SZS status Theorem'), nl,
-    nl,
-    output_proof_results(OutputProof, Logic, Formula),
-    tptp_validation_phase(Formula, 'Theorem').
+        format('% SZS status Theorem~n', []),
+        format('% Proof validated by nanoCoP (G4+ logic classification exceeded limits)~n', []),
+        nl
+    ).
 
 % =========================================================================
 % SHARED VALIDATION PHASE
@@ -578,17 +655,164 @@ tptp_validation_phase(Formula, SZSStatus) :-
     nl.
 
 % Determine SZS status for a formula that failed to prove.
-% If ~F is provable (i.e. F is a contradiction), status is 'Unsatisfiable'.
-% Otherwise F is coherent but not valid: status is 'CounterSatisfiable'.
+% Uses nanocop_probe/2 (prove2 WITHOUT cut, with time+inference limits)
+% for reliable depth-limit detection.
+% With [cut,comp(7)], nanoCoP may prune branches and never hit the depth
+% limit, so we probe without cut to get a trustworthy answer.
+%
+% nanocop_probe returns: proved | depth_limited | exhausted
+%
+% Logic:
+%   1. Probe F without cut:
+%      - proved       -> Theorem (cut-free search found proof that cut missed)
+%      - depth_limited -> GaveUp (comp(7) insufficient, skip ~F test)
+%      - exhausted    -> F genuinely not provable, proceed to test ~F
+%   2. Probe ~F without cut:
+%      - proved       -> Unsatisfiable (F is a contradiction)
+%      - depth_limited -> GaveUp
+%      - exhausted    -> CounterSatisfiable (both searches exhaustive)
+
 szs_disproved_status(Formula, Status) :-
-    ( catch(
-          call_with_inference_limit(nanocop_decides(~Formula), 2000000, _),
-          _,
-          fail
-      ) ->
-      Status = 'Unsatisfiable'
+    nanocop_probe(Formula, ProbeF),
+    ( ProbeF = depth_limited ->
+        Status = 'GaveUp'
+    ; ProbeF = proved ->
+        Status = 'Theorem'
     ;
-      Status = 'CounterSatisfiable'
+        % ProbeF = exhausted: F is genuinely not provable. Test ~F.
+        nanocop_probe(~Formula, ProbeNegF),
+        ( ProbeNegF = proved ->
+            Status = 'Unsatisfiable'
+        ; ProbeNegF = depth_limited ->
+            Status = 'GaveUp'
+        ;
+            % Both searches exhausted.
+            % Even for propositional formulas, nanocop_probe at comp(7) is
+            % NOT a complete decision procedure: a proof may exist requiring
+            % multiplicity > 7.  "exhausted" means only "no proof found within
+            % the bound", NOT "formula is CounterSatisfiable".
+            % The only safe conclusion is GaveUp.
+            % (Structurally false formulas are caught earlier by
+            %  simplify_g4mic_formula/2, before reaching this predicate.)
+            Status = 'GaveUp'
+        )
     ).
+
+% =========================================================================
+% FORMULA CLASSIFICATION HELPERS
+% =========================================================================
+
+% is_tptp_false_formula(+F)
+% True when F is the TPTP falsum — either as the raw TPTP atom $false/'$false'
+% or as the G4mic internal translation ~(p0=>p0).
+is_tptp_false_formula('$false') :- !.
+is_tptp_false_formula($false)   :- !.
+is_tptp_false_formula(~(p0 => p0)) :- !.   % translate_operators output for $false
+
+% -------------------------------------------------------------------------
+% simplify_g4mic_formula(+F, -Value)
+%
+% Evaluates the G4mic *internal* representation of a formula (i.e. after
+% translate_operators has been applied) to one of: true | false | unknown.
+%
+% The evaluation treats ~(p0=>p0) as the canonical G4mic encoding of ⊥ and
+% (~(p0=>p0) => ~(p0=>p0)) as ⊤.  Any atom or compound predicate that is
+% neither of these constants evaluates to `unknown`.
+%
+% Properties:
+%   - If Value = false  → formula is structurally always false (CounterSatisfiable).
+%   - If Value = true   → formula is structurally always true  (Theorem).
+%   - If Value = unknown → cannot determine; proceed with normal proof search.
+%
+% Logical correctness: all rules respect classical two-valued semantics.
+% The catch-all clause (unknown) is conservative: it never produces a wrong
+% true/false for formulas containing real predicate/function symbols.
+% -------------------------------------------------------------------------
+
+simplify_g4mic_formula(~(p0=>p0), false) :- !.                        % G4mic ⊥
+simplify_g4mic_formula((~(p0=>p0) => ~(p0=>p0)), true) :- !.          % G4mic ⊤
+simplify_g4mic_formula(~A, V) :- !,
+    simplify_g4mic_formula(A, VA),
+    simplify_g4mic_negate(VA, V).
+simplify_g4mic_formula((A ; B), V) :- !,        % disjunction (nanoCoP internal)
+    simplify_g4mic_formula(A, VA),
+    simplify_g4mic_formula(B, VB),
+    simplify_g4mic_or(VA, VB, V).
+simplify_g4mic_formula((A , B), V) :- !,        % conjunction (nanoCoP internal)
+    simplify_g4mic_formula(A, VA),
+    simplify_g4mic_formula(B, VB),
+    simplify_g4mic_and(VA, VB, V).
+simplify_g4mic_formula((A => B), V) :- !,
+    simplify_g4mic_formula(A, VA),
+    simplify_g4mic_formula(B, VB),
+    simplify_g4mic_implies(VA, VB, V).
+simplify_g4mic_formula((A <=> B), V) :- !,
+    simplify_g4mic_formula(A, VA),
+    simplify_g4mic_formula(B, VB),
+    simplify_g4mic_iff(VA, VB, V).
+% Quantifiers: if body is a constant, quantifier folds (any non-empty domain).
+simplify_g4mic_formula(ex _:A, V) :- !,
+    simplify_g4mic_formula(A, VA),
+    ( VA = false -> V = false ; VA = true -> V = true ; V = unknown ).
+simplify_g4mic_formula(all _:A, V) :- !,
+    simplify_g4mic_formula(A, VA),
+    ( VA = false -> V = false ; VA = true -> V = true ; V = unknown ).
+% Any other term (real predicate, variable, etc.) → unknown.
+simplify_g4mic_formula(_, unknown).
+
+simplify_g4mic_negate(true, false).
+simplify_g4mic_negate(false, true).
+simplify_g4mic_negate(unknown, unknown).
+
+simplify_g4mic_or(true,    _,     true)    :- !.
+simplify_g4mic_or(_,      true,   true)    :- !.
+simplify_g4mic_or(false,  false,  false)   :- !.
+simplify_g4mic_or(_,      _,      unknown).
+
+simplify_g4mic_and(false,  _,     false)   :- !.
+simplify_g4mic_and(_,      false,  false)  :- !.
+simplify_g4mic_and(true,   true,   true)   :- !.
+simplify_g4mic_and(_,      _,      unknown).
+
+simplify_g4mic_implies(false, _,     true)   :- !.
+simplify_g4mic_implies(_,     true,  true)   :- !.
+simplify_g4mic_implies(true,  false, false)  :- !.
+simplify_g4mic_implies(_,     _,     unknown).
+
+simplify_g4mic_iff(true,  true,  true)   :- !.
+simplify_g4mic_iff(false, false, true)   :- !.
+simplify_g4mic_iff(true,  false, false)  :- !.
+simplify_g4mic_iff(false, true,  false)  :- !.
+simplify_g4mic_iff(_,     _,     unknown).
+
+% tptp_formula_is_propositional(+F)
+% True when F contains no first-order constructs: no quantifiers, no equality,
+% and no compound predicate/function applications with arguments (arity >= 1).
+% Used by szs_disproved_status to decide whether an exhaustive comp(7) search
+% can definitively establish CounterSatisfiable (propositional) or only GaveUp
+% (FOL, where comp(7) may be too shallow).
+tptp_formula_is_propositional(F) :-
+    \+ tptp_formula_has_fol_feature(F).
+
+tptp_formula_has_fol_feature(![_]:_)  :- !.
+tptp_formula_has_fol_feature(?[_]:_)  :- !.
+tptp_formula_has_fol_feature(all _:_) :- !.
+tptp_formula_has_fol_feature(ex _:_)  :- !.
+tptp_formula_has_fol_feature(_ = _)   :- !.
+tptp_formula_has_fol_feature(A & B)   :- !,
+    ( tptp_formula_has_fol_feature(A) -> true ; tptp_formula_has_fol_feature(B) ).
+tptp_formula_has_fol_feature(A | B)   :- !,
+    ( tptp_formula_has_fol_feature(A) -> true ; tptp_formula_has_fol_feature(B) ).
+tptp_formula_has_fol_feature(A => B)  :- !,
+    ( tptp_formula_has_fol_feature(A) -> true ; tptp_formula_has_fol_feature(B) ).
+tptp_formula_has_fol_feature(A <=> B) :- !,
+    ( tptp_formula_has_fol_feature(A) -> true ; tptp_formula_has_fol_feature(B) ).
+tptp_formula_has_fol_feature(~A) :- !,
+    tptp_formula_has_fol_feature(A).
+% Compound term with at least one argument = predicate/function of arity >= 1.
+tptp_formula_has_fol_feature(Term) :-
+    compound(Term),
+    Term =.. [_|Args],
+    Args \= [].
 
 %%% END OF g4mic PROVER

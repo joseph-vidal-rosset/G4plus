@@ -500,7 +500,7 @@ show_banner :-
     format('SWI-Prolog version ~w.~w.~w~n', [Major, Minor, Patch]),
     nl,
     write('================================================================'), nl,
-    write('  G4+  --  Unified Prover for Minimal, Intuitionistic and'), nl,
+    write('  G4+ 1.4 -- Unified Prover for Minimal, Intuitionistic and'), nl,
     write('           Classical First-Order Logic (G4 + nanoCoP)'), nl,
     write('================================================================'), nl,
     write('  NOTE: Your formula must follow the correct syntax.'), nl,
@@ -984,7 +984,7 @@ prove(Formula) :-
         Logic = minimal,
         OutputProof = Proof
 
-    ; provable_at_level([] > [F2], constructive, Proof) ->
+    ; provable_at_level([] > [F2], intuitionistic, Proof) ->
         write('--- Intuitionistic logic ---'), nl,
         Logic = intuitionistic,
         OutputProof = Proof
@@ -995,37 +995,28 @@ prove(Formula) :-
         OutputProof = Proof
 
     ;
-        nl,
-        write('[!] UNEXPECTED: g4mic failed but nanoCoP validated!'), nl,
-        nl,
-        write('This is likely a BUG in G4-mic.'), nl,
-        write('Please help improve G4-mic by reporting this issue:'), nl,
-        nl,
-        write('  *  Email: joseph@vidal-rosset.net'), nl,
-        write('  -  Include: the formula and this error message'), nl,
-        nl,
-        write('Thank you for your contribution!'), nl,
-        nl,
-        fail
+        % G4+ incomplete on this formula (known FOL limitation).
+        % nanoCoP's result stands as the authority.
+        format('% SZS status Theorem~n', []),
+        format('% Proof validated by nanoCoP (G4+ proof search exceeded limits)~n', []),
+        nl
     ),
 
-    statistics(walltime, [End|_]),
-    Time is (End - Start) / 1000,
-
-    nl,
-    format('G4mic time: ~3f seconds~n', [Time]),
-    nl,
-    format("% SZS status Theorem~n"), nl, output_proof_results(OutputProof, Logic, Formula),
-
-    % ===============================================================
-    % PHASE 3: EXTERNAL VALIDATION (displayed)
-    % ===============================================================
-    nl,
-    write('================================================================'), nl,
-    write('                  - PHASE 3: VALIDATION                         '), nl,
-    write('================================================================'), nl,
-    tptp_validation_phase(Formula, 'Theorem'),
-    nl.
+    ( nonvar(OutputProof) ->
+        statistics(walltime, [End|_]),
+        Time is (End - Start) / 1000,
+        nl,
+        format('G4mic time: ~3f seconds~n', [Time]),
+        nl,
+        format("% SZS status Theorem~n"), nl,
+        output_proof_results(OutputProof, Logic, Formula),
+        nl,
+        write('================================================================'), nl,
+        write('                  - PHASE 3: VALIDATION                         '), nl,
+        write('================================================================'), nl,
+        tptp_validation_phase(Formula, 'Theorem'),
+        nl
+    ; true ).
 % =========================================================================
 % HELPERS
 % =========================================================================
@@ -1159,8 +1150,6 @@ g4mic_decides(Left <=> Right) :- ! ,
     write('Direction 2 ('), write(Right => Left), write(') is valid in '),
     write(Logic2), write(' logic'), nl,
     !.
-
-
 
 % g4mic_decides/1 for theorems (catch-all - must come last)
 g4mic_decides(Formula) :-
@@ -1403,12 +1392,14 @@ subst_neg(A, A).
 % - Optimized rule ordering for performance
 %
 % Rule ordering rationale:
-% - Rforall first: eigenvariable introduced before any left rules fire
-% - L& before L0->: decompose conjunctions before modus ponens
-% - L0-> with guard: avoid re-deriving already present formulas
-% - L\/-> before branching rules: deterministic simplification first
-% - IP just before R->: classical law applied before implication decomposition
-% - Lforall after right rules: universal instantiation guided by Skolem terms
+% - Deterministic rules before any branching (weakest logic first):
+%     Axiom, L-bot, R->, L&, R&, Rforall, Lexists, L0->, L&->, L\/->
+% - Branching rules after all deterministic reductions:
+%     L\/, R\/, IP (classical only), L->->
+% - Threshold-based quantifier rules last:
+%     CQ_m (before Lforall: builds the universal form that Lforall instantiates),
+%     Lforall, Rexists, CQ_c (classical only)
+% - TNE removed: dead code (R-> fires first on Delta=[A=>B] with cut)
 % =========================================================================
 
 % =========================================================================
@@ -1441,104 +1432,44 @@ g4mic_ax(Gamma > Delta, _, _, SkolemIn, SkolemIn, _, ax(Gamma>Delta, ax)) :-
 %              LogicLevel, Proof)
 % =========================================================================
 
-% --- Rule 0: Axiom (tested first, non-tabled) ----------------------------
+% --- Rule 0: Axiom  ----------------------------
 g4mic_proves(Seq, FV, Th, SI, SO, LL, Proof) :-
     g4mic_ax(Seq, FV, Th, SI, SO, LL, Proof), !.
+
 
 % --- Rule 1: L-bot -----------------------------------------------------
 g4mic_proves(Gamma>Delta, _, _, SI, SI, LL, lbot(Gamma>Delta, #)) :-
     member(LL, [intuitionistic, classical]),
     member(#, Gamma), !.
 
-% --- Rule 2: R-> ---------------------------------------------------------
-g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, rcond(Gamma>Delta, P)) :-
-    Delta = [A => B], !,
-    g4mic_proves([A | Gamma]>[B], FV, Th, SI, SO, LL, P).
-
-
-% =====================================================================
-% PROPOSITIONAL RULES (deterministic, no branching)
-%======================================================================
-% LEFT RULES
-%======================================================================
-% --- Rule 3: L& -----------------------------------------------------------
+% --- Rule 2: L& -----------------------------------------------------------
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, land(Gamma>Delta, P)) :-
     select((A & B), Gamma, G1), !,
     g4mic_proves([A, B | G1]>Delta, FV, Th, SI, SO, LL, P).
 
-% --- Rule 4: TNE (triple negation elimination) ----------------------------
-g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, tne(Gamma>Delta, P)) :-
-    Delta = [(A => B)],
-    member(LongNeg, Gamma),
-    is_nested_negation(LongNeg, A => B, Depth),
-    Depth >= 2, !,
-    g4mic_proves([A | Gamma]>[B], FV, Th, SI, SO, LL, P).
-
-% --- Rule 5: L0-> (modus ponens on context) -------------------------------
+% --- Rule 3: L0-> (modus ponens on context) -------------------------------
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, l0cond(Gamma>Delta, P)) :-
     select((A => B), Gamma, G1),
     member(A, G1),
     !,
     g4mic_proves([B | G1]>Delta, FV, Th, SI, SO, LL, P).
 
-% --- Rule 6: L&-> ---------------------------------------------------------
+% --- Rule 4: L&-> ---------------------------------------------------------
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, landto(Gamma>Delta, P)) :-
     select(((A & B) => C), Gamma, G1), !,
     g4mic_proves([(A => (B => C)) | G1]>Delta, FV, Th, SI, SO, LL, P).
 
-% --- Rule 7: L\/-> (optimized) --------------------------------------------
-g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, lorto(Gamma>Delta, P)) :-
-    select(((A | B) => C), Gamma, G1), !,
-    ( member(A, G1), member(B, G1) ->
-        g4mic_proves([B=>C, A=>C | G1]>Delta, FV, Th, SI, SO, LL, P)
-    ; member(A, G1) ->
-        g4mic_proves([A=>C | G1]>Delta, FV, Th, SI, SO, LL, P)
-    ; member(B, G1) ->
-        g4mic_proves([B=>C | G1]>Delta, FV, Th, SI, SO, LL, P)
-    ;
-        g4mic_proves([A=>C, B=>C | G1]>Delta, FV, Th, SI, SO, LL, P)
-    ).
+% --- Rule 5: Lexists (deterministic: existential in antecedent -> introduce eigenvar) --
+g4mic_proves(Gamma > Delta, FV, Th, SI, SO, LL, lex(Gamma>Delta, P)) :-
+    select((?[_Z-X]:A), Gamma, G1), !,
+    copy_term((X:A, FV), (f_sk(SI, FV):A1, FV)),
+    (catch(b_getval(g4_eigenvars, UsedVars), _, UsedVars = [])),
+    \+ member_check(f_sk(SI, FV), UsedVars),
+    b_setval(g4_eigenvars, [f_sk(SI, FV) | UsedVars]),
+    J1 is SI + 1,
+    g4mic_proves([A1 | G1] > Delta, FV, Th, J1, SO, LL, P).
 
-% --- Rule 8: L\/ (left disjunction) ---------------------------------------
-g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, lor(Gamma>Delta, P1, P2)) :-
-    select((A | B), Gamma, G1), !,
-    g4mic_proves([A | G1]>Delta, FV, Th, SI, J1, LL, P1),
-    g4mic_proves([B | G1]>Delta, FV, Th, J1, SO, LL, P2).
-
-% --- Rule 09: R\/ ----------------------------------------------------------
-g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, ror(Gamma>Delta, P)) :-
-    Delta = [(A | B)],
-    (   g4mic_proves(Gamma>[A], FV, Th, SI, SO, LL, P)
-    ;   g4mic_proves(Gamma>[B], FV, Th, SI, SO, LL, P)
-    ).
-
-% --- Rule 10: IP (indirect proof -- classical only, must be before rule L->->)
-g4mic_proves(Gamma>Delta, FV, Th, SI, SO, classical, ip(Gamma>Delta, P)) :-
-    Delta = [A],
-    A \= #,
-    \+ member((A => #), Gamma),
-    Th > 0,
-    g4mic_proves([(A => #) | Gamma]>[#], FV, Th, SI, SO, classical, P).
-
-% --- Rule 11: L->-> --------------------------------------------------------
-g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, ltoto(Gamma>Delta, P1, P2)) :-
-    select(((A => B) => C), Gamma, G1),
-    \+ (B = #, member(A, G1)),
-    !,
-    g4mic_proves([A, (B => C) | G1]>[B], FV, Th, SI, J1, LL, P1),
-    g4mic_proves([C | G1]>Delta, FV, Th, J1, SO, LL, P2).
-
-
-% --- Rule 12: R& ----------------------------------------------------------
-g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, rand(Gamma>Delta, P1, P2)) :-
-    Delta = [(A & B)], !,
-    g4mic_proves(Gamma>[A], FV, Th, SI, J1, LL, P1),
-    g4mic_proves(Gamma>[B], FV, Th, J1, SO, LL, P2).
-
-% =========================================================================
-% QUANTIFIER  RULES
-% =========================================================================
-% --- Rule 13: Rforall -----------------------------------------------------------
+% --- Rule 6: Rforall (deterministic: universal in succedent -> introduce eigenvar) --
 g4mic_proves(Gamma > Delta, FV, Th, SI, SO, LL, rall(Gamma>Delta, P)) :-
     select((![_Z-X]:A), Delta, D1), !,
     copy_term((X:A, FV), (f_sk(SI, FV):A1, FV)),
@@ -1548,15 +1479,69 @@ g4mic_proves(Gamma > Delta, FV, Th, SI, SO, LL, rall(Gamma>Delta, P)) :-
     J1 is SI + 1,
     g4mic_proves(Gamma > [A1 | D1], FV, Th, J1, SO, LL, P).
 
-% --- Rule 14: Lexists ----------------------------------------------------------
-g4mic_proves(Gamma > Delta, FV, Th, SI, SO, LL, lex(Gamma>Delta, P)) :-
-    select((?[_Z-X]:A), Gamma, G1), !,
-    copy_term((X:A, FV), (f_sk(SI, FV):A1, FV)),
-    (catch(b_getval(g4_eigenvars, UsedVars), _, UsedVars = [])),
-    \+ member_check(f_sk(SI, FV), UsedVars),
-    b_setval(g4_eigenvars, [f_sk(SI, FV) | UsedVars]),
-    J1 is SI + 1,
-    g4mic_proves([A1 | G1] > Delta, FV, Th, J1, SO, LL, P).
+% --- Rule 7: R-> ---------------------------------------------------------
+g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, rcond(Gamma>Delta, P)) :-
+    Delta = [A => B], !,
+    g4mic_proves([A | Gamma]>[B], FV, Th, SI, SO, LL, P).
+
+
+% --- Rule 8: R& (deterministic: Delta is a conjunction -> decompose immediately) --
+g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, rand(Gamma>Delta, P1, P2)) :-
+    Delta = [(A & B)], !,
+    g4mic_proves(Gamma>[A], FV, Th, SI, J1, LL, P1),
+    g4mic_proves(Gamma>[B], FV, Th, J1, SO, LL, P2).
+
+% --- Rule 9: L\/ (left disjunction) --------------------------------------
+g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, lor(Gamma>Delta, P1, P2)) :-
+    select((A | B), Gamma, G1), !,
+    g4mic_proves([A | G1]>Delta, FV, Th, SI, J1, LL, P1),
+    g4mic_proves([B | G1]>Delta, FV, Th, J1, SO, LL, P2).
+
+% --- Rule 10: R\/ ---------------------------------------------------------
+g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, ror(Gamma>Delta, P)) :-
+    Delta = [(A | B)],
+    (   g4mic_proves(Gamma>[A], FV, Th, SI, SO, LL, P)
+    ;   g4mic_proves(Gamma>[B], FV, Th, SI, SO, LL, P)
+    ).
+
+% --- Rule 11: L\/-> (optimized) --------------------------------------------
+g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, lorto(Gamma>Delta, P)) :-
+    select(((A | B) => C), Gamma, G1), !,
+    ( member(A, G1), member(B, G1) ->
+      g4mic_proves([B=>C, A=>C | G1]>Delta, FV, Th, SI, SO, LL, P)
+    ; member(A, G1) ->
+      g4mic_proves([A=>C | G1]>Delta, FV, Th, SI, SO, LL, P)
+    ; member(B, G1) ->
+      g4mic_proves([B=>C | G1]>Delta, FV, Th, SI, SO, LL, P)
+    ;
+    g4mic_proves([A=>C, B=>C | G1]>Delta, FV, Th, SI, SO, LL, P)
+    ).
+
+% --- Rule 12: IP (indirect proof -- classical only, must be before L->->)  --
+g4mic_proves(Gamma>Delta, FV, Th, SI, SO, classical, ip(Gamma>Delta, P)) :-
+    Delta = [A],
+    A \= #,
+    \+ member((A => #), Gamma),
+    Th > 0,
+    g4mic_proves([(A => #) | Gamma]>[#], FV, Th, SI, SO, classical, P).
+
+% --- Rule 13: L->-> --------------------------------------------------------
+g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, ltoto(Gamma>Delta, P1, P2)) :-
+    select(((A => B) => C), Gamma, G1),
+    \+ (B = #, member(A, G1)),
+    !,
+    g4mic_proves([A, (B => C) | G1]>[B], FV, Th, SI, J1, LL, P1),
+    g4mic_proves([C | G1]>Delta, FV, Th, J1, SO, LL, P2).
+
+% =========================================================================
+% QUANTIFIER RULES (threshold-based)
+% =========================================================================
+% --- Rule 14: CQ_m (quantifier conversion, all logics -- must precede Lforall) --
+% (?[X]:A => B)  ->  ![X]:(A => B)
+% Placed before Lforall so that the universal form is available for instantiation.
+g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, cq_m(Gamma>Delta, P)) :-
+    select((?[Z-X]:A) => B, Gamma, G1),
+    g4mic_proves([![Z-X]:(A => B) | G1]>Delta, FV, Th, SI, SO, LL, P).
 
 % --- Rule 15: Lforall (universal instantiation, Otten's limitation) -----------
 g4mic_proves(Gamma > Delta, FV, Th, SI, SO, LL, lall(Gamma>Delta, P)) :-
@@ -1573,7 +1558,7 @@ g4mic_proves(Gamma > Delta, FV, Th, SI, SO, LL, rex(Gamma>Delta, P)) :-
     g4mic_proves(Gamma > [A1 | D1], [Y | FV], Th, SI, SO, LL, P), !.
 
 % =========================================================================
-% QUANTIFIER CONVERSION RULES
+% QUANTIFIER CONVERSION RULES (classical)
 % =========================================================================
 
 % --- Rule 17: CQ_c (classical quantifier shift) ---------------------------
@@ -1585,12 +1570,6 @@ g4mic_proves(Gamma>Delta, FV, Th, SI, SO, classical, cq_c(Gamma>Delta, P)) :-
     ;
         g4mic_proves([?[Z-X]:(A => B) | G1]>Delta, FV, Th, SI, SO, classical, P)
     ).
-
-% --- Rule 18: CQ_m (quantifier conversion, all logics) -------------------
-% (?[X]:A => B) -> ![X]:(A => B)
-g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, cq_m(Gamma>Delta, P)) :-
-    select((?[Z-X]:A) => B, Gamma, G1),
-    g4mic_proves([![Z-X]:(A => B) | G1]>Delta, FV, Th, SI, SO, LL, P).
 
 % =========================================================================
 % HELPER PREDICATES
@@ -2729,15 +2708,6 @@ render_bussproofs(landto(Seq, Proof), VarCounter, FinalCounter) :-
     render_sequent(Seq, TempCounter, FinalCounter),
     write('$}'), nl.
 
-% TNE
-render_bussproofs(tne(Seq, Proof), VarCounter, FinalCounter) :-
-    !,
-    render_bussproofs(Proof, VarCounter, TempCounter),
-    write('\\RightLabel{\\scriptsize{$R\\to$}}'), nl,
-    write('\\UnaryInfC{$'),
-    render_sequent(Seq, TempCounter, FinalCounter),
-    write('$}'), nl.
-
 % 4. L-or-implies
 render_bussproofs(lorto(Seq, Proof), VarCounter, FinalCounter) :-
     !,
@@ -3731,21 +3701,6 @@ fitch_g4_proof(ror((_ > [Goal]), SubProof), Context, Scope, CurLine, NextLine, R
 
 % R-> : Implication introduction
 fitch_g4_proof(rcond((_ > [A => B]), SubProof), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :-
-    !,
-    HypLine is CurLine + 1,
-    assert_safe_fitch_line(HypLine, A, assumption, Scope),
-    render_hypo(Scope, A, 'AS', CurLine, HypLine, VarIn, V1),
-    NewScope is Scope + 1,
-    fitch_g4_proof(SubProof, [HypLine:A|Context], NewScope, HypLine, SubEnd, GoalLine, V1, V2),
-    ImplLine is SubEnd + 1,
-    assert_safe_fitch_line(ImplLine, (A => B), rcond(HypLine, GoalLine), Scope),
-    format(atom(Just), '$ \\to I $ ~w-~w', [HypLine, GoalLine]),
-    render_have(Scope, (A => B), Just, SubEnd, ImplLine, V2, VarOut),
-    NextLine = ImplLine,
-    ResLine = ImplLine.
-
-% TNE : Triple negation elimination
-fitch_g4_proof(tne((_ > [(A => B)]), SubProof), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :-
     !,
     HypLine is CurLine + 1,
     assert_safe_fitch_line(HypLine, A, assumption, Scope),
@@ -4888,12 +4843,88 @@ render_clean_just(Just) :-
 % This module converts TPTP formulas to G4-mic syntax.
 
 % Read and process a TPTP file
+% prove_tptp_file/1 — main entry point.
+% prove_tptp_file/2 — kept for backward compatibility (TimeoutSecs ignored,
+%                     inference limit is used instead).
 prove_tptp_file(Filename) :-
+    prove_tptp_file(Filename, _Ignored).
+
+prove_tptp_file(Filename, _TimeoutSecs) :-
+    catch(
+        prove_tptp_file_safe(Filename),
+        Error,
+        ( nl, format('% SZS status GaveUp (error: ~w)~n', [Error]) )
+    ).
+
+prove_tptp_file_safe(Filename) :-
     file_directory_name(Filename, FileDir),
+    % Cap loading at 100 000 formulae — problems like CSR+5 have 540 000+
+    % and loop forever on axiom loading alone.
     open(Filename, read, Stream),
-    read_tptp_formulas(Stream, FileDir, Formulas),
+    read_tptp_formulas_limited(Stream, FileDir, Formulas, 100000, Truncated),
     close(Stream),
-    ( process_tptp_formulas(Formulas) -> true ; true ).
+    ( Truncated = true ->
+        format('% WARNING: Problem has > 100000 formulae, too large for G4+~n'),
+        format('% SZS status GaveUp~n')
+    ;
+        ( process_tptp_formulas(Formulas) -> true ; true )
+    ).
+
+% read_tptp_formulas_limited/5
+% Like read_tptp_formulas/3 but stops after Max formulae.
+% Truncated = true if limit was hit.
+read_tptp_formulas_limited(Stream, FileDir, Formulas, Max, Truncated) :-
+    read_tptp_formulas_acc(Stream, FileDir, Formulas, Max, 0, Truncated).
+
+read_tptp_formulas_acc(Stream, _FileDir, [], _Max, _Count, false) :-
+    at_end_of_stream(Stream), !.
+read_tptp_formulas_acc(_Stream, _FileDir, [], _Max, Count, true) :-
+    Count >= 100000, !.
+read_tptp_formulas_acc(Stream, FileDir, Formulas, Max, Count, Truncated) :-
+    \+ at_end_of_stream(Stream),
+    read(Stream, Term), !,
+    (   Term = fof(_, _, _) ->
+        Count1 is Count + 1,
+        ( Count1 >= Max ->
+            Formulas = [Term], Truncated = true
+        ;
+            Formulas = [Term|Rest],
+            read_tptp_formulas_acc(Stream, FileDir, Rest, Max, Count1, Truncated)
+        )
+    ;   Term = include(RelPath) ->
+        ( atom_concat(FileDir, '/', Prefix),
+          atom_concat(Prefix, RelPath, AbsPath1),
+          exists_file(AbsPath1)
+        -> IncludePath = AbsPath1
+        ; getenv('TPTP', TTPTBase),
+          atom_concat(TTPTBase, '/', TPrefix),
+          atom_concat(TPrefix, RelPath, AbsPath2),
+          exists_file(AbsPath2)
+        -> IncludePath = AbsPath2
+        ;  format('% WARNING: Include file not found: ~w~n', [RelPath]),
+           IncludePath = ''
+        ),
+        ( IncludePath \= '' ->
+            file_directory_name(IncludePath, IncludeDir),
+            open(IncludePath, read, IncStream),
+            Remaining is Max - Count,
+            read_tptp_formulas_acc(IncStream, IncludeDir, IncFormulas, Remaining, 0, Trunc1),
+            close(IncStream),
+            length(IncFormulas, IncCount),
+            Count2 is Count + IncCount,
+            ( Trunc1 = true ->
+                Formulas = IncFormulas, Truncated = true
+            ;
+                read_tptp_formulas_acc(Stream, FileDir, RestFormulas, Max, Count2, Truncated),
+                append(IncFormulas, RestFormulas, Formulas)
+            )
+        ;
+            read_tptp_formulas_acc(Stream, FileDir, Formulas, Max, Count, Truncated)
+        )
+    ;
+        read_tptp_formulas_acc(Stream, FileDir, Formulas, Max, Count, Truncated)
+    ).
+read_tptp_formulas_acc(_, _, [], _, _, false).
 
 % Read all fof() declarations from file, resolving include() directives.
 % FileDir is the directory of the current file, used for relative include paths.
@@ -5341,12 +5372,37 @@ prove_tptp_internal(Formula, no_conjecture) :-
           ; ProbeResult = depth_limited ->
               format('% SZS status GaveUp~n', [])
           ;
-              % ProbeResult = exhausted: search space fully explored,
-              % NegFormula genuinely not provable => axioms are satisfiable
-              format('% SZS status Satisfiable~n', [])
+              % ProbeResult = exhausted: comp(7) found no proof of NegFormula,
+              % but this does NOT establish that the axioms are genuinely
+              % satisfiable — the proof may require multiplicity > 7.
+              % Report GaveUp to avoid soundness errors.
+              format('% SZS status GaveUp~n', [])
           )
       )
     ).
+
+% Case 2b-special: conjecture that is structurally always false.
+%
+% Root cause covers two distinct errors (SYN916+1 and LCL679+1.001):
+%
+%   SYN916+1: conjecture = $false = ~(p0=>p0).
+%     nanoCoP negates internally → ~~(p0=>p0) = p0=>p0, trivially provable
+%     → spurious Theorem.
+%
+%   LCL679+1.001: conjecture = ~?[X]:~($false|$false).
+%     After translate_operators → ~(ex _:~(~(p0=>p0);~(p0=>p0))).
+%     nanoCoP negates → ex _:(p0=>p0) → clausification gives [[~p0,p0]]:
+%     a tautological clause that nanoCoP preprocessing removes, leaving the
+%     empty matrix → "trivially proved" → spurious Theorem.
+%
+% Fix: translate Formula to internal form and run simplify_g4mic_formula/2
+% (constant-folding with ~(p0=>p0) ≡ ⊥).  If the result is false, return
+% CounterSatisfiable without calling nanoCoP.
+prove_tptp_internal(Formula, has_conjecture) :-
+    translate_formula(Formula, InternalFormula),
+    simplify_g4mic_formula(InternalFormula, false),
+    !,
+    format('% SZS status CounterSatisfiable~n', []).
 
 % Case 2b: has conjecture - nanoCoP validates, G4+ classifies logic level
 prove_tptp_internal(Formula, has_conjecture) :-
@@ -5465,9 +5521,133 @@ szs_disproved_status(Formula, Status) :-
         ; ProbeNegF = depth_limited ->
             Status = 'GaveUp'
         ;
-            % Both exhausted: genuine non-theorem
-            Status = 'CounterSatisfiable'
+            % Both searches exhausted.
+            % Even for propositional formulas, nanocop_probe at comp(7) is
+            % NOT a complete decision procedure: a proof may exist requiring
+            % multiplicity > 7.  "exhausted" means only "no proof found within
+            % the bound", NOT "formula is CounterSatisfiable".
+            % The only safe conclusion is GaveUp.
+            % (Structurally false formulas are caught earlier by
+            %  simplify_g4mic_formula/2, before reaching this predicate.)
+            Status = 'GaveUp'
         )
     ).
+
+% =========================================================================
+% FORMULA CLASSIFICATION HELPERS
+% =========================================================================
+
+% is_tptp_false_formula(+F)
+% True when F is the TPTP falsum — either as the raw TPTP atom $false/'$false'
+% or as the G4mic internal translation ~(p0=>p0).
+is_tptp_false_formula('$false') :- !.
+is_tptp_false_formula($false)   :- !.
+is_tptp_false_formula(~(p0 => p0)) :- !.   % translate_operators output for $false
+
+% -------------------------------------------------------------------------
+% simplify_g4mic_formula(+F, -Value)
+%
+% Evaluates the G4mic *internal* representation of a formula (i.e. after
+% translate_operators has been applied) to one of: true | false | unknown.
+%
+% The evaluation treats ~(p0=>p0) as the canonical G4mic encoding of ⊥ and
+% (~(p0=>p0) => ~(p0=>p0)) as ⊤.  Any atom or compound predicate that is
+% neither of these constants evaluates to `unknown`.
+%
+% Properties:
+%   - If Value = false  → formula is structurally always false (CounterSatisfiable).
+%   - If Value = true   → formula is structurally always true  (Theorem).
+%   - If Value = unknown → cannot determine; proceed with normal proof search.
+%
+% Logical correctness: all rules respect classical two-valued semantics.
+% The catch-all clause (unknown) is conservative: it never produces a wrong
+% true/false for formulas containing real predicate/function symbols.
+% -------------------------------------------------------------------------
+
+simplify_g4mic_formula(~(p0=>p0), false) :- !.                        % G4mic ⊥
+simplify_g4mic_formula((~(p0=>p0) => ~(p0=>p0)), true) :- !.          % G4mic ⊤
+simplify_g4mic_formula(~A, V) :- !,
+    simplify_g4mic_formula(A, VA),
+    simplify_g4mic_negate(VA, V).
+simplify_g4mic_formula((A ; B), V) :- !,        % disjunction (nanoCoP internal)
+    simplify_g4mic_formula(A, VA),
+    simplify_g4mic_formula(B, VB),
+    simplify_g4mic_or(VA, VB, V).
+simplify_g4mic_formula((A , B), V) :- !,        % conjunction (nanoCoP internal)
+    simplify_g4mic_formula(A, VA),
+    simplify_g4mic_formula(B, VB),
+    simplify_g4mic_and(VA, VB, V).
+simplify_g4mic_formula((A => B), V) :- !,
+    simplify_g4mic_formula(A, VA),
+    simplify_g4mic_formula(B, VB),
+    simplify_g4mic_implies(VA, VB, V).
+simplify_g4mic_formula((A <=> B), V) :- !,
+    simplify_g4mic_formula(A, VA),
+    simplify_g4mic_formula(B, VB),
+    simplify_g4mic_iff(VA, VB, V).
+% Quantifiers: if body is a constant, quantifier folds (any non-empty domain).
+simplify_g4mic_formula(ex _:A, V) :- !,
+    simplify_g4mic_formula(A, VA),
+    ( VA = false -> V = false ; VA = true -> V = true ; V = unknown ).
+simplify_g4mic_formula(all _:A, V) :- !,
+    simplify_g4mic_formula(A, VA),
+    ( VA = false -> V = false ; VA = true -> V = true ; V = unknown ).
+% Any other term (real predicate, variable, etc.) → unknown.
+simplify_g4mic_formula(_, unknown).
+
+simplify_g4mic_negate(true, false).
+simplify_g4mic_negate(false, true).
+simplify_g4mic_negate(unknown, unknown).
+
+simplify_g4mic_or(true,    _,     true)    :- !.
+simplify_g4mic_or(_,      true,   true)    :- !.
+simplify_g4mic_or(false,  false,  false)   :- !.
+simplify_g4mic_or(_,      _,      unknown).
+
+simplify_g4mic_and(false,  _,     false)   :- !.
+simplify_g4mic_and(_,      false,  false)  :- !.
+simplify_g4mic_and(true,   true,   true)   :- !.
+simplify_g4mic_and(_,      _,      unknown).
+
+simplify_g4mic_implies(false, _,     true)   :- !.
+simplify_g4mic_implies(_,     true,  true)   :- !.
+simplify_g4mic_implies(true,  false, false)  :- !.
+simplify_g4mic_implies(_,     _,     unknown).
+
+simplify_g4mic_iff(true,  true,  true)   :- !.
+simplify_g4mic_iff(false, false, true)   :- !.
+simplify_g4mic_iff(true,  false, false)  :- !.
+simplify_g4mic_iff(false, true,  false)  :- !.
+simplify_g4mic_iff(_,     _,     unknown).
+
+% tptp_formula_is_propositional(+F)
+% True when F contains no first-order constructs: no quantifiers, no equality,
+% and no compound predicate/function applications with arguments (arity >= 1).
+% Used by szs_disproved_status to decide whether an exhaustive comp(7) search
+% can definitively establish CounterSatisfiable (propositional) or only GaveUp
+% (FOL, where comp(7) may be too shallow).
+tptp_formula_is_propositional(F) :-
+    \+ tptp_formula_has_fol_feature(F).
+
+tptp_formula_has_fol_feature(![_]:_)  :- !.
+tptp_formula_has_fol_feature(?[_]:_)  :- !.
+tptp_formula_has_fol_feature(all _:_) :- !.
+tptp_formula_has_fol_feature(ex _:_)  :- !.
+tptp_formula_has_fol_feature(_ = _)   :- !.
+tptp_formula_has_fol_feature(A & B)   :- !,
+    ( tptp_formula_has_fol_feature(A) -> true ; tptp_formula_has_fol_feature(B) ).
+tptp_formula_has_fol_feature(A | B)   :- !,
+    ( tptp_formula_has_fol_feature(A) -> true ; tptp_formula_has_fol_feature(B) ).
+tptp_formula_has_fol_feature(A => B)  :- !,
+    ( tptp_formula_has_fol_feature(A) -> true ; tptp_formula_has_fol_feature(B) ).
+tptp_formula_has_fol_feature(A <=> B) :- !,
+    ( tptp_formula_has_fol_feature(A) -> true ; tptp_formula_has_fol_feature(B) ).
+tptp_formula_has_fol_feature(~A) :- !,
+    tptp_formula_has_fol_feature(A).
+% Compound term with at least one argument = predicate/function of arity >= 1.
+tptp_formula_has_fol_feature(Term) :-
+    compound(Term),
+    Term =.. [_|Args],
+    Args \= [].
 
 %%% END OF g4mic PROVER

@@ -34,15 +34,6 @@ render_bussproofs(landto(Seq, Proof), VarCounter, FinalCounter) :-
     render_sequent(Seq, TempCounter, FinalCounter),
     write('$}'), nl.
 
-% TNE
-render_bussproofs(tne(Seq, Proof), VarCounter, FinalCounter) :-
-    !,
-    render_bussproofs(Proof, VarCounter, TempCounter),
-    write('\\RightLabel{\\scriptsize{$R\\to$}}'), nl,
-    write('\\UnaryInfC{$'),
-    render_sequent(Seq, TempCounter, FinalCounter),
-    write('$}'), nl.
-
 % 4. L-or-implies
 render_bussproofs(lorto(Seq, Proof), VarCounter, FinalCounter) :-
     !,

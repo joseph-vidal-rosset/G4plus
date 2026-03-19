@@ -191,21 +191,6 @@ fitch_g4_proof(rcond((_ > [A => B]), SubProof), Context, Scope, CurLine, NextLin
     NextLine = ImplLine,
     ResLine = ImplLine.
 
-% TNE : Triple negation elimination
-fitch_g4_proof(tne((_ > [(A => B)]), SubProof), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :-
-    !,
-    HypLine is CurLine + 1,
-    assert_safe_fitch_line(HypLine, A, assumption, Scope),
-    render_hypo(Scope, A, 'AS', CurLine, HypLine, VarIn, V1),
-    NewScope is Scope + 1,
-    fitch_g4_proof(SubProof, [HypLine:A|Context], NewScope, HypLine, SubEnd, GoalLine, V1, V2),
-    ImplLine is SubEnd + 1,
-    assert_safe_fitch_line(ImplLine, (A => B), rcond(HypLine, GoalLine), Scope),
-    format(atom(Just), '$ \\to I $ ~w-~w', [HypLine, GoalLine]),
-    render_have(Scope, (A => B), Just, SubEnd, ImplLine, V2, VarOut),
-    NextLine = ImplLine,
-    ResLine = ImplLine.
-
 % IP : Indirect proof / Classical
 fitch_g4_proof(ip((_ > [Goal]), SubProof), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :-
     !,
@@ -234,6 +219,9 @@ fitch_g4_proof(ip((_ > [Goal]), SubProof), Context, Scope, CurLine, NextLine, Re
 % Valid in intuitionistic and classical logic (not minimal logic)
 % Pattern: One branch uses explosion (~A with A), other branch derives Goal from B
 fitch_g4_proof(lor((Premisss > [_Goal]), SP1, SP2), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :-
+    % DS is NOT valid in minimal logic — skip this optimization
+    current_logic_level(LogicLevel),
+    LogicLevel \= minimal,
     % Try DS optimization: Check if we have A \/ B and ~A (A => #)
     select((A | B), Premisss, _),
     % Check if ~A (i.e., A => #) is available
