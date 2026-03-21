@@ -148,6 +148,28 @@
     background: #ccc;
     cursor: not-allowed;
 }
+
+#fof-convert-btn {
+    padding: 4px 12px;
+    background: #2196F3;
+    color: white;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    transition: background 0.2s;
+    margin-left: 5px;
+}
+
+#fof-convert-btn:hover {
+    background: #1976D2;
+}
+
+#fof-convert-btn:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+}
 </style>
 </head>
 <body>
@@ -201,6 +223,12 @@
 	  <input type="file" id="tptp-file-input" accept=".p,.tptp" style="display:none">
 	  <a class="btn" href="#" id="tptp-upload-btn" title="Upload TPTP .p file">📥</a>
 	  <button id="prove-tptp-btn" style="display:none">Prove</button>
+	</span>
+	<span class="tptp-files" style="display: block; margin-top: 4px;">
+	  <span style="font-size: 11px; color: #666; margin-right: 5px;">Get LaTeX proofs for your TPTP FOF conjecture:</span>
+	  <input type="file" id="fof-convert-input" accept=".p,.tptp" style="display:none">
+	  <a class="btn" href="#" id="fof-convert-upload-btn" title="Upload FOF file for conversion">📥</a>
+	  <button id="fof-convert-btn" style="display:none">Prove</button>
 	</span>
 	<div style="margin-top: 10px; font-size: 11px; color: #5f5f5f; font-style: italic;">
 	  Theme: <a href="https://github.com/fniessen/emacs-leuven-theme" target="_blank" style="color: #3465a4; text-decoration: none;">Leuven for Emacs</a> by Fabrice Niessen
@@ -1636,6 +1664,82 @@ function initTPTPHandler() {
     fileInput.value = '';
   }
 }
+</script>
+
+<!-- FOF-to-prove Handler -->
+<script>
+(function() {
+  window.addEventListener('load', function() {
+    setTimeout(function() {
+      let processingConvert = false;
+      const convertBtn = document.getElementById('fof-convert-btn');
+      const convertUploadBtn = document.getElementById('fof-convert-upload-btn');
+      const convertInput = document.getElementById('fof-convert-input');
+
+      if (!convertBtn || !convertUploadBtn || !convertInput) return;
+
+      convertUploadBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        convertInput.click();
+      });
+
+      convertInput.addEventListener('change', function() {
+        if (convertInput.files.length > 0) {
+          convertBtn.style.display = 'inline';
+          convertBtn.textContent = 'LaTeX proofs for ' + convertInput.files[0].name;
+        } else {
+          convertBtn.style.display = 'none';
+        }
+      });
+
+      convertBtn.addEventListener('click', function() {
+        if (processingConvert) {
+          alert('Already converting. Please wait...');
+          return;
+        }
+
+        const file = convertInput.files[0];
+        if (!file) {
+          alert('Please select a TPTP .p file first');
+          return;
+        }
+
+        processingConvert = true;
+        convertBtn.disabled = true;
+        convertBtn.textContent = 'Converting...';
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          try {
+            if (!window.tinker || !window.Prolog || !window.Module) {
+              window.tinker.console.print('\n❌ Prolog engine not ready yet. Please wait.', 'error');
+              return;
+            }
+            const tempFilename = '/tmp/convert.p';
+            window.Module.FS.writeFile(tempFilename, e.target.result);
+            window.tinker.console.print(`\n📄 Converting FOF file: ${file.name}`, 'query');
+            window.Prolog.call(`fof_to_prove_run('${tempFilename}')`);
+          } catch (error) {
+            window.tinker.console.print(`\n❌ Error: ${error.message}`, 'error');
+          } finally {
+            processingConvert = false;
+            convertBtn.disabled = false;
+            convertBtn.style.display = 'none';
+            convertInput.value = '';
+          }
+        };
+        reader.onerror = function() {
+          window.tinker.console.print('\n❌ Failed to read file', 'error');
+          processingConvert = false;
+          convertBtn.disabled = false;
+          convertBtn.style.display = 'none';
+          convertInput.value = '';
+        };
+        reader.readAsText(file);
+      });
+    }, 2000);
+  });
+})();
 </script>
 
 <!-- G4-mic Share Module -->
