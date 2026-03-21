@@ -4,6 +4,8 @@
 % G4-mic uses lowercase-only syntax, while TPTP uses uppercase for variables.
 % This module converts TPTP formulas to G4-mic syntax.
 
+:- style_check(-singleton).
+
 % Read and process a TPTP file
 % prove_tptp_file/1 — main entry point.
 % prove_tptp_file/2 — kept for backward compatibility (TimeoutSecs ignored,
@@ -481,8 +483,9 @@ prove_tptp_internal(Formula, ProblemType) :-
               InfResult_eq \== inference_limit_exceeded ->
                 szs_status(ProblemType, proved, SZSStatus),
                 nl,
-                format('% SZS status ~w~n', [SZSStatus]),
                 format('% nanoCoP proof (equality/functions)~n', []),
+                format('% nanoCoP proof is given at https://g4-mic.vidal-rosset.net/wasm/tinker via nanocop_proves(Your_Formula).~n', []),
+                format('% SZS status ~w~n', [SZSStatus]),
                 nl
             ;
                 format('% SZS status GaveUp~n', []),
@@ -503,43 +506,43 @@ prove_tptp_internal(Formula, no_conjecture) :-
            time(call_with_inference_limit(nanocop_decides(NegFormula), 2000000, InfResult_nc))),
           _,
           fail
-      )
+      ),
+      InfResult_nc \== inference_limit_exceeded  % Fail if inference limit was exceeded
     ->
-      % catch succeeded: check inference limit
-      ( InfResult_nc \== inference_limit_exceeded
-      ->
-        % nanoCoP validated: now determine the logic level (no proof term)
-        ( write('g4mic : '), nl,
-          time(g4mic_logic_level(NegFormula, Logic)) ->
-            nl,
-            format('--- ~w logic ---~n', [Logic]),
-            nl,
-            format('% SZS status Unsatisfiable~n', []),
-            nl
-        ;
-            % G4+ could not classify but nanoCoP validated: still Unsatisfiable
-            nl,
-            format('% SZS status Unsatisfiable~n', []),
-            format('% Validated by nanoCoP (G4+ logic classification exceeded limits)~n', []),
-            nl
-        )
+      % nanoCoP validated: now determine the logic level (no proof term)
+      ( write('g4mic : '), nl,
+        time(g4mic_logic_level(NegFormula, Logic)) ->
+          nl,
+          format('% Logic level: valid in ~w logic.~n', [Logic]),
+          format('% To get proofs (sequent calculus G4 and natural deduction), you can use G4+ at https://g4-mic.vidal-rosset.net/wasm/tinker~n'),
+          format('% SZS status Unsatisfiable~n', []),
+          nl
       ;
-        % inference limit exceeded
-        format('% SZS status GaveUp~n', [])
+          % G4+ could not classify but nanoCoP validated: still Unsatisfiable
+          nl,
+          format('% To get proofs (sequent calculus G4 and natural deduction), you can use G4+ at https://g4-mic.vidal-rosset.net/wasm/tinker~n'),
+          format('% SZS status Unsatisfiable~n', []),
+          nl
       )
     ;
-      % catch failed (exception or nanoCoP failed): probe without cut for reliable status
-      nanocop_probe(NegFormula, ProbeResult),
-      ( ProbeResult = proved ->
-          format('% SZS status Unsatisfiable~n', [])
-      ; ProbeResult = depth_limited ->
+      % nanoCoP could not prove NegFormula within limits.
+      % Never claim Satisfiable without proof.
+      ( InfResult_nc == inference_limit_exceeded ->
           format('% SZS status GaveUp~n', [])
       ;
-          % ProbeResult = exhausted: comp(7) found no proof of NegFormula,
-          % but this does NOT establish that the axioms are genuinely
-          % satisfiable — the proof may require multiplicity > 7.
-          % Report GaveUp to avoid soundness errors.
-          format('% SZS status GaveUp~n', [])
+          % nanoCoP completed but failed: probe without cut for reliable status
+          nanocop_probe(NegFormula, ProbeResult),
+          ( ProbeResult = proved ->
+              format('% SZS status Unsatisfiable~n', [])
+          ; ProbeResult = depth_limited ->
+              format('% SZS status GaveUp~n', [])
+          ;
+              % ProbeResult = exhausted: comp(7) found no proof of NegFormula,
+              % but this does NOT establish that the axioms are genuinely
+              % satisfiable — the proof may require multiplicity > 7.
+              % Report GaveUp to avoid soundness errors.
+              format('% SZS status GaveUp~n', [])
+          )
       )
     ).
 
@@ -578,37 +581,34 @@ prove_tptp_internal(Formula, has_conjecture) :-
           ),
           _,
           (set_prolog_flag(occurs_check, OriginalFlag), fail)
-      )
+      ),
+      InfResult_hc \== inference_limit_exceeded  % Fail if inference limit was exceeded
     ->
-      % catch succeeded: check inference limit
-      ( InfResult_hc \== inference_limit_exceeded
-      ->
-        true
-      ;
-        % inference limit exceeded
-        format('% SZS status GaveUp~n', []),
-        !, fail
-      )
+      true
     ;
-      % catch failed (exception or nanoCoP failed)
-      szs_disproved_status(Formula, DisprStatus),
-      format('% SZS status ~w~n', [DisprStatus]),
-      !, fail
+    % nanoCoP failed: distinguish "not a theorem" from "inference limit exceeded"
+    ( InfResult_hc == inference_limit_exceeded ->
+        format('% SZS status GaveUp~n', [])
+    ;
+        szs_disproved_status(Formula, DisprStatus),
+        format('% SZS status ~w~n', [DisprStatus])
+    ),
+    !, fail
     ),
 
     % nanoCoP validated: now determine the logic level (no proof term)
     ( write('g4mic : '), nl,
       time(g4mic_logic_level(Formula, Logic)) ->
         nl,
-        format('--- ~w logic ---~n', [Logic]),
-        nl,
+        format('% Logic level: valid in ~w logic.~n', [Logic]),
+        format('% To get proofs (sequent calculus G4 and natural deduction), you can use G4+ at https://g4-mic.vidal-rosset.net/wasm/tinker~n'),
         format('% SZS status Theorem~n', []),
         nl
     ;
         % G4+ could not classify but nanoCoP validated: still a Theorem
         nl,
+        format('% To get proofs (sequent calculus G4 and natural deduction), you can use G4+ at https://g4-mic.vidal-rosset.net/wasm/tinker~n'),
         format('% SZS status Theorem~n', []),
-        format('% Proof validated by nanoCoP (G4+ logic classification exceeded limits)~n', []),
         nl
     ).
 
