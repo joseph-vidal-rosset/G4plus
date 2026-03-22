@@ -1,9 +1,6 @@
 % =========================================================================
 % NATURAL DEDUCTION PRINTER IN TREE STYLE
 % =========================================================================
-:- dynamic fitch_line/4.
-:- dynamic fitch_line_latex/2.
-:- dynamic abbreviated_line/1.
 % =========================================================================
 % DISPLAY PREMISS LIST FOR TREE STYLE
 % =========================================================================
@@ -279,12 +276,7 @@ build_tree_from_just(cq_c(Line), _LineNum, Formula, FitchLines, unary_node(cq_c,
 build_tree_from_just(cq_m(Line), _LineNum, Formula, FitchLines, unary_node(cq_m, Formula, SubTree)) :-
     !, build_buss_tree(Line, FitchLines, SubTree).
 
-% -- Equality Rules --
-
-
-
-
-
+% DS: Disjunctive Syllogism (binary rule)
 
 
 % DS: Disjunctive Syllogism (binary rule)
@@ -434,12 +426,6 @@ format_rule_label(landto, '$ \\land\\to E$').
 format_rule_label(lorto, '$ \\lor\\to E$').
 format_rule_label(cq_c, ' $CQ_c $').
 format_rule_label(cq_m, '$ CQ_m $').
-format_rule_label(eq_refl, '$ = I $').
-format_rule_label(eq_sym, ' Sym ').
-format_rule_label(eq_trans, ' Trans ').
-format_rule_label(eq_subst, '$ = E $').
-format_rule_label(eq_cong, ' Cong ').
-format_rule_label(eq_subst_eq, ' SubstEq ').
 format_rule_label(X, X). % Fallback
 
 % =========================================================================

@@ -68,15 +68,11 @@
 :- op(1110, xfy, <=).             % reverse implication
 :- op(1100, xfy, '~|').           % negated disjunction (NOR)
 :- op(1000, xfy, ~&).             % negated conjunction (NAND)
-% :- op( 400, xfx, =).              % equality
 :- op( 300, xf,  !).              % negated equality (for !=)
 :- op( 299, fx,  $).              % TPTP constants ($true/$false)
 % =========================================================================
 % g4mic specific
 % =========================================================================
-% Input syntax: sequent turnstile
-% Equivalence operator for sequents (bidirectional provability)
-% :- op(800, xfx, <>).
 % =========================================================================
 % LATEX OPERATORS (formatted output)
 % ATTENTION: Respect spaces exactly!
@@ -90,8 +86,6 @@
 :- op( 500, fy, ' \\exists ').   % existential quantifier
 :- op( 500, xfy, ' ').           % space for quantifiers
 :- op(400, fx, ' \\bot ').      % falsity (#)
-% LaTeX syntax: sequent turnstile
-% :- op(1150, xfx, ' \\vdash ').
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % End of operators list
 %% File: minimal_driver_equal.pl  -  Version: 7.3 FINAL (time seulement dans proves)
@@ -299,9 +293,6 @@ nanocop_contains_equality(Term) :-
     Term =.. [_|Args],
     member(Arg, Args),
     nanocop_contains_equality(Arg), !.
-
-% Base case: no equality
-nanocop_contains_equality(_) :- fail.
 
 % =========================================================================
 % OUTPUT RESULT
@@ -848,10 +839,7 @@ prove(Left <=> Right) :-
         write('                '), write(Left => Right), nl,
         write('----------------------------------------------------------------'), nl, nl,
         ( Direction1Valid = true ->
-            % write('\\begin{fitch}'), nl,
-            % g4_to_fitch_theorem(Proof1),
-            % write('\\end{fitch}'), nl, nl,
-          render_clean_fitch(Proof1),nl,nl,
+            render_clean_fitch(Proof1),nl,nl,
             write('Q.E.D.'), nl, nl
         ; write('  failed'), nl, nl
         ),
@@ -862,10 +850,7 @@ prove(Left <=> Right) :-
         write('             '), write(Right => Left), nl,
         write('----------------------------------------------------------------'), nl, nl,
         ( Direction2Valid = true ->
-            % write('\\begin{fitch}'), nl,
-            % g4_to_fitch_theorem(Proof2),
-            % write('\\end{fitch}'), nl, nl,
-          render_clean_fitch(Proof2),nl,nl,
+            render_clean_fitch(Proof2),nl,nl,
             write('Q.E.D.'), nl, nl
         ; write('  failed'), nl, nl
         ),
@@ -1443,7 +1428,6 @@ g4mic_ax(Gamma > Delta, _, _, SkolemIn, SkolemIn, _, ax(Gamma>Delta, ax)) :-
 g4mic_proves(Seq, FV, Th, SI, SO, LL, Proof) :-
     g4mic_ax(Seq, FV, Th, SI, SO, LL, Proof), !.
 
-
 % --- Rule 1: L-bot -----------------------------------------------------
 g4mic_proves(Gamma>Delta, _, _, SI, SI, LL, lbot(Gamma>Delta, #)) :-
     member(LL, [intuitionistic, classical]),
@@ -1454,19 +1438,7 @@ g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, land(Gamma>Delta, P)) :-
     select((A & B), Gamma, G1), !,
     g4mic_proves([A, B | G1]>Delta, FV, Th, SI, SO, LL, P).
 
-% --- Rule 3: L0-> (modus ponens on context) -------------------------------
-g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, l0cond(Gamma>Delta, P)) :-
-    select((A => B), Gamma, G1),
-    member(A, G1),
-    !,
-    g4mic_proves([B | G1]>Delta, FV, Th, SI, SO, LL, P).
-
-% --- Rule 4: L&-> ---------------------------------------------------------
-g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, landto(Gamma>Delta, P)) :-
-    select(((A & B) => C), Gamma, G1), !,
-    g4mic_proves([(A => (B => C)) | G1]>Delta, FV, Th, SI, SO, LL, P).
-
-% --- Rule 5: Lexists (deterministic: existential in antecedent -> introduce eigenvar) --
+% --- Rule 3: Lexists (deterministic: existential in antecedent -> introduce eigenvar) --
 g4mic_proves(Gamma > Delta, FV, Th, SI, SO, LL, lex(Gamma>Delta, P)) :-
     select((?[_Z-X]:A), Gamma, G1), !,
     copy_term((X:A, FV), (f_sk(SI, FV):A1, FV)),
@@ -1476,42 +1448,44 @@ g4mic_proves(Gamma > Delta, FV, Th, SI, SO, LL, lex(Gamma>Delta, P)) :-
     J1 is SI + 1,
     g4mic_proves([A1 | G1] > Delta, FV, Th, J1, SO, LL, P).
 
-% --- Rule 6: Rforall (deterministic: universal in succedent -> introduce eigenvar) --
-g4mic_proves(Gamma > Delta, FV, Th, SI, SO, LL, rall(Gamma>Delta, P)) :-
-    select((![_Z-X]:A), Delta, D1), !,
-    copy_term((X:A, FV), (f_sk(SI, FV):A1, FV)),
-    (catch(b_getval(g4_eigenvars, UsedVars), _, UsedVars = [])),
-    \+ member_check(f_sk(SI, FV), UsedVars),
-    b_setval(g4_eigenvars, [f_sk(SI, FV) | UsedVars]),
-    J1 is SI + 1,
-    g4mic_proves(Gamma > [A1 | D1], FV, Th, J1, SO, LL, P).
+% --- Rule 4: L0-> (modus ponens on context) -------------------------------
+g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, l0cond(Gamma>Delta, P)) :-
+    select((A => B), Gamma, G1),
+    member(A, G1),
+    !,
+    g4mic_proves([B | G1]>Delta, FV, Th, SI, SO, LL, P).
 
-% --- Rule 7: R-> ---------------------------------------------------------
+% --- Rule 5: L&-> ---------------------------------------------------------
+g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, landto(Gamma>Delta, P)) :-
+    select(((A & B) => C), Gamma, G1), !,
+    g4mic_proves([(A => (B => C)) | G1]>Delta, FV, Th, SI, SO, LL, P).
+
+% --- Rule 6: R-> ---------------------------------------------------------
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, rcond(Gamma>Delta, P)) :-
     Delta = [A => B], !,
     g4mic_proves([A | Gamma]>[B], FV, Th, SI, SO, LL, P).
 
 
-% --- Rule 8: R& (deterministic: Delta is a conjunction -> decompose immediately) --
+% --- Rule 7: R& (deterministic: Delta is a conjunction -> decompose immediately) --
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, rand(Gamma>Delta, P1, P2)) :-
     Delta = [(A & B)], !,
     g4mic_proves(Gamma>[A], FV, Th, SI, J1, LL, P1),
     g4mic_proves(Gamma>[B], FV, Th, J1, SO, LL, P2).
 
-% --- Rule 9: L\/ (left disjunction) --------------------------------------
+% --- Rule 8: L\/ (left disjunction) --------------------------------------
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, lor(Gamma>Delta, P1, P2)) :-
     select((A | B), Gamma, G1), !,
     g4mic_proves([A | G1]>Delta, FV, Th, SI, J1, LL, P1),
     g4mic_proves([B | G1]>Delta, FV, Th, J1, SO, LL, P2).
 
-% --- Rule 10: R\/ ---------------------------------------------------------
+% --- Rule 09: R\/ ---------------------------------------------------------
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, ror(Gamma>Delta, P)) :-
     Delta = [(A | B)],
     (   g4mic_proves(Gamma>[A], FV, Th, SI, SO, LL, P)
     ;   g4mic_proves(Gamma>[B], FV, Th, SI, SO, LL, P)
     ).
 
-% --- Rule 11: L\/-> (optimized) --------------------------------------------
+% --- Rule 10: L\/-> (optimized) --------------------------------------------
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, lorto(Gamma>Delta, P)) :-
     select(((A | B) => C), Gamma, G1), !,
     ( member(A, G1), member(B, G1) ->
@@ -1524,7 +1498,7 @@ g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, lorto(Gamma>Delta, P)) :-
     g4mic_proves([A=>C, B=>C | G1]>Delta, FV, Th, SI, SO, LL, P)
     ).
 
-% --- Rule 12: IP (indirect proof -- classical only, must be before L->->)  --
+% --- Rule 11: IP (indirect proof -- classical only, must be before L->->)  --
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, classical, ip(Gamma>Delta, P)) :-
     Delta = [A],
     A \= #,
@@ -1532,7 +1506,7 @@ g4mic_proves(Gamma>Delta, FV, Th, SI, SO, classical, ip(Gamma>Delta, P)) :-
     Th > 0,
     g4mic_proves([(A => #) | Gamma]>[#], FV, Th, SI, SO, classical, P).
 
-% --- Rule 13: L->-> --------------------------------------------------------
+% --- Rule 12: L->-> --------------------------------------------------------
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, ltoto(Gamma>Delta, P1, P2)) :-
     select(((A => B) => C), Gamma, G1),
     \+ (B = #, member(A, G1)),
@@ -1543,6 +1517,17 @@ g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, ltoto(Gamma>Delta, P1, P2)) :-
 % =========================================================================
 % QUANTIFIER RULES (threshold-based)
 % =========================================================================
+
+% --- Rule 13: Rforall (deterministic: universal in succedent -> introduce eigenvar) --
+g4mic_proves(Gamma > Delta, FV, Th, SI, SO, LL, rall(Gamma>Delta, P)) :-
+    select((![_Z-X]:A), Delta, D1), !,
+    copy_term((X:A, FV), (f_sk(SI, FV):A1, FV)),
+    (catch(b_getval(g4_eigenvars, UsedVars), _, UsedVars = [])),
+    \+ member_check(f_sk(SI, FV), UsedVars),
+    b_setval(g4_eigenvars, [f_sk(SI, FV) | UsedVars]),
+    J1 is SI + 1,
+    g4mic_proves(Gamma > [A1 | D1], FV, Th, J1, SO, LL, P).
+
 % --- Rule 14: CQ_m (quantifier conversion, all logics -- must precede Lforall) --
 % (?[X]:A => B)  ->  ![X]:(A => B)
 % Placed before Lforall so that the universal form is available for instantiation.
@@ -1581,13 +1566,6 @@ g4mic_proves(Gamma>Delta, FV, Th, SI, SO, classical, cq_c(Gamma>Delta, P)) :-
 % =========================================================================
 % HELPER PREDICATES
 % =========================================================================
-
-% is_nested_negation(Formula, Target, Depth)
-% Checks if Formula = not^Depth(Target)
-is_nested_negation(Target, Target, 0) :- !.
-is_nested_negation((Inner => #), Target, N) :-
-    is_nested_negation(Inner, Target, N1),
-    N is N1 + 1.
 
 % =========================================================================
 % END of Prover
@@ -1671,7 +1649,6 @@ quantifier_body_needs_parens((_ ' \\to ' _)) :- !.
 quantifier_body_needs_parens((_ ' \\land ' _)) :- !.
 quantifier_body_needs_parens((_ ' \\lor ' _)) :- !.
 quantifier_body_needs_parens((_ ' \\leftrightarrow ' _)) :- !.
-quantifier_body_needs_parens(_) :- fail.
 
 % =========================================================================
 % ALL write_formula_with_parens/1 CLAUSES GROUPED
@@ -2142,20 +2119,6 @@ rewrite_term(X, J, K, Y) :-
     rewrite_list(L, J, K, R),
     Y =.. [F|R].
 
-% Generateur de noms elegants pour variables liees
-% Use x, y, z instead of a, b, c to avoid collision with constants
-rewrite_name(K, N) :-
-    K < 3,
-    !,
-    J is K+0'x,  % Generates x, y, z
-    char_code(N, J).
-
-rewrite_name(K, N) :-
-    J is (K mod 3)+0'x,  % For K >= 3, generates x0, y0, z0, x1, y1, z1...
-    H is K div 3,
-    number_codes(H, L),
-    atom_codes(N, [J|L]).
-
 % =========================================================================
 % CONSTANT NAME GENERATOR
 % For instantiation terms (eigenvariables and gamma-rule witnesses)
@@ -2197,11 +2160,6 @@ toggle_code(X, X).
 % =========================================================================
 % SYSTEME PREPARE
 % =========================================================================
-
-prepare_premisses_list([], []) :- !.
-prepare_premisses_list([H|T], [PreparedH|PreparedT]) :-
-    prepare(H, [], PreparedH),
-    prepare_premisses_list(T, PreparedT).
 
 prepare(#, _, #) :- !.
 
@@ -2672,9 +2630,6 @@ g4mic_contains_equality_direct(A => B) :- !, (g4mic_contains_equality_direct(A) 
 g4mic_contains_equality_direct(A <=> B) :- !, (g4mic_contains_equality_direct(A) ; g4mic_contains_equality_direct(B)).
 g4mic_contains_equality_direct(![_]: A) :- !, g4mic_contains_equality_direct(A).
 g4mic_contains_equality_direct(?[_]:A) :- !, g4mic_contains_equality_direct(A).
-% No recursive descent into arbitrary compound terms - only through logical operators
-g4mic_contains_equality_direct(_) :- fail.
-
 
 %=========================================================================
 % END OF DETECTIONS
@@ -2919,7 +2874,6 @@ filter_top_from_gamma([H|T], Filtered) :-
 % Top is represented as (# => #) or sometimes ~ #
 is_top_formula((# => #)) :- !.
 is_top_formula(((# => #) => #) => #) :- !.  % Double negation of top
-is_top_formula(_) :- fail.
 
 % =========================================================================
 % FORMULA LIST RENDERING
@@ -3985,23 +3939,6 @@ fitch_g4_proof(cq_m((Premisses > _), SubProof), Context, Scope, CurLine, NextLin
                        SubProof, Context, CurLine, NextLine, ResLine, VarIn, VarOut).
 
 % =========================================================================
-% EQUALITY RULES - CORRECTED VERSION
-% =========================================================================
-
-% Reflexivity
-
-% Symmetry
-
-% Transitivity
-
-% Substitution (Leibniz) - MAIN CASE
-
-% Congruence
-
-% Substitution in equality
-
-% Transitivity chain
-% =========================================================================
 % FALLBACK
 % =========================================================================
 fitch_g4_proof(UnknownRule, _Context, _Scope, CurLine, CurLine, CurLine, VarIn, VarIn) :-
@@ -4012,9 +3949,6 @@ fitch_g4_proof(UnknownRule, _Context, _Scope, CurLine, CurLine, CurLine, VarIn, 
 % =========================================================================
 % NATURAL DEDUCTION PRINTER IN TREE STYLE
 % =========================================================================
-:- dynamic fitch_line/4.
-:- dynamic fitch_line_latex/2.
-:- dynamic abbreviated_line/1.
 % =========================================================================
 % DISPLAY PREMISS LIST FOR TREE STYLE
 % =========================================================================
@@ -4290,12 +4224,7 @@ build_tree_from_just(cq_c(Line), _LineNum, Formula, FitchLines, unary_node(cq_c,
 build_tree_from_just(cq_m(Line), _LineNum, Formula, FitchLines, unary_node(cq_m, Formula, SubTree)) :-
     !, build_buss_tree(Line, FitchLines, SubTree).
 
-% -- Equality Rules --
-
-
-
-
-
+% DS: Disjunctive Syllogism (binary rule)
 
 
 % DS: Disjunctive Syllogism (binary rule)
@@ -4445,12 +4374,6 @@ format_rule_label(landto, '$ \\land\\to E$').
 format_rule_label(lorto, '$ \\lor\\to E$').
 format_rule_label(cq_c, ' $CQ_c $').
 format_rule_label(cq_m, '$ CQ_m $').
-format_rule_label(eq_refl, '$ = I $').
-format_rule_label(eq_sym, ' Sym ').
-format_rule_label(eq_trans, ' Trans ').
-format_rule_label(eq_subst, '$ = E $').
-format_rule_label(eq_cong, ' Cong ').
-format_rule_label(eq_subst_eq, ' SubstEq ').
 format_rule_label(X, X). % Fallback
 
 % =========================================================================
@@ -5199,43 +5122,7 @@ read_tptp_formulas_acc(Stream, FileDir, Formulas, Max, Count, Truncated) :-
     ).
 read_tptp_formulas_acc(_, _, [], _, _, false).
 
-% Read all fof() declarations from file, resolving include() directives.
-% FileDir is the directory of the current file, used for relative include paths.
-read_tptp_formulas(Stream, FileDir, Formulas) :-
-    \+ at_end_of_stream(Stream),
-    read(Stream, Term),
-    !,
-    (   Term = fof(_, _, _) ->
-        Formulas = [Term|Rest],
-        read_tptp_formulas(Stream, FileDir, Rest)
-    ;   Term = include(RelPath) ->
-        % Resolve include path: try relative to FileDir first, then $TPTP
-        ( atom_concat(FileDir, '/', Prefix),
-          atom_concat(Prefix, RelPath, AbsPath1),
-          exists_file(AbsPath1)
-        -> IncludePath = AbsPath1
-        ; getenv('TPTP', TTPTBase),
-          atom_concat(TTPTBase, '/', TPrefix),
-          atom_concat(TPrefix, RelPath, AbsPath2),
-          exists_file(AbsPath2)
-        -> IncludePath = AbsPath2
-        ;  format('% WARNING: Include file not found: ~w~n', [RelPath]),
-           IncludePath = ''
-        ),
-        ( IncludePath \= '' ->
-            file_directory_name(IncludePath, IncludeDir),
-            open(IncludePath, read, IncStream),
-            read_tptp_formulas(IncStream, IncludeDir, IncFormulas),
-            close(IncStream),
-            read_tptp_formulas(Stream, FileDir, RestFormulas),
-            append(IncFormulas, RestFormulas, Formulas)
-        ;
-            read_tptp_formulas(Stream, FileDir, Formulas)
-        )
-    ;   % Skip other non-fof terms (comments, directives, etc.)
-        read_tptp_formulas(Stream, FileDir, Formulas)
-    ).
-read_tptp_formulas(_, _, []).
+
 
 % Process list of TPTP formulas - collect axioms and combine with conjecture
 % Two-pass: first collect ALL axioms, then process conjecture.
@@ -5395,151 +5282,7 @@ char_downcase(C, L) :-
     ;   L = C
     ).
 
-% Removed: expand_quantifier_lists(!(VarTerm:Body), ...)
-% This clause was matching before the list-handling clause and causing bugs
 
-% Removed: expand_quantifier_lists(?(VarTerm:Body), ...)
-% This clause was matching before the list-handling clause and causing bugs
-
-% PRIMARY PATTERN - handles all cases including lists
-% Expand multi-variable quantifiers: ![x,y]: -> ![x]:![y]:
-% CRITICAL: ![a,b]:Body is parsed as !([a,b]:Body) due to operator precedence
-expand_quantifier_lists(!(Expr), Result) :-
-    Expr = (VarTerm:Body),
-    !,
-    (   is_list(VarTerm) ->
-        % True list: [a,b,c] or [a]
-        (   VarTerm = [_|_] ->
-            (   VarTerm = [SingleVar] ->
-                % Single element list - common from TPTP ![X]:
-                format('DEBUG: Single var list [~w], recursing on body~n', [SingleVar]),
-                expand_quantifier_lists(Body, NewBody),
-                % Construct !(SingleVar:NewBody) explicitly
-                NewExpr = (SingleVar:NewBody),
-                Result =.. ['!', NewExpr]
-            ;   % Multiple elements
-                expand_forall_list(VarTerm, Body, Result)
-            )
-        ;   expand_quantifier_lists(Body, NewBody),
-            Result = (![VarTerm]:NewBody)
-        )
-    ;   compound(VarTerm), functor(VarTerm, ',', 2) ->
-        % Comma operator: a,b parsed as ','(a,b)
-        comma_to_list(VarTerm, VarList),
-        expand_forall_list(VarList, Body, Result)
-    ;   % Single variable (not in list)
-        expand_quantifier_lists(Body, NewBody),
-        Result = (![VarTerm]:NewBody)
-    ).
-
-% Same for existential
-expand_quantifier_lists(?(Expr), Result) :-
-    Expr = (VarTerm:Body),
-    !,
-    (   is_list(VarTerm), VarTerm = [_|_] ->
-        (   VarTerm = [SingleVar] ->
-            % Single element list - common from TPTP ?[X]:
-            expand_quantifier_lists(Body, NewBody),
-            % Construct ?(SingleVar:NewBody) explicitly
-            NewExpr = (SingleVar:NewBody),
-            Result =.. ['?', NewExpr]
-        ;   % Multiple elements
-            expand_exists_list(VarTerm, Body, Result)
-        )
-    ;   compound(VarTerm), functor(VarTerm, ',', 2) ->
-        comma_to_list(VarTerm, VarList),
-        expand_exists_list(VarList, Body, Result)
-    ;   expand_quantifier_lists(Body, NewBody),
-        Result = (?[VarTerm]:NewBody)
-    ).
-
-% OLD PATTERN kept for backward compatibility
-expand_quantifier_lists(![VarTerm]:Body, Result) :-
-    (   is_list(VarTerm) ->
-        % True list: [a,b,c]
-        (   VarTerm = [_|_] ->
-            expand_forall_list(VarTerm, Body, Result)
-        ;   Result = (![VarTerm]:Body)
-        )
-    ;   compound(VarTerm), functor(VarTerm, ',', 2) ->
-        % Comma operator: a,b parsed as ','(a,b)
-        comma_to_list(VarTerm, VarList),
-        expand_forall_list(VarList, Body, Result)
-    ;   % Single variable
-        !, expand_quantifier_lists(Body, NewBody),
-        Result = (![VarTerm]:NewBody)
-    ).
-
-expand_quantifier_lists(?[VarList]:Body, Result) :-
-    is_list(VarList), VarList = [_|_], !,
-    expand_exists_list(VarList, Body, Result).
-
-expand_quantifier_lists(![Var]:Body, ![Var]:NewBody) :- !,
-    expand_quantifier_lists(Body, NewBody).
-
-expand_quantifier_lists(?[Var]:Body, ?[Var]:NewBody) :- !,
-    expand_quantifier_lists(Body, NewBody).
-
-expand_quantifier_lists(A & B, NewA & NewB) :- !,
-    expand_quantifier_lists(A, NewA),
-    expand_quantifier_lists(B, NewB).
-
-expand_quantifier_lists(A | B, NewA | NewB) :- !,
-    expand_quantifier_lists(A, NewA),
-    expand_quantifier_lists(B, NewB).
-
-expand_quantifier_lists(A => B, NewA => NewB) :- !,
-    expand_quantifier_lists(A, NewA),
-    expand_quantifier_lists(B, NewB).
-
-expand_quantifier_lists(A <=> B, NewA <=> NewB) :- !,
-    expand_quantifier_lists(A, NewA),
-    expand_quantifier_lists(B, NewB).
-
-expand_quantifier_lists(~A, ~NewA) :- !,
-    expand_quantifier_lists(A, NewA).
-
-expand_quantifier_lists(A = B, A = B) :- !.
-
-% Removed CATCH-ALL for debugging - it was blocking the generic clause below
-
-expand_quantifier_lists(Term, NewTerm) :-
-    compound(Term), !,
-    Term =.. [F|Args],
-    maplist(expand_quantifier_lists, Args, NewArgs),
-    NewTerm =.. [F|NewArgs].
-
-expand_quantifier_lists(Atom, Atom).
-
-% Expand ![x,y,z]: Body into ![x]:![y]:![z]: Body
-expand_forall_list([Var], Body, Result) :- !,
-    expand_quantifier_lists(Body, NewBody),
-    % Construct !(Var:NewBody) explicitly to avoid operator precedence issues
-    Expr = (Var:NewBody),
-    Result =.. ['!', Expr].
-expand_forall_list([Var|Rest], Body, Result) :-
-    expand_forall_list(Rest, Body, RestResult),
-    % Construct !(Var:RestResult) explicitly
-    Expr = (Var:RestResult),
-    Result =.. ['!', Expr].
-
-% Expand ?[x,y,z]: Body into ?[x]:?[y]:?[z]: Body
-expand_exists_list([Var], Body, Result) :- !,
-    expand_quantifier_lists(Body, NewBody),
-    % Construct ?(Var:NewBody) explicitly to avoid operator precedence issues
-    Expr = (Var:NewBody),
-    Result =.. ['?', Expr].
-expand_exists_list([Var|Rest], Body, Result) :-
-    expand_exists_list(Rest, Body, RestResult),
-    % Construct ?(Var:RestResult) explicitly
-    Expr = (Var:RestResult),
-    Result =.. ['?', Expr].
-
-% Convert comma operator to list: ','(a,','(b,c)) -> [a,b,c]
-comma_to_list((A,B), [A|Rest]) :-
-    !,
-    comma_to_list(B, Rest).
-comma_to_list(A, [A]).
 xyz_name(N, Name) :-
     Base is N mod 3,
     Suffix is N div 3,
@@ -5811,13 +5554,6 @@ szs_disproved_status(Formula, Status) :-
 % FORMULA CLASSIFICATION HELPERS
 % =========================================================================
 
-% is_tptp_false_formula(+F)
-% True when F is the TPTP falsum — either as the raw TPTP atom $false/'$false'
-% or as the G4mic internal translation ~(p0=>p0).
-is_tptp_false_formula('$false') :- !.
-is_tptp_false_formula($false)   :- !.
-is_tptp_false_formula(~(p0 => p0)) :- !.   % translate_operators output for $false
-
 % -------------------------------------------------------------------------
 % simplify_g4mic_formula(+F, -Value)
 %
@@ -5893,35 +5629,5 @@ simplify_g4mic_iff(false, false, true)   :- !.
 simplify_g4mic_iff(true,  false, false)  :- !.
 simplify_g4mic_iff(false, true,  false)  :- !.
 simplify_g4mic_iff(_,     _,     unknown).
-
-% tptp_formula_is_propositional(+F)
-% True when F contains no first-order constructs: no quantifiers, no equality,
-% and no compound predicate/function applications with arguments (arity >= 1).
-% Used by szs_disproved_status to decide whether an exhaustive comp(7) search
-% can definitively establish CounterSatisfiable (propositional) or only GaveUp
-% (FOL, where comp(7) may be too shallow).
-tptp_formula_is_propositional(F) :-
-    \+ tptp_formula_has_fol_feature(F).
-
-tptp_formula_has_fol_feature(![_]:_)  :- !.
-tptp_formula_has_fol_feature(?[_]:_)  :- !.
-tptp_formula_has_fol_feature(all _:_) :- !.
-tptp_formula_has_fol_feature(ex _:_)  :- !.
-tptp_formula_has_fol_feature(_ = _)   :- !.
-tptp_formula_has_fol_feature(A & B)   :- !,
-    ( tptp_formula_has_fol_feature(A) -> true ; tptp_formula_has_fol_feature(B) ).
-tptp_formula_has_fol_feature(A | B)   :- !,
-    ( tptp_formula_has_fol_feature(A) -> true ; tptp_formula_has_fol_feature(B) ).
-tptp_formula_has_fol_feature(A => B)  :- !,
-    ( tptp_formula_has_fol_feature(A) -> true ; tptp_formula_has_fol_feature(B) ).
-tptp_formula_has_fol_feature(A <=> B) :- !,
-    ( tptp_formula_has_fol_feature(A) -> true ; tptp_formula_has_fol_feature(B) ).
-tptp_formula_has_fol_feature(~A) :- !,
-    tptp_formula_has_fol_feature(A).
-% Compound term with at least one argument = predicate/function of arity >= 1.
-tptp_formula_has_fol_feature(Term) :-
-    compound(Term),
-    Term =.. [_|Args],
-    Args \= [].
 
 %%% END OF g4mic PROVER

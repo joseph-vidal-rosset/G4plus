@@ -1,10 +1,276 @@
 % =========================================================================
+% FOF <-> G4+ FORMULA CONVERTERS
+% =========================================================================
+% fof_to_prove/1   : reads a .p file, outputs prove(Formula). command
+% get_fof_problem/1: takes a G4+ formula, outputs fof(...) TPTP text
+
+:-style_check(-singleton).
+
+%% fof_to_prove(+Filename)
+%  Reads a TPTP .p file and prints the equivalent prove/1 command(s).
+%  Handles axioms + conjecture by combining them as (Ax1 & Ax2 & ...) => Conj.
+
+fof_to_prove(Filename) :-
+    catch(
+        fof_to_prove_safe(Filename),
+        Error,
+        ( format('% Error reading file: ~w~n', [Error]) )
+    ).
+
+%% fof_to_prove_run(+Filename)
+%  Like fof_to_prove/1, but directly executes prove/1 on each conjecture.
+%  Used by the tinker.html button for one-click proof generation.
+
+fof_to_prove_run(Filename) :-
+    catch(
+        fof_to_prove_run_safe(Filename),
+        Error,
+        ( format('% Error: ~w~n', [Error]) )
+    ).
+
+fof_to_prove_run_safe(Filename) :-
+    file_directory_name(Filename, FileDir),
+    open(Filename, read, Stream),
+    read_tptp_formulas_limited(Stream, FileDir, Formulas, 100000, Truncated),
+    close(Stream),
+    ( Truncated = true ->
+        format('% File too large (> 100000 formulae)~n')
+    ;
+        collect_all_axioms(Formulas, AllAxioms, Conjectures),
+        ( Conjectures = [] ->
+            ( AllAxioms = [] ->
+                write('% No conjecture or axioms found in file.'), nl
+            ;
+                write('% No conjecture found. Axioms only.'), nl,
+                maplist(convert_axiom_formula, AllAxioms, G4micAxioms),
+                combine_axioms(G4micAxioms, Combined),
+                NegFormula = (Combined => #),
+                format('% Running: prove(~w).~n~n', [NegFormula]),
+                ( prove(NegFormula) -> true ; true )
+            )
+        ;
+            maplist(convert_axiom_formula, AllAxioms, G4micAxioms),
+            forall(
+                member(fof(Name, conjecture, Formula), Conjectures),
+                ( convert_tptp_formula(Formula, G4micConj),
+                  ( G4micAxioms = [] ->
+                      CombinedFormula = G4micConj
+                  ;
+                      combine_axioms(G4micAxioms, CombinedAxioms),
+                      CombinedFormula = (CombinedAxioms => G4micConj)
+                  ),
+                  format('~n% ~w~n', [Name]),
+                  format('% Running: prove(~w).~n~n', [CombinedFormula]),
+                  ( prove(CombinedFormula) -> true ; true )
+                )
+            )
+        )
+    ).
+
+fof_to_prove_safe(Filename) :-
+    file_directory_name(Filename, FileDir),
+    open(Filename, read, Stream),
+    read_tptp_formulas_limited(Stream, FileDir, Formulas, 100000, Truncated),
+    close(Stream),
+    ( Truncated = true ->
+        format('% File too large (> 100000 formulae)~n')
+    ;
+        collect_all_axioms(Formulas, AllAxioms, Conjectures),
+        ( Conjectures = [] ->
+            ( AllAxioms = [] ->
+                write('% No conjecture or axioms found in file.'), nl
+            ;
+                write('% No conjecture found. Axioms only (satisfiability check):'), nl,
+                maplist(convert_axiom_formula, AllAxioms, G4micAxioms),
+                combine_axioms(G4micAxioms, Combined),
+                format('prove(~w => #).~n', [Combined])
+            )
+        ;
+            maplist(convert_axiom_formula, AllAxioms, G4micAxioms),
+            forall(
+                member(fof(Name, conjecture, Formula), Conjectures),
+                ( convert_tptp_formula(Formula, G4micConj),
+                  ( G4micAxioms = [] ->
+                      CombinedFormula = G4micConj
+                  ;
+                      combine_axioms(G4micAxioms, CombinedAxioms),
+                      CombinedFormula = (CombinedAxioms => G4micConj)
+                  ),
+                  format('% ~w~n', [Name]),
+                  format('prove(~w).~n~n', [CombinedFormula])
+                )
+            )
+        )
+    ).
+
+%% get_fof_problem(+Formula)
+%  Takes a G4+ formula and prints a valid TPTP fof() declaration.
+%  Example: get_fof_problem(![x]: p(x) => p(a)).
+%  Output:  fof(my_conjecture, conjecture, ![X]: (p(X) => p(a))).
+
+get_fof_problem(Formula) :-
+    collect_bound_vars(Formula, BoundVars),
+    sort(BoundVars, BoundSet),
+    write('fof(my_conjecture, conjecture, '),
+    write_tptp_formula(Formula, BoundSet),
+    write(').'),
+    nl.
+
+%% collect_bound_vars(+Formula, -Vars)
+%  Collects all variable names bound by quantifiers in the formula.
+
+collect_bound_vars(![X]:A, Vars) :- !,
+    collect_bound_vars(A, RestVars),
+    Vars = [X | RestVars].
+collect_bound_vars(?[X]:A, Vars) :- !,
+    collect_bound_vars(A, RestVars),
+    Vars = [X | RestVars].
+collect_bound_vars(all X:A, Vars) :- !,
+    collect_bound_vars(A, RestVars),
+    Vars = [X | RestVars].
+collect_bound_vars(ex X:A, Vars) :- !,
+    collect_bound_vars(A, RestVars),
+    Vars = [X | RestVars].
+collect_bound_vars(~A, Vars) :- !,
+    collect_bound_vars(A, Vars).
+collect_bound_vars(A & B, Vars) :- !,
+    collect_bound_vars(A, V1),
+    collect_bound_vars(B, V2),
+    append(V1, V2, Vars).
+collect_bound_vars(A | B, Vars) :- !,
+    collect_bound_vars(A, V1),
+    collect_bound_vars(B, V2),
+    append(V1, V2, Vars).
+collect_bound_vars(A => B, Vars) :- !,
+    collect_bound_vars(A, V1),
+    collect_bound_vars(B, V2),
+    append(V1, V2, Vars).
+collect_bound_vars(A <=> B, Vars) :- !,
+    collect_bound_vars(A, V1),
+    collect_bound_vars(B, V2),
+    append(V1, V2, Vars).
+collect_bound_vars(_, []).
+
+%% write_tptp_formula(+Formula, +BoundVars)
+%  Prints a G4+ formula in TPTP syntax.
+%  BoundVars: list of atoms that are quantifier-bound variables
+%  (these get uppercased in the output).
+
+write_tptp_formula(#, _) :- !, write('$false').
+write_tptp_formula(bot, _) :- !, write('$false').
+write_tptp_formula(top, _) :- !, write('$true').
+
+% Quantifiers: ![x]: -> ![X]:
+write_tptp_formula(![X]:A, BV) :- !,
+    upcase_atom(X, XU),
+    write('(!['), write(XU), write(']: '),
+    write_tptp_formula(A, BV),
+    write(')').
+write_tptp_formula(?[X]:A, BV) :- !,
+    upcase_atom(X, XU),
+    write('(?['), write(XU), write(']: '),
+    write_tptp_formula(A, BV),
+    write(')').
+write_tptp_formula(all X:A, BV) :- !,
+    upcase_atom(X, XU),
+    write('(!['), write(XU), write(']: '),
+    write_tptp_formula(A, BV),
+    write(')').
+write_tptp_formula(ex X:A, BV) :- !,
+    upcase_atom(X, XU),
+    write('(?['), write(XU), write(']: '),
+    write_tptp_formula(A, BV),
+    write(')').
+
+% Negation
+write_tptp_formula(~A, BV) :- !,
+    write('~'),
+    write_tptp_atom(A, BV).
+
+% Binary connectives
+write_tptp_formula(A & B, BV) :- !,
+    write('('),
+    write_tptp_formula(A, BV), write(' & '), write_tptp_formula(B, BV),
+    write(')').
+write_tptp_formula(A | B, BV) :- !,
+    write('('),
+    write_tptp_formula(A, BV), write(' | '), write_tptp_formula(B, BV),
+    write(')').
+write_tptp_formula(A => B, BV) :- !,
+    write('('),
+    write_tptp_formula(A, BV), write(' => '), write_tptp_formula(B, BV),
+    write(')').
+write_tptp_formula(A <=> B, BV) :- !,
+    write('('),
+    write_tptp_formula(A, BV), write(' <=> '), write_tptp_formula(B, BV),
+    write(')').
+
+% Equality
+write_tptp_formula(A = B, BV) :- !,
+    write('('),
+    write_tptp_term(A, BV), write(' = '), write_tptp_term(B, BV),
+    write(')').
+
+% Compound predicate: p(x,y) -> p(X,Y) if x,y are bound vars
+write_tptp_formula(Term, BV) :-
+    compound(Term),
+    Term =.. [F | Args],
+    Args \= [],
+    \+ memberchk(F, [~, &, '|', =>, <=>, !, ?, all, ex, '#']),
+    !,
+    write(F), write('('),
+    write_tptp_args(Args, BV),
+    write(')').
+
+% Atom: uppercase if bound variable, otherwise keep as-is
+write_tptp_formula(A, BV) :-
+    atom(A), !,
+    ( memberchk(A, BV) ->
+        upcase_atom(A, AU), write(AU)
+    ;
+        write(A)
+    ).
+
+% Fallback
+write_tptp_formula(X, _) :- write(X).
+
+% Helper for terms (inside predicates/functions)
+write_tptp_term(Term, BV) :-
+    compound(Term),
+    Term =.. [F | Args],
+    Args \= [],
+    !,
+    write(F), write('('),
+    write_tptp_args(Args, BV),
+    write(')').
+write_tptp_term(A, BV) :-
+    atom(A), !,
+    ( memberchk(A, BV) ->
+        upcase_atom(A, AU), write(AU)
+    ;
+        write(A)
+    ).
+write_tptp_term(X, _) :- write(X).
+
+% Helper for negation: add parens around complex subformulas
+write_tptp_atom(A, BV) :-
+    ( atom(A) ; A = #; compound(A), functor(A, F, _),
+      \+ memberchk(F, [~, &, '|', =>, <=>, !, ?, all, ex]) ) ->
+        write_tptp_formula(A, BV)
+    ;
+        write('('), write_tptp_formula(A, BV), write(')').
+
+write_tptp_args([], _) :- !.
+write_tptp_args([A], BV) :- !, write_tptp_term(A, BV).
+write_tptp_args([A|Rest], BV) :-
+    write_tptp_term(A, BV), write(', '),
+    write_tptp_args(Rest, BV).
+
+% =========================================================================
 % TPTP FORMAT SUPPORT
 % =========================================================================
 % G4-mic uses lowercase-only syntax, while TPTP uses uppercase for variables.
 % This module converts TPTP formulas to G4-mic syntax.
-
-:- style_check(-singleton).
 
 % Read and process a TPTP file
 % prove_tptp_file/1 — main entry point.
@@ -90,43 +356,7 @@ read_tptp_formulas_acc(Stream, FileDir, Formulas, Max, Count, Truncated) :-
     ).
 read_tptp_formulas_acc(_, _, [], _, _, false).
 
-% Read all fof() declarations from file, resolving include() directives.
-% FileDir is the directory of the current file, used for relative include paths.
-read_tptp_formulas(Stream, FileDir, Formulas) :-
-    \+ at_end_of_stream(Stream),
-    read(Stream, Term),
-    !,
-    (   Term = fof(_, _, _) ->
-        Formulas = [Term|Rest],
-        read_tptp_formulas(Stream, FileDir, Rest)
-    ;   Term = include(RelPath) ->
-        % Resolve include path: try relative to FileDir first, then $TPTP
-        ( atom_concat(FileDir, '/', Prefix),
-          atom_concat(Prefix, RelPath, AbsPath1),
-          exists_file(AbsPath1)
-        -> IncludePath = AbsPath1
-        ; getenv('TPTP', TTPTBase),
-          atom_concat(TTPTBase, '/', TPrefix),
-          atom_concat(TPrefix, RelPath, AbsPath2),
-          exists_file(AbsPath2)
-        -> IncludePath = AbsPath2
-        ;  format('% WARNING: Include file not found: ~w~n', [RelPath]),
-           IncludePath = ''
-        ),
-        ( IncludePath \= '' ->
-            file_directory_name(IncludePath, IncludeDir),
-            open(IncludePath, read, IncStream),
-            read_tptp_formulas(IncStream, IncludeDir, IncFormulas),
-            close(IncStream),
-            read_tptp_formulas(Stream, FileDir, RestFormulas),
-            append(IncFormulas, RestFormulas, Formulas)
-        ;
-            read_tptp_formulas(Stream, FileDir, Formulas)
-        )
-    ;   % Skip other non-fof terms (comments, directives, etc.)
-        read_tptp_formulas(Stream, FileDir, Formulas)
-    ).
-read_tptp_formulas(_, _, []).
+
 
 % Process list of TPTP formulas - collect axioms and combine with conjecture
 % Two-pass: first collect ALL axioms, then process conjecture.
@@ -286,151 +516,7 @@ char_downcase(C, L) :-
     ;   L = C
     ).
 
-% Removed: expand_quantifier_lists(!(VarTerm:Body), ...)
-% This clause was matching before the list-handling clause and causing bugs
 
-% Removed: expand_quantifier_lists(?(VarTerm:Body), ...)
-% This clause was matching before the list-handling clause and causing bugs
-
-% PRIMARY PATTERN - handles all cases including lists
-% Expand multi-variable quantifiers: ![x,y]: -> ![x]:![y]:
-% CRITICAL: ![a,b]:Body is parsed as !([a,b]:Body) due to operator precedence
-expand_quantifier_lists(!(Expr), Result) :-
-    Expr = (VarTerm:Body),
-    !,
-    (   is_list(VarTerm) ->
-        % True list: [a,b,c] or [a]
-        (   VarTerm = [_|_] ->
-            (   VarTerm = [SingleVar] ->
-                % Single element list - common from TPTP ![X]:
-                format('DEBUG: Single var list [~w], recursing on body~n', [SingleVar]),
-                expand_quantifier_lists(Body, NewBody),
-                % Construct !(SingleVar:NewBody) explicitly
-                NewExpr = (SingleVar:NewBody),
-                Result =.. ['!', NewExpr]
-            ;   % Multiple elements
-                expand_forall_list(VarTerm, Body, Result)
-            )
-        ;   expand_quantifier_lists(Body, NewBody),
-            Result = (![VarTerm]:NewBody)
-        )
-    ;   compound(VarTerm), functor(VarTerm, ',', 2) ->
-        % Comma operator: a,b parsed as ','(a,b)
-        comma_to_list(VarTerm, VarList),
-        expand_forall_list(VarList, Body, Result)
-    ;   % Single variable (not in list)
-        expand_quantifier_lists(Body, NewBody),
-        Result = (![VarTerm]:NewBody)
-    ).
-
-% Same for existential
-expand_quantifier_lists(?(Expr), Result) :-
-    Expr = (VarTerm:Body),
-    !,
-    (   is_list(VarTerm), VarTerm = [_|_] ->
-        (   VarTerm = [SingleVar] ->
-            % Single element list - common from TPTP ?[X]:
-            expand_quantifier_lists(Body, NewBody),
-            % Construct ?(SingleVar:NewBody) explicitly
-            NewExpr = (SingleVar:NewBody),
-            Result =.. ['?', NewExpr]
-        ;   % Multiple elements
-            expand_exists_list(VarTerm, Body, Result)
-        )
-    ;   compound(VarTerm), functor(VarTerm, ',', 2) ->
-        comma_to_list(VarTerm, VarList),
-        expand_exists_list(VarList, Body, Result)
-    ;   expand_quantifier_lists(Body, NewBody),
-        Result = (?[VarTerm]:NewBody)
-    ).
-
-% OLD PATTERN kept for backward compatibility
-expand_quantifier_lists(![VarTerm]:Body, Result) :-
-    (   is_list(VarTerm) ->
-        % True list: [a,b,c]
-        (   VarTerm = [_|_] ->
-            expand_forall_list(VarTerm, Body, Result)
-        ;   Result = (![VarTerm]:Body)
-        )
-    ;   compound(VarTerm), functor(VarTerm, ',', 2) ->
-        % Comma operator: a,b parsed as ','(a,b)
-        comma_to_list(VarTerm, VarList),
-        expand_forall_list(VarList, Body, Result)
-    ;   % Single variable
-        !, expand_quantifier_lists(Body, NewBody),
-        Result = (![VarTerm]:NewBody)
-    ).
-
-expand_quantifier_lists(?[VarList]:Body, Result) :-
-    is_list(VarList), VarList = [_|_], !,
-    expand_exists_list(VarList, Body, Result).
-
-expand_quantifier_lists(![Var]:Body, ![Var]:NewBody) :- !,
-    expand_quantifier_lists(Body, NewBody).
-
-expand_quantifier_lists(?[Var]:Body, ?[Var]:NewBody) :- !,
-    expand_quantifier_lists(Body, NewBody).
-
-expand_quantifier_lists(A & B, NewA & NewB) :- !,
-    expand_quantifier_lists(A, NewA),
-    expand_quantifier_lists(B, NewB).
-
-expand_quantifier_lists(A | B, NewA | NewB) :- !,
-    expand_quantifier_lists(A, NewA),
-    expand_quantifier_lists(B, NewB).
-
-expand_quantifier_lists(A => B, NewA => NewB) :- !,
-    expand_quantifier_lists(A, NewA),
-    expand_quantifier_lists(B, NewB).
-
-expand_quantifier_lists(A <=> B, NewA <=> NewB) :- !,
-    expand_quantifier_lists(A, NewA),
-    expand_quantifier_lists(B, NewB).
-
-expand_quantifier_lists(~A, ~NewA) :- !,
-    expand_quantifier_lists(A, NewA).
-
-expand_quantifier_lists(A = B, A = B) :- !.
-
-% Removed CATCH-ALL for debugging - it was blocking the generic clause below
-
-expand_quantifier_lists(Term, NewTerm) :-
-    compound(Term), !,
-    Term =.. [F|Args],
-    maplist(expand_quantifier_lists, Args, NewArgs),
-    NewTerm =.. [F|NewArgs].
-
-expand_quantifier_lists(Atom, Atom).
-
-% Expand ![x,y,z]: Body into ![x]:![y]:![z]: Body
-expand_forall_list([Var], Body, Result) :- !,
-    expand_quantifier_lists(Body, NewBody),
-    % Construct !(Var:NewBody) explicitly to avoid operator precedence issues
-    Expr = (Var:NewBody),
-    Result =.. ['!', Expr].
-expand_forall_list([Var|Rest], Body, Result) :-
-    expand_forall_list(Rest, Body, RestResult),
-    % Construct !(Var:RestResult) explicitly
-    Expr = (Var:RestResult),
-    Result =.. ['!', Expr].
-
-% Expand ?[x,y,z]: Body into ?[x]:?[y]:?[z]: Body
-expand_exists_list([Var], Body, Result) :- !,
-    expand_quantifier_lists(Body, NewBody),
-    % Construct ?(Var:NewBody) explicitly to avoid operator precedence issues
-    Expr = (Var:NewBody),
-    Result =.. ['?', Expr].
-expand_exists_list([Var|Rest], Body, Result) :-
-    expand_exists_list(Rest, Body, RestResult),
-    % Construct ?(Var:RestResult) explicitly
-    Expr = (Var:RestResult),
-    Result =.. ['?', Expr].
-
-% Convert comma operator to list: ','(a,','(b,c)) -> [a,b,c]
-comma_to_list((A,B), [A|Rest]) :-
-    !,
-    comma_to_list(B, Rest).
-comma_to_list(A, [A]).
 xyz_name(N, Name) :-
     Base is N mod 3,
     Suffix is N div 3,
@@ -702,13 +788,6 @@ szs_disproved_status(Formula, Status) :-
 % FORMULA CLASSIFICATION HELPERS
 % =========================================================================
 
-% is_tptp_false_formula(+F)
-% True when F is the TPTP falsum — either as the raw TPTP atom $false/'$false'
-% or as the G4mic internal translation ~(p0=>p0).
-is_tptp_false_formula('$false') :- !.
-is_tptp_false_formula($false)   :- !.
-is_tptp_false_formula(~(p0 => p0)) :- !.   % translate_operators output for $false
-
 % -------------------------------------------------------------------------
 % simplify_g4mic_formula(+F, -Value)
 %
@@ -784,35 +863,5 @@ simplify_g4mic_iff(false, false, true)   :- !.
 simplify_g4mic_iff(true,  false, false)  :- !.
 simplify_g4mic_iff(false, true,  false)  :- !.
 simplify_g4mic_iff(_,     _,     unknown).
-
-% tptp_formula_is_propositional(+F)
-% True when F contains no first-order constructs: no quantifiers, no equality,
-% and no compound predicate/function applications with arguments (arity >= 1).
-% Used by szs_disproved_status to decide whether an exhaustive comp(7) search
-% can definitively establish CounterSatisfiable (propositional) or only GaveUp
-% (FOL, where comp(7) may be too shallow).
-tptp_formula_is_propositional(F) :-
-    \+ tptp_formula_has_fol_feature(F).
-
-tptp_formula_has_fol_feature(![_]:_)  :- !.
-tptp_formula_has_fol_feature(?[_]:_)  :- !.
-tptp_formula_has_fol_feature(all _:_) :- !.
-tptp_formula_has_fol_feature(ex _:_)  :- !.
-tptp_formula_has_fol_feature(_ = _)   :- !.
-tptp_formula_has_fol_feature(A & B)   :- !,
-    ( tptp_formula_has_fol_feature(A) -> true ; tptp_formula_has_fol_feature(B) ).
-tptp_formula_has_fol_feature(A | B)   :- !,
-    ( tptp_formula_has_fol_feature(A) -> true ; tptp_formula_has_fol_feature(B) ).
-tptp_formula_has_fol_feature(A => B)  :- !,
-    ( tptp_formula_has_fol_feature(A) -> true ; tptp_formula_has_fol_feature(B) ).
-tptp_formula_has_fol_feature(A <=> B) :- !,
-    ( tptp_formula_has_fol_feature(A) -> true ; tptp_formula_has_fol_feature(B) ).
-tptp_formula_has_fol_feature(~A) :- !,
-    tptp_formula_has_fol_feature(A).
-% Compound term with at least one argument = predicate/function of arity >= 1.
-tptp_formula_has_fol_feature(Term) :-
-    compound(Term),
-    Term =.. [_|Args],
-    Args \= [].
 
 %%% END OF g4mic PROVER

@@ -366,9 +366,6 @@ g4mic_contains_equality_direct(A => B) :- !, (g4mic_contains_equality_direct(A) 
 g4mic_contains_equality_direct(A <=> B) :- !, (g4mic_contains_equality_direct(A) ; g4mic_contains_equality_direct(B)).
 g4mic_contains_equality_direct(![_]: A) :- !, g4mic_contains_equality_direct(A).
 g4mic_contains_equality_direct(?[_]:A) :- !, g4mic_contains_equality_direct(A).
-% No recursive descent into arbitrary compound terms - only through logical operators
-g4mic_contains_equality_direct(_) :- fail.
-
 
 %=========================================================================
 % END OF DETECTIONS

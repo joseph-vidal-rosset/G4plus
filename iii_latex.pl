@@ -77,7 +77,6 @@ quantifier_body_needs_parens((_ ' \\to ' _)) :- !.
 quantifier_body_needs_parens((_ ' \\land ' _)) :- !.
 quantifier_body_needs_parens((_ ' \\lor ' _)) :- !.
 quantifier_body_needs_parens((_ ' \\leftrightarrow ' _)) :- !.
-quantifier_body_needs_parens(_) :- fail.
 
 % =========================================================================
 % ALL write_formula_with_parens/1 CLAUSES GROUPED
@@ -548,20 +547,6 @@ rewrite_term(X, J, K, Y) :-
     rewrite_list(L, J, K, R),
     Y =.. [F|R].
 
-% Generateur de noms elegants pour variables liees
-% Use x, y, z instead of a, b, c to avoid collision with constants
-rewrite_name(K, N) :-
-    K < 3,
-    !,
-    J is K+0'x,  % Generates x, y, z
-    char_code(N, J).
-
-rewrite_name(K, N) :-
-    J is (K mod 3)+0'x,  % For K >= 3, generates x0, y0, z0, x1, y1, z1...
-    H is K div 3,
-    number_codes(H, L),
-    atom_codes(N, [J|L]).
-
 % =========================================================================
 % CONSTANT NAME GENERATOR
 % For instantiation terms (eigenvariables and gamma-rule witnesses)
@@ -603,11 +588,6 @@ toggle_code(X, X).
 % =========================================================================
 % SYSTEME PREPARE
 % =========================================================================
-
-prepare_premisses_list([], []) :- !.
-prepare_premisses_list([H|T], [PreparedH|PreparedT]) :-
-    prepare(H, [], PreparedH),
-    prepare_premisses_list(T, PreparedT).
 
 prepare(#, _, #) :- !.
 

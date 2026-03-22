@@ -455,23 +455,6 @@ fitch_g4_proof(cq_m((Premisses > _), SubProof), Context, Scope, CurLine, NextLin
                        SubProof, Context, CurLine, NextLine, ResLine, VarIn, VarOut).
 
 % =========================================================================
-% EQUALITY RULES - CORRECTED VERSION
-% =========================================================================
-
-% Reflexivity
-
-% Symmetry
-
-% Transitivity
-
-% Substitution (Leibniz) - MAIN CASE
-
-% Congruence
-
-% Substitution in equality
-
-% Transitivity chain
-% =========================================================================
 % FALLBACK
 % =========================================================================
 fitch_g4_proof(UnknownRule, _Context, _Scope, CurLine, CurLine, CurLine, VarIn, VarIn) :-

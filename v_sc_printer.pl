@@ -238,7 +238,6 @@ filter_top_from_gamma([H|T], Filtered) :-
 % Top is represented as (# => #) or sometimes ~ #
 is_top_formula((# => #)) :- !.
 is_top_formula(((# => #) => #) => #) :- !.  % Double negation of top
-is_top_formula(_) :- fail.
 
 % =========================================================================
 % FORMULA LIST RENDERING

@@ -263,9 +263,6 @@ nanocop_contains_equality(Term) :-
     member(Arg, Args),
     nanocop_contains_equality(Arg), !.
 
-% Base case: no equality
-nanocop_contains_equality(_) :- fail.
-
 % =========================================================================
 % OUTPUT RESULT
 % =========================================================================
@@ -811,10 +808,7 @@ prove(Left <=> Right) :-
         write('                '), write(Left => Right), nl,
         write('----------------------------------------------------------------'), nl, nl,
         ( Direction1Valid = true ->
-            % write('\\begin{fitch}'), nl,
-            % g4_to_fitch_theorem(Proof1),
-            % write('\\end{fitch}'), nl, nl,
-          render_clean_fitch(Proof1),nl,nl,
+            render_clean_fitch(Proof1),nl,nl,
             write('Q.E.D.'), nl, nl
         ; write('  failed'), nl, nl
         ),
@@ -825,10 +819,7 @@ prove(Left <=> Right) :-
         write('             '), write(Right => Left), nl,
         write('----------------------------------------------------------------'), nl, nl,
         ( Direction2Valid = true ->
-            % write('\\begin{fitch}'), nl,
-            % g4_to_fitch_theorem(Proof2),
-            % write('\\end{fitch}'), nl, nl,
-          render_clean_fitch(Proof2),nl,nl,
+            render_clean_fitch(Proof2),nl,nl,
             write('Q.E.D.'), nl, nl
         ; write('  failed'), nl, nl
         ),
