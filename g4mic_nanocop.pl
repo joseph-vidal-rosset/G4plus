@@ -3473,6 +3473,11 @@ try_derive_immediately(Goal, Context, Scope, CurLine, NextLine, ResLine, VarIn, 
 
 try_derive_immediately(Goal, Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :-
     member(FLine: #, Context),
+    % bot E (ex falso) is NOT valid in minimal logic.
+    % In minimal logic, # in context only proves # (by identity),
+    % not arbitrary goals.
+    current_logic_level(LL),
+    member(LL, [intuitionistic, classical]),
     !,
     RuleTerm = lbot(FLine),
     JustFormat = '$ \\bot E $ ~w',
