@@ -140,23 +140,23 @@ nanocop_proves(Formula) :-
             ),
 
             % IMPORTANT : PAS DE NEGATION - prove2 gere la refutation en interne
-            ( time(prove2(FormulaToProve, [cut,comp(40)], Proof)) ->
+            ( time(prove2(FormulaToProve, [cut,comp(7)], Proof)) ->
               Result='Theorem'
             ;
               Result='Non-Theorem'
             ),
-            bmatrix(FormulaToProve, [cut,comp(40)], Matrix),
+            bmatrix(FormulaToProve, [cut,comp(7)], Matrix),
             output_result(Formula, Matrix, Proof, Result),
             % VERIFIER le resultat
             Result='Theorem'
         ),
-        50000000,
+        2000000,
         InfResult
     ),
     ( InfResult == inference_limit_exceeded ->
         % Limite atteinte: verifier avec nanocop_decides si c'est quand meme un theoreme
         ( catch(
-              ( call_with_inference_limit(nanocop_decides(Formula), 50000000, InfResult2),
+              ( call_with_inference_limit(nanocop_decides(Formula), 5000000, InfResult2),
                 InfResult2 \== inference_limit_exceeded ),
               _, fail
           ) ->
@@ -193,42 +193,7 @@ nanocop_decides(Formula) :-
 
     % IMPORTANT : PAS DE NEGATION - prove2 gere la refutation en interne
     retractall(nanocop_depth_limited),
-    prove2(FormulaToProve, [cut,comp(40)], _Proof),
-    retractall(g4mic_silent_mode), !.
-
-% =========================================================================
-% nanocop_decides_equality/1 : LEGACY - now equivalent to nanocop_decides/1
-% =========================================================================
-% Kept for backward compatibility. Since nanocop_decides/1 now uses comp(40)
-% globally, this predicate is redundant.
-%
-% ROLLBACK REFERENCE (original values before general upgrade):
-%   nanocop_decides:  comp(40),  prove_tptp_internal limits: 2000000
-%   nanocop_probe:    comp(40),  50000 inferences, 2s time
-%   nanocop_proves:   comp(40),  2000000 / fallback 5000000
-
-nanocop_decides_equality(Formula) :-
-    assertz(g4mic_silent_mode),
-
-    % Detecter l'egalite AVANT traduction
-    (nanocop_contains_equality(Formula) ->
-        HasEquality = true
-    ;
-        HasEquality = false
-    ),
-
-    translate_formula(Formula, InternalFormula),
-
-    % N'appeler leancop_equal QUE si egalite presente
-    (HasEquality = true ->
-        leancop_equal(InternalFormula, FormulaToProve)
-    ;
-        FormulaToProve = InternalFormula
-    ),
-
-    % IMPORTANT : PAS DE NEGATION - prove2 gere la refutation en interne
-    retractall(nanocop_depth_limited),
-    prove2(FormulaToProve, [cut,comp(40)], _Proof),
+    prove2(FormulaToProve, [cut,comp(7)], _Proof),
     retractall(g4mic_silent_mode), !.
 
 % =========================================================================
@@ -236,7 +201,7 @@ nanocop_decides_equality(Formula) :-
 % =========================================================================
 % Runs prove2 WITHOUT cut under inference limit. The result tells us:
 %   proved          - formula is provable
-%   depth_limited   - search was truncated by comp(40)
+%   depth_limited   - search was truncated by comp(7)
 %   exhausted       - search space fully explored, no proof exists
 %   inference_limit - inference limit reached before conclusion
 %
@@ -259,14 +224,14 @@ nanocop_probe(Formula, Result) :-
         FormulaToProve = InternalFormula
     ),
     retractall(nanocop_depth_limited),
-    % Probe with [comp(40)] (no cut) under strict limits.
-    % Uses time limit (5s) as safety net on native SWI,
+    % Probe with [comp(7)] (no cut) under strict limits.
+    % Uses time limit (2s) as safety net on native SWI,
     % falls back to inference limit only for WASM.
     ProbeGoal = call_with_inference_limit(
-                    prove2(FormulaToProve, [comp(40)], _Proof),
-                    500000, InfResult),
+                    prove2(FormulaToProve, [comp(7)], _Proof),
+                    50000, InfResult),
     ( predicate_property(call_with_time_limit(_,_), defined) ->
-        TimedGoal = call_with_time_limit(5, ProbeGoal)
+        TimedGoal = call_with_time_limit(2, ProbeGoal)
     ;
         TimedGoal = ProbeGoal   % WASM: no time limit available
     ),
@@ -1500,6 +1465,7 @@ g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, rcond(Gamma>Delta, P)) :-
     Delta = [A => B], !,
     g4mic_proves([A | Gamma]>[B], FV, Th, SI, SO, LL, P).
 
+
 % --- Rule 7: R& (deterministic: Delta is a conjunction -> decompose immediately) --
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, rand(Gamma>Delta, P1, P2)) :-
     Delta = [(A & B)], !,
@@ -1584,7 +1550,7 @@ g4mic_proves(Gamma > Delta, FV, Th, SI, SO, LL, rex(Gamma>Delta, P)) :-
     g4mic_proves(Gamma > [A1 | D1], [Y | FV], Th, SI, SO, LL, P), !.
 
 % =========================================================================
-% CLASSICAL QUANTIFIER CONVERSION RULE (classical)
+% QUANTIFIER CONVERSION RULES (classical)
 % =========================================================================
 
 % --- Rule 17: CQ_c (classical quantifier shift) ---------------------------
@@ -5362,17 +5328,16 @@ prove_tptp_internal(Formula, ProblemType) :-
     % Check if needs nanoCoP (equality/functions)
     g4mic_needs_nanocop(Formula),
     !,
-    format('% Equality/functions detected -> nanoCoP oracle mode~n', []),
     catch(
         (
             ( write('nanoCoP : '), nl,
-              time(call_with_inference_limit(nanocop_decides(Formula), 50000000, InfResult_eq)),
+              time(call_with_inference_limit(nanocop_decides(Formula), 2000000, InfResult_eq)),
               InfResult_eq \== inference_limit_exceeded ->
                 szs_status(ProblemType, proved, SZSStatus),
                 nl,
-                format('% SZS status ~w~n', [SZSStatus]),
                 format('% nanoCoP proof (equality/functions)~n', []),
                 format('% nanoCoP proof is given at https://g4-mic.vidal-rosset.net/wasm/tinker via nanocop_proves(Your_Formula).~n', []),
+                format('% SZS status ~w~n', [SZSStatus]),
                 nl
             ;
                 format('% SZS status GaveUp~n', []),
@@ -5390,7 +5355,7 @@ prove_tptp_internal(Formula, no_conjecture) :-
     NegFormula = (Formula => #),
     ( catch(
           (write('nanoCoP : '), nl,
-           time(call_with_inference_limit(nanocop_decides(NegFormula), 50000000, InfResult_nc))),
+           time(call_with_inference_limit(nanocop_decides(NegFormula), 2000000, InfResult_nc))),
           _,
           fail
       ),
@@ -5400,15 +5365,15 @@ prove_tptp_internal(Formula, no_conjecture) :-
       ( write('g4mic : '), nl,
         time(g4mic_logic_level(NegFormula, Logic)) ->
           nl,
-          format('% SZS status Unsatisfiable~n', []),
           format('% Logic level: valid in ~w logic.~n', [Logic]),
           format('% To get proofs (sequent calculus G4 and natural deduction), you can use G4+ at https://g4-mic.vidal-rosset.net/wasm/tinker~n'),
+          format('% SZS status Unsatisfiable~n', []),
           nl
       ;
           % G4+ could not classify but nanoCoP validated: still Unsatisfiable
           nl,
-          format('% SZS status Unsatisfiable~n', []),
           format('% To get proofs (sequent calculus G4 and natural deduction), you can use G4+ at https://g4-mic.vidal-rosset.net/wasm/tinker~n'),
+          format('% SZS status Unsatisfiable~n', []),
           nl
       )
     ;
@@ -5424,7 +5389,7 @@ prove_tptp_internal(Formula, no_conjecture) :-
           ; ProbeResult = depth_limited ->
               format('% SZS status GaveUp~n', [])
           ;
-              % ProbeResult = exhausted: comp(40) found no proof of NegFormula,
+              % ProbeResult = exhausted: comp(7) found no proof of NegFormula,
               % but this does NOT establish that the axioms are genuinely
               % satisfiable — the proof may require multiplicity > 7.
               % Report GaveUp to avoid soundness errors.
@@ -5463,7 +5428,7 @@ prove_tptp_internal(Formula, has_conjecture) :-
           setup_call_cleanup(
               true,
               (write('nanoCoP : '), nl,
-               time(call_with_inference_limit(nanocop_decides(Formula), 50000000, InfResult_hc))),
+               time(call_with_inference_limit(nanocop_decides(Formula), 2000000, InfResult_hc))),
               set_prolog_flag(occurs_check, OriginalFlag)
           ),
           _,
@@ -5487,15 +5452,15 @@ prove_tptp_internal(Formula, has_conjecture) :-
     ( write('g4mic : '), nl,
       time(g4mic_logic_level(Formula, Logic)) ->
         nl,
-        format('% SZS status Theorem~n', []),
         format('% Logic level: valid in ~w logic.~n', [Logic]),
         format('% To get proofs (sequent calculus G4 and natural deduction), you can use G4+ at https://g4-mic.vidal-rosset.net/wasm/tinker~n'),
+        format('% SZS status Theorem~n', []),
         nl
     ;
         % G4+ could not classify but nanoCoP validated: still a Theorem
         nl,
-        format('% SZS status Theorem~n', []),
         format('% To get proofs (sequent calculus G4 and natural deduction), you can use G4+ at https://g4-mic.vidal-rosset.net/wasm/tinker~n'),
+        format('% SZS status Theorem~n', []),
         nl
     ).
 
@@ -5544,7 +5509,7 @@ tptp_validation_phase(Formula, SZSStatus) :-
 % Determine SZS status for a formula that failed to prove.
 % Uses nanocop_probe/2 (prove2 WITHOUT cut, with time+inference limits)
 % for reliable depth-limit detection.
-% With [cut,comp(40)], nanoCoP may prune branches and never hit the depth
+% With [cut,comp(7)], nanoCoP may prune branches and never hit the depth
 % limit, so we probe without cut to get a trustworthy answer.
 %
 % nanocop_probe returns: proved | depth_limited | exhausted
@@ -5552,7 +5517,7 @@ tptp_validation_phase(Formula, SZSStatus) :-
 % Logic:
 %   1. Probe F without cut:
 %      - proved       -> Theorem (cut-free search found proof that cut missed)
-%      - depth_limited -> GaveUp (comp(40) insufficient, skip ~F test)
+%      - depth_limited -> GaveUp (comp(7) insufficient, skip ~F test)
 %      - exhausted    -> F genuinely not provable, proceed to test ~F
 %   2. Probe ~F without cut:
 %      - proved       -> Unsatisfiable (F is a contradiction)
@@ -5574,7 +5539,7 @@ szs_disproved_status(Formula, Status) :-
             Status = 'GaveUp'
         ;
             % Both searches exhausted.
-            % Even for propositional formulas, nanocop_probe at comp(40) is
+            % Even for propositional formulas, nanocop_probe at comp(7) is
             % NOT a complete decision procedure: a proof may exist requiring
             % multiplicity > 7.  "exhausted" means only "no proof found within
             % the bound", NOT "formula is CounterSatisfiable".

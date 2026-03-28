@@ -93,7 +93,6 @@ g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, rcond(Gamma>Delta, P)) :-
     Delta = [A => B], !,
     g4mic_proves([A | Gamma]>[B], FV, Th, SI, SO, LL, P).
 
-
 % --- Rule 7: R& (deterministic: Delta is a conjunction -> decompose immediately) --
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, rand(Gamma>Delta, P1, P2)) :-
     Delta = [(A & B)], !,
@@ -178,7 +177,7 @@ g4mic_proves(Gamma > Delta, FV, Th, SI, SO, LL, rex(Gamma>Delta, P)) :-
     g4mic_proves(Gamma > [A1 | D1], [Y | FV], Th, SI, SO, LL, P), !.
 
 % =========================================================================
-% QUANTIFIER CONVERSION RULES (classical)
+% CLASSICAL QUANTIFIER CONVERSION RULE (classical)
 % =========================================================================
 
 % --- Rule 17: CQ_c (classical quantifier shift) ---------------------------
