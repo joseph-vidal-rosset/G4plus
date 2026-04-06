@@ -150,13 +150,13 @@ nanocop_proves(Formula) :-
             % VERIFIER le resultat
             Result='Theorem'
         ),
-        50000000,
+        80000000,
         InfResult
     ),
     ( InfResult == inference_limit_exceeded ->
         % Limite atteinte: verifier avec nanocop_decides si c'est quand meme un theoreme
         ( catch(
-              ( call_with_inference_limit(nanocop_decides(Formula), 50000000, InfResult2),
+              ( call_with_inference_limit(nanocop_decides(Formula), 80000000, InfResult2),
                 InfResult2 \== inference_limit_exceeded ),
               _, fail
           ) ->
@@ -206,6 +206,11 @@ nanocop_decides(Formula) :-
 %   nanocop_decides:  comp(40),  prove_tptp_internal limits: 2000000
 %   nanocop_probe:    comp(40),  50000 inferences, 2s time
 %   nanocop_proves:   comp(40),  2000000 / fallback 5000000
+%
+% v1.4 upgrade history:
+%   prove_tptp_internal / nanocop_proves: 2M -> 50M -> 80M
+%   nanocop_probe: 50K/2s -> 500K/5s (unchanged in this round)
+%   g4mic_logic_level_internal: 10M -> 80M
 
 nanocop_decides_equality(Formula) :-
     assertz(g4mic_silent_mode),
@@ -1257,7 +1262,7 @@ g4mic_logic_level_internal(F2, intuitionistic) :-
 
 g4mic_logic_level_internal(F2, classical) :-
     catch(call_with_inference_limit(
-        provable_at_level([] > [F2], classical, _), 10000000, InfRes), _, fail),
+        provable_at_level([] > [F2], classical, _), 80000000, InfRes), _, fail),
     InfRes \== inference_limit_exceeded, !.
 
 % =========================================================================
@@ -1458,6 +1463,22 @@ g4mic_ax(Gamma > Delta, _, _, SkolemIn, SkolemIn, _, ax(Gamma>Delta, ax)) :-
 % g4mic_proves(Sequent, FreeVars, Threshold, SkolemIn, SkolemOut,
 %              LogicLevel, Proof)
 % =========================================================================
+%
+% Rule ordering rationale:
+% -------------------------
+% Invertible deterministic rules first (no branching, no loss of information):
+%   1. Axiom, L-bot                     — base cases
+%   2. Lexists, Rforall                 — eigenvariable introduction (enriches context)
+%   3. R->, L&                          — structural decomposition
+%   4. L0->, L&->                       — conditional decomposition (benefit from eigenvars)
+%   5. R&, L\/->                        — deterministic with cut
+% Then branching rules (non-deterministic, expensive):
+%   6. L\/, R\/                         — disjunction (two branches / choice)
+%   7. IP                               — classical indirect proof
+%   8. L->->                            — implication-to-implication (two branches)
+% Then threshold-based quantifier rules (non-deterministic, instantiation):
+%   9. CQ_m, Lforall, Rexists, CQ_c
+% =========================================================================
 
 % --- Rule 0: Axiom  ----------------------------
 g4mic_proves(Seq, FV, Th, SI, SO, LL, Proof) :-
@@ -1468,12 +1489,30 @@ g4mic_proves(Gamma>Delta, _, _, SI, SI, LL, lbot(Gamma>Delta, #)) :-
     member(LL, [intuitionistic, classical]),
     member(#, Gamma), !.
 
-% --- Rule 2: L& -----------------------------------------------------------
+% --- Rule 4: R-> ---------------------------------------------------------
+g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, rcond(Gamma>Delta, P)) :-
+    Delta = [A => B], !,
+    g4mic_proves([A | Gamma]>[B], FV, Th, SI, SO, LL, P).
+
+% --- Rule 5: L& -----------------------------------------------------------
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, land(Gamma>Delta, P)) :-
     select((A & B), Gamma, G1), !,
     g4mic_proves([A, B | G1]>Delta, FV, Th, SI, SO, LL, P).
 
-% --- Rule 3: Lexists (deterministic: existential in antecedent -> introduce eigenvar) --
+% --- Rule 6: L0-> (modus ponens on context) -------------------------------
+g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, l0cond(Gamma>Delta, P)) :-
+    select((A => B), Gamma, G1),
+    member(A, G1),
+    !,
+    g4mic_proves([B | G1]>Delta, FV, Th, SI, SO, LL, P).
+
+% --- Rule 7: L&-> ---------------------------------------------------------
+g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, landto(Gamma>Delta, P)) :-
+    select(((A & B) => C), Gamma, G1), !,
+    g4mic_proves([(A => (B => C)) | G1]>Delta, FV, Th, SI, SO, LL, P).
+
+
+% --- Rule 2: Lexists (deterministic: existential in antecedent -> introduce eigenvar) --
 g4mic_proves(Gamma > Delta, FV, Th, SI, SO, LL, lex(Gamma>Delta, P)) :-
     select((?[_Z-X]:A), Gamma, G1), !,
     copy_term((X:A, FV), (f_sk(SI, FV):A1, FV)),
@@ -1483,43 +1522,28 @@ g4mic_proves(Gamma > Delta, FV, Th, SI, SO, LL, lex(Gamma>Delta, P)) :-
     J1 is SI + 1,
     g4mic_proves([A1 | G1] > Delta, FV, Th, J1, SO, LL, P).
 
-% --- Rule 4: L0-> (modus ponens on context) -------------------------------
-g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, l0cond(Gamma>Delta, P)) :-
-    select((A => B), Gamma, G1),
-    member(A, G1),
-    !,
-    g4mic_proves([B | G1]>Delta, FV, Th, SI, SO, LL, P).
 
-% --- Rule 5: L&-> ---------------------------------------------------------
-g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, landto(Gamma>Delta, P)) :-
-    select(((A & B) => C), Gamma, G1), !,
-    g4mic_proves([(A => (B => C)) | G1]>Delta, FV, Th, SI, SO, LL, P).
-
-% --- Rule 6: R-> ---------------------------------------------------------
-g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, rcond(Gamma>Delta, P)) :-
-    Delta = [A => B], !,
-    g4mic_proves([A | Gamma]>[B], FV, Th, SI, SO, LL, P).
-
-% --- Rule 7: R& (deterministic: Delta is a conjunction -> decompose immediately) --
+% --- Rule 8: R& (deterministic: Delta is a conjunction -> decompose immediately) --
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, rand(Gamma>Delta, P1, P2)) :-
     Delta = [(A & B)], !,
     g4mic_proves(Gamma>[A], FV, Th, SI, J1, LL, P1),
     g4mic_proves(Gamma>[B], FV, Th, J1, SO, LL, P2).
 
-% --- Rule 8: L\/ (left disjunction) --------------------------------------
+% --- Rule 10: L\/ (left disjunction) --------------------------------------
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, lor(Gamma>Delta, P1, P2)) :-
     select((A | B), Gamma, G1), !,
     g4mic_proves([A | G1]>Delta, FV, Th, SI, J1, LL, P1),
     g4mic_proves([B | G1]>Delta, FV, Th, J1, SO, LL, P2).
 
-% --- Rule 09: R\/ ---------------------------------------------------------
+% --- Rule 11: R\/ ---------------------------------------------------------
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, ror(Gamma>Delta, P)) :-
     Delta = [(A | B)],
     (   g4mic_proves(Gamma>[A], FV, Th, SI, SO, LL, P)
     ;   g4mic_proves(Gamma>[B], FV, Th, SI, SO, LL, P)
     ).
 
-% --- Rule 10: L\/-> (optimized) --------------------------------------------
+
+% --- Rule 9: L\/-> (optimized) --------------------------------------------
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, lorto(Gamma>Delta, P)) :-
     select(((A | B) => C), Gamma, G1), !,
     ( member(A, G1), member(B, G1) ->
@@ -1532,7 +1556,7 @@ g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, lorto(Gamma>Delta, P)) :-
     g4mic_proves([A=>C, B=>C | G1]>Delta, FV, Th, SI, SO, LL, P)
     ).
 
-% --- Rule 11: IP (indirect proof -- classical only, must be before L->->)  --
+% --- Rule 12: IP (indirect proof -- classical only, must be before L->->)  --
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, classical, ip(Gamma>Delta, P)) :-
     Delta = [A],
     A \= #,
@@ -1540,7 +1564,7 @@ g4mic_proves(Gamma>Delta, FV, Th, SI, SO, classical, ip(Gamma>Delta, P)) :-
     Th > 0,
     g4mic_proves([(A => #) | Gamma]>[#], FV, Th, SI, SO, classical, P).
 
-% --- Rule 12: L->-> --------------------------------------------------------
+% --- Rule 13: L->-> --------------------------------------------------------
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, ltoto(Gamma>Delta, P1, P2)) :-
     select(((A => B) => C), Gamma, G1),
     \+ (B = #, member(A, G1)),
@@ -1548,11 +1572,8 @@ g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, ltoto(Gamma>Delta, P1, P2)) :-
     g4mic_proves([A, (B => C) | G1]>[B], FV, Th, SI, J1, LL, P1),
     g4mic_proves([C | G1]>Delta, FV, Th, J1, SO, LL, P2).
 
-% =========================================================================
-% QUANTIFIER RULES (threshold-based)
-% =========================================================================
 
-% --- Rule 13: Rforall (deterministic: universal in succedent -> introduce eigenvar) --
+% --- Rule 3: Rforall (deterministic: universal in succedent -> introduce eigenvar) --
 g4mic_proves(Gamma > Delta, FV, Th, SI, SO, LL, rall(Gamma>Delta, P)) :-
     select((![_Z-X]:A), Delta, D1), !,
     copy_term((X:A, FV), (f_sk(SI, FV):A1, FV)),
@@ -1561,6 +1582,10 @@ g4mic_proves(Gamma > Delta, FV, Th, SI, SO, LL, rall(Gamma>Delta, P)) :-
     b_setval(g4_eigenvars, [f_sk(SI, FV) | UsedVars]),
     J1 is SI + 1,
     g4mic_proves(Gamma > [A1 | D1], FV, Th, J1, SO, LL, P).
+
+% =========================================================================
+% THRESHOLD-BASED QUANTIFIER RULES
+% =========================================================================
 
 % --- Rule 14: CQ_m (quantifier conversion, all logics -- must precede Lforall) --
 % (?[X]:A => B)  ->  ![X]:(A => B)
@@ -1604,6 +1629,7 @@ g4mic_proves(Gamma>Delta, FV, Th, SI, SO, classical, cq_c(Gamma>Delta, P)) :-
 % =========================================================================
 % END of Prover
 % =========================================================================
+
 %==========================================================================
 % LATEX  UTILITIES
 %========================================================================
@@ -4851,7 +4877,12 @@ fof_to_prove_run_safe(Filename) :-
                 combine_axioms(G4micAxioms, Combined),
                 NegFormula = (Combined => #),
                 format('% Running: prove(~w).~n~n', [NegFormula]),
-                ( prove(NegFormula) -> true ; true )
+                ( prove(NegFormula) -> true
+                ; format('~n% G4+ proof failed, attempting nanoCoP...~n', []),
+                  ( nanocop_proves_safe(NegFormula) -> true
+                  ; format('% nanoCoP also failed.~n', [])
+                  )
+                )
             )
         ;
             maplist(convert_axiom_formula, AllAxioms, G4micAxioms),
@@ -4866,7 +4897,12 @@ fof_to_prove_run_safe(Filename) :-
                   ),
                   format('~n% ~w~n', [Name]),
                   format('% Running: prove(~w).~n~n', [CombinedFormula]),
-                  ( prove(CombinedFormula) -> true ; true )
+                  ( prove(CombinedFormula) -> true
+                  ; format('~n% G4+ proof failed, attempting nanoCoP...~n', []),
+                    ( nanocop_proves_safe(CombinedFormula) -> true
+                    ; format('% nanoCoP also failed.~n', [])
+                    )
+                  )
                 )
             )
         )
@@ -5371,7 +5407,7 @@ prove_tptp_internal(Formula, ProblemType) :-
     catch(
         (
             ( write('nanoCoP : '), nl,
-              time(call_with_inference_limit(nanocop_decides(Formula), 50000000, InfResult_eq)),
+              time(call_with_inference_limit(nanocop_decides(Formula), 80000000, InfResult_eq)),
               InfResult_eq \== inference_limit_exceeded ->
                 szs_status(ProblemType, proved, SZSStatus),
                 nl,
@@ -5395,7 +5431,7 @@ prove_tptp_internal(Formula, no_conjecture) :-
     NegFormula = (Formula => #),
     ( catch(
           (write('nanoCoP : '), nl,
-           time(call_with_inference_limit(nanocop_decides(NegFormula), 50000000, InfResult_nc))),
+           time(call_with_inference_limit(nanocop_decides(NegFormula), 80000000, InfResult_nc))),
           _,
           fail
       ),
@@ -5413,6 +5449,7 @@ prove_tptp_internal(Formula, no_conjecture) :-
           % G4+ could not classify but nanoCoP validated: still Unsatisfiable
           nl,
           format('% SZS status Unsatisfiable~n', []),
+          format('% Logic level: not determined (G4+ inference limit exceeded)~n', []),
           format('% To get proofs (sequent calculus G4 and natural deduction), you can use G4+ at https://g4-mic.vidal-rosset.net/wasm/tinker~n'),
           nl
       )
@@ -5468,7 +5505,7 @@ prove_tptp_internal(Formula, has_conjecture) :-
           setup_call_cleanup(
               true,
               (write('nanoCoP : '), nl,
-               time(call_with_inference_limit(nanocop_decides(Formula), 50000000, InfResult_hc))),
+               time(call_with_inference_limit(nanocop_decides(Formula), 80000000, InfResult_hc))),
               set_prolog_flag(occurs_check, OriginalFlag)
           ),
           _,
@@ -5500,6 +5537,7 @@ prove_tptp_internal(Formula, has_conjecture) :-
         % G4+ could not classify but nanoCoP validated: still a Theorem
         nl,
         format('% SZS status Theorem~n', []),
+        format('% Logic level: not determined (G4+ inference limit exceeded)~n', []),
         format('% To get proofs (sequent calculus G4 and natural deduction), you can use G4+ at https://g4-mic.vidal-rosset.net/wasm/tinker~n'),
         nl
     ).
