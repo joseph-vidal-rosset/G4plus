@@ -1,9 +1,12 @@
-%% File: nanocop_proof.pl  -  Version: 1.0  -  Date: 1 May 2021
+%% File: nanocop_proof.pl  -  Version: 1.1  -  Date: 12 April 2026
 %%
 %% Purpose: Presentation of connection proof found by nanoCoP
 %%
 %% Author:  Jens Otten
 %% Web:     www.leancop.de/nanocop/
+%%
+%% Enhanced with i.e. annotations for readability
+%% by J. Vidal-Rosset & Claude/Anthropic, April 2026
 %%
 %% Usage:   nanocop_proof(M,P). % where M is a non-clausal matrix,
 %%                              %  P is the (non-clausal) connection
@@ -14,6 +17,8 @@
 
 
 :- assert(proof(leantptp)). % compact, connect, leantptp, readable
+:- dynamic(ie_matrix/1).
+:- dynamic(ie_varmap/1).
 
 
 %%% output of nanoCoP proof
@@ -60,16 +65,23 @@ nanocop_leantptp_proof(Mat,Proof) :-
     write('%-----------------------------------------------------'),
     nl.
 
-%%% write readable proof
+%%% write readable proof (enhanced with i.e. annotations)
 
 nanocop_readable_proof(Mat,Proof) :-
     write('------------------------------------------------------'),
     nl,
+    retractall(ie_matrix(_)),
+    assert(ie_matrix(Mat)),
+    ie_build_varmap(Mat, VarMap),
+    retractall(ie_varmap(_)),
+    assert(ie_varmap(VarMap)),
     write_explanations,
     write('Proof:'), nl,
     write('------'), nl,
     write('Translation into a non-clausal matrix:'), nl,
-    write('    '), portray_clause(Mat), nl,nl,
+    write('    '), portray_clause(Mat), nl,
+    write('i.e. a disjunction of clauses:'), nl,
+    write('    '), ie_write_matrix(Mat), nl, nl,
     write_introduction,
     calc_proof(Proof,Mat,Proof1),
     write_readable_proof(Proof1), nl,
@@ -195,33 +207,44 @@ write_readable_proof([[(Cla,Num,Sub)|Proof]|Proof2],[I|J]) :-
     write_readable_proof(Proof,[1,I|J]), I1 is I+1,
     write_readable_proof(Proof2,[I1|J]).
 
-%%% write nanoCoP proof step
+%%% write nanoCoP proof step (enhanced: i.e. after Assume)
 
 write_proof_step(I,[Lit|Cla],Num,Sub) :-
     write_assume(I,Lit),
+    ie_write_assume_ie(I,Lit),
     ( Num=(R:N) -> append(_,[H|T],I), length([H|T],N),
-      (R=r -> write_redu(I,[H|T]) ; write_fact(I,[R|T])) ;
+      (R=r -> write_redu(I,[H|T]) ;
+              write_fact(I,[R|T]),
+              ie_write_fact_ie(I, Lit)) ;
       write_clause(I,Cla,Num,Sub) ).
 
 write_assume(I,Lit) :-
     write_step(I),write('.'), write(' Assume '), (-NegLit=Lit;-Lit=NegLit) ->
     write(NegLit), write(' is '), write('false.'), nl.
 
+%%% write_clause (enhanced: i.e. showing original clause content)
+
 write_clause(I,Cla,Num,Sub) :-
     write_sp(I), write(' Then clause ('), write(Num), write(')'),
+    write(' (i.e. ['),
+    ie_write_original_clause(Num),
+    write('])'),
     ( Sub=[[],[]] -> true ; write(' under the substitution '),
-                            write(Sub), nl, write_sp(I) ),
-    ( Cla=[] -> write(' is true.') ;
-      write(' is false if at least one of the following is false:'),
-      nl, write_sp(I), write(' '), write(Cla) ), nl.
+                            write(Sub),
+                            ie_write_subst(Sub),
+                            nl, write_sp(I) ),
+    ( Cla=[] ->
+        write(' is true.')
+    ;
+        write(' is false if at least one of the following is false.')
+    ), nl.
 
 write_redu(I,J) :-
     write_sp(I), write(' This is a contradiction to assumption '),
     write_step(J), write('.'), nl.
 
-write_fact(I,J) :-
-    write_sp(I), write(' This assumption has been refuted in '),
-    write_lstep(J), write('.'), nl.
+write_fact(I,_J) :-
+    write_sp(I), write(' This assumption has been refuted above.'), nl.
 
 %%% write matrix, write step number, write spaces
 
@@ -274,3 +297,181 @@ write_ending :-
     write('Therefore, the given matrix is valid because'), nl,
  write('there is no interpretation that makes it false.'), nl,
  write('                                              Q.E.D.'), nl.
+
+%% ===================================================================
+%%  i.e. helpers: surgical annotations for readability
+%%  Added by J. Vidal-Rosset & Claude/Anthropic, April 2026
+%% ===================================================================
+
+%%% ie_write_matrix(+Mat)
+%%%   Translate the matrix into readable notation
+
+ie_write_matrix(Mat) :-
+    write('['),
+    ie_write_mat_clauses(Mat),
+    write(']').
+
+ie_write_mat_clauses([]).
+ie_write_mat_clauses([!|Rest]) :- !,
+    ie_write_mat_clauses(Rest).
+ie_write_mat_clauses([_IV:Clause]) :- !,
+    ie_write_clause_lits(Clause).
+ie_write_mat_clauses([_IV:Clause|Rest]) :-
+    ie_write_clause_lits(Clause),
+    write(' | '),
+    ie_write_mat_clauses(Rest).
+
+ie_write_clause_lits([]) :- write('()').
+ie_write_clause_lits([E]) :- !, ie_write_lit_or_sub(E).
+ie_write_clause_lits([E|Rest]) :-
+    ie_write_lit_or_sub(E), write(' & '),
+    ie_write_clause_lits(Rest).
+
+ie_write_lit_or_sub(E) :-
+    E =.. [':', _J, SubMat], is_list(SubMat), !,
+    write('('),
+    ie_write_mat_clauses(SubMat),
+    write(')').
+ie_write_lit_or_sub(E) :-
+    E =.. [':', _J, Lit], !,
+    ie_write_lit_or_sub(Lit).
+ie_write_lit_or_sub(E) :-
+    E =.. ['-', Atom], !,
+    write('~ '), ie_write_term_clean(Atom).
+ie_write_lit_or_sub(E) :-
+    ie_write_term_clean(E).
+
+%%% ie_write_term_clean(+Term)
+%%%   Write a term with Skolem and variable renaming
+
+ie_write_term_clean(T) :-
+    var(T), !,
+    ( ie_varmap(VM), member(T-Name, VM) -> write(Name) ; write(T) ).
+ie_write_term_clean(T) :-
+    nonvar(T), T =.. ['^', N, Args],
+    integer(N), is_list(Args), !,
+    atom_concat(sk, N, SkName),
+    ( Args = [] -> write(SkName)
+    ; write(SkName), write('('),
+      ie_write_term_list(Args), write(')')
+    ).
+ie_write_term_clean(T) :-
+    atomic(T), !, write(T).
+ie_write_term_clean(T) :-
+    T =.. [F|Args], Args \= [], !,
+    write(F), write('('),
+    ie_write_term_list(Args), write(')').
+ie_write_term_clean(T) :- write(T).
+
+ie_write_term_list([]).
+ie_write_term_list([T]) :- !, ie_write_term_clean(T).
+ie_write_term_list([T|Rest]) :-
+    ie_write_term_clean(T), write(', '),
+    ie_write_term_list(Rest).
+
+%%% ie_write_original_clause(+Num)
+%%%   Look up original clause content from stored matrix
+
+ie_write_original_clause(Num) :-
+    ( Num = (I^_K), integer(I),
+      ie_matrix(Mat),
+      ie_find_clause(I, Mat, OrigClause) ->
+        ie_write_clause_lits(OrigClause)
+    ; write('?')
+    ).
+
+ie_find_clause(I, Mat, Clause) :-
+    is_list(Mat),
+    member(Elem, Mat),
+    ie_find_clause_in(I, Elem, Clause), !.
+
+ie_find_clause_in(I, (I^_)^_:Clause, Clause) :- !.
+ie_find_clause_in(I, _:SubMat, Clause) :-
+    is_list(SubMat),
+    ie_find_clause(I, SubMat, Clause).
+ie_find_clause_in(I, _J:SubMat, Clause) :-
+    is_list(SubMat),
+    ie_find_clause(I, SubMat, Clause).
+
+%%% ie_write_subst(+Sub)
+%%%   After substitution, explain: i.e. Var1 := Term1, ...
+
+ie_write_subst(Sub) :-
+    ( Sub = [Vars, Terms],
+      is_list(Vars), is_list(Terms),
+      Vars \= [] ->
+        nl, write('                    i.e. '),
+        ie_write_bindings(Vars, Terms)
+    ; true
+    ).
+
+ie_write_bindings([], []).
+ie_write_bindings([V], [T]) :- !,
+    ie_write_term_clean(V), write(' := '), ie_write_term_clean(T).
+ie_write_bindings([V|Vs], [T|Ts]) :-
+    ie_write_term_clean(V), write(' := '), ie_write_term_clean(T),
+    write(', '),
+    ie_write_bindings(Vs, Ts).
+ie_write_bindings(_, _).
+
+%%% ie_write_assume_ie(+I, +Lit)
+%%%   After Otten's "Assume ... is false.", add i.e. line
+%%%   only if the literal needs translation (has Skolem/vars)
+
+ie_write_assume_ie(_I, Lit) :-
+    ( ie_needs_translation(Lit) ->
+        write_sp(_I),
+        write('     i.e. Assume '),
+        ie_write_assume_neglit(Lit),
+        write(' is false.'), nl
+    ; true
+    ).
+
+ie_write_assume_neglit(Lit) :-
+    ( nonvar(Lit), Lit =.. ['-', Atom] ->
+        ie_write_term_clean(Atom)
+    ;
+        write('~ '), ie_write_term_clean(Lit)
+    ).
+
+%%% ie_needs_translation(+Term)
+%%%   True if term contains Prolog variables or Skolem terms
+
+ie_needs_translation(T) :- var(T), !.
+ie_needs_translation(T) :-
+    nonvar(T), T =.. ['^', N, _], integer(N), !.
+ie_needs_translation(T) :-
+    nonvar(T), T =.. [_|Args],
+    member(A, Args), ie_needs_translation(A), !.
+
+%%% ie_build_varmap(+Mat, -VarMap)
+%%%   Assign readable names to Prolog variables
+
+ie_build_varmap(Mat, VarMap) :-
+    term_variables(Mat, Vars),
+    ie_name_vars(Vars,
+        ['X','Y','Z','W','U','V','A','B','C','D',
+         'X1','Y1','Z1','W1','U1','V1',
+         'X2','Y2','Z2','W2','U2','V2'], VarMap).
+
+ie_name_vars([], _, []).
+ie_name_vars([Var|Vs], [Name|Names], [Var-Name|Map]) :-
+    ie_name_vars(Vs, Names, Map).
+ie_name_vars([Var|Vs], [], [Var-GenName|Map]) :-
+    length(Vs, K), N is K + 1,
+    atom_concat('V', N, GenName),
+    ie_name_vars(Vs, [], Map).
+
+%%% ie_write_fact_ie(+I, +Lit)
+%%%   After "This assumption has been refuted above.",
+%%%   add a line showing what was assumed false, in clean notation,
+%%%   so the reader can search for it in the proof.
+
+ie_write_fact_ie(I, Lit) :-
+    ( ie_needs_translation(Lit) ->
+        write_sp(I),
+        write('     (see above: '),
+        ie_write_assume_neglit(Lit),
+        write(')'), nl
+    ; true
+    ).

@@ -1234,7 +1234,7 @@ g4mic_decides(Formula) :-
 decide(X) :- g4mic_decides(X).
 
 % =========================================================================
-% g4mic_logic_level/2 — Determine the logic level WITHOUT building a proof term.
+% g4mic_logic_level/2 -- Determine the logic level WITHOUT building a proof term.
 % =========================================================================
 % Used by the TPTP path after nanoCoP validation.
 % Returns: minimal | intuitionistic | classical
@@ -1467,15 +1467,15 @@ g4mic_ax(Gamma > Delta, _, _, SkolemIn, SkolemIn, _, ax(Gamma>Delta, ax)) :-
 % Rule ordering rationale:
 % -------------------------
 % Invertible deterministic rules first (no branching, no loss of information):
-%   1. Axiom, L-bot                     — base cases
-%   2. Lexists, Rforall                 — eigenvariable introduction (enriches context)
-%   3. R->, L&                          — structural decomposition
-%   4. L0->, L&->                       — conditional decomposition (benefit from eigenvars)
-%   5. R&, L\/->                        — deterministic with cut
+%   1. Axiom, L-bot                     -- base cases
+%   2. Lexists, Rforall                 -- eigenvariable introduction (enriches context)
+%   3. R->, L&                          -- structural decomposition
+%   4. L0->, L&->                       -- conditional decomposition (benefit from eigenvars)
+%   5. R&, L\/->                        -- deterministic with cut
 % Then branching rules (non-deterministic, expensive):
-%   6. L\/, R\/                         — disjunction (two branches / choice)
-%   7. IP                               — classical indirect proof
-%   8. L->->                            — implication-to-implication (two branches)
+%   6. L\/, R\/                         -- disjunction (two branches / choice)
+%   7. IP                               -- classical indirect proof
+%   8. L->->                            -- implication-to-implication (two branches)
 % Then threshold-based quantifier rules (non-deterministic, instantiation):
 %   9. CQ_m, Lforall, Rexists, CQ_c
 % =========================================================================
@@ -3768,7 +3768,7 @@ fitch_g4_proof(ip((_ > [Goal]), SubProof), Context, Scope, CurLine, NextLine, Re
 % Valid in intuitionistic and classical logic (not minimal logic)
 % Pattern: One branch uses explosion (~A with A), other branch derives Goal from B
 fitch_g4_proof(lor((Premisss > [_Goal]), SP1, SP2), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :-
-    % DS is NOT valid in minimal logic — skip this optimization
+    % DS is NOT valid in minimal logic -- skip this optimization
     current_logic_level(LogicLevel),
     LogicLevel \= minimal,
     % Try DS optimization: Check if we have A \/ B and ~A (A => #)
@@ -5114,8 +5114,8 @@ write_tptp_args([A|Rest], BV) :-
 % This module converts TPTP formulas to G4-mic syntax.
 
 % Read and process a TPTP file
-% prove_tptp_file/1 — main entry point.
-% prove_tptp_file/2 — kept for backward compatibility (TimeoutSecs ignored,
+% prove_tptp_file/1 -- main entry point.
+% prove_tptp_file/2 -- kept for backward compatibility (TimeoutSecs ignored,
 %                     inference limit is used instead).
 prove_tptp_file(Filename) :-
     prove_tptp_file(Filename, _Ignored).
@@ -5129,7 +5129,7 @@ prove_tptp_file(Filename, _TimeoutSecs) :-
 
 prove_tptp_file_safe(Filename) :-
     file_directory_name(Filename, FileDir),
-    % Cap loading at 100 000 formulae — problems like CSR+5 have 540 000+
+    % Cap loading at 100 000 formulae -- problems like CSR+5 have 540 000+
     % and loop forever on axiom loading alone.
     open(Filename, read, Stream),
     read_tptp_formulas_limited(Stream, FileDir, Formulas, 100000, Truncated),
@@ -5468,7 +5468,7 @@ prove_tptp_internal(Formula, no_conjecture) :-
           ;
               % ProbeResult = exhausted: comp(40) found no proof of NegFormula,
               % but this does NOT establish that the axioms are genuinely
-              % satisfiable — the proof may require multiplicity > 7.
+              % satisfiable -- the proof may require multiplicity > 7.
               % Report GaveUp to avoid soundness errors.
               format('% SZS status GaveUp~n', [])
           )
@@ -5480,17 +5480,17 @@ prove_tptp_internal(Formula, no_conjecture) :-
 % Root cause covers two distinct errors (SYN916+1 and LCL679+1.001):
 %
 %   SYN916+1: conjecture = $false = ~(p0=>p0).
-%     nanoCoP negates internally → ~~(p0=>p0) = p0=>p0, trivially provable
-%     → spurious Theorem.
+%     nanoCoP negates internally -> ~~(p0=>p0) = p0=>p0, trivially provable
+%     -> spurious Theorem.
 %
 %   LCL679+1.001: conjecture = ~?[X]:~($false|$false).
-%     After translate_operators → ~(ex _:~(~(p0=>p0);~(p0=>p0))).
-%     nanoCoP negates → ex _:(p0=>p0) → clausification gives [[~p0,p0]]:
+%     After translate_operators -> ~(ex _:~(~(p0=>p0);~(p0=>p0))).
+%     nanoCoP negates -> ex _:(p0=>p0) -> clausification gives [[~p0,p0]]:
 %     a tautological clause that nanoCoP preprocessing removes, leaving the
-%     empty matrix → "trivially proved" → spurious Theorem.
+%     empty matrix -> "trivially proved" -> spurious Theorem.
 %
 % Fix: translate Formula to internal form and run simplify_g4mic_formula/2
-% (constant-folding with ~(p0=>p0) ≡ ⊥).  If the result is false, return
+% (constant-folding with ~(p0=>p0) = bot).  If the result is false, return
 % CounterSatisfiable without calling nanoCoP.
 prove_tptp_internal(Formula, has_conjecture) :-
     translate_formula(Formula, InternalFormula),
@@ -5638,22 +5638,22 @@ szs_disproved_status(Formula, Status) :-
 % Evaluates the G4mic *internal* representation of a formula (i.e. after
 % translate_operators has been applied) to one of: true | false | unknown.
 %
-% The evaluation treats ~(p0=>p0) as the canonical G4mic encoding of ⊥ and
-% (~(p0=>p0) => ~(p0=>p0)) as ⊤.  Any atom or compound predicate that is
+% The evaluation treats ~(p0=>p0) as the canonical G4mic encoding of bot and
+% (~(p0=>p0) => ~(p0=>p0)) as top.  Any atom or compound predicate that is
 % neither of these constants evaluates to `unknown`.
 %
 % Properties:
-%   - If Value = false  → formula is structurally always false (CounterSatisfiable).
-%   - If Value = true   → formula is structurally always true  (Theorem).
-%   - If Value = unknown → cannot determine; proceed with normal proof search.
+%   - If Value = false  -> formula is structurally always false (CounterSatisfiable).
+%   - If Value = true   -> formula is structurally always true  (Theorem).
+%   - If Value = unknown -> cannot determine; proceed with normal proof search.
 %
 % Logical correctness: all rules respect classical two-valued semantics.
 % The catch-all clause (unknown) is conservative: it never produces a wrong
 % true/false for formulas containing real predicate/function symbols.
 % -------------------------------------------------------------------------
 
-simplify_g4mic_formula(~(p0=>p0), false) :- !.                        % G4mic ⊥
-simplify_g4mic_formula((~(p0=>p0) => ~(p0=>p0)), true) :- !.          % G4mic ⊤
+simplify_g4mic_formula(~(p0=>p0), false) :- !.                        % G4mic bot
+simplify_g4mic_formula((~(p0=>p0) => ~(p0=>p0)), true) :- !.          % G4mic top
 simplify_g4mic_formula(~A, V) :- !,
     simplify_g4mic_formula(A, VA),
     simplify_g4mic_negate(VA, V).
@@ -5680,7 +5680,7 @@ simplify_g4mic_formula(ex _:A, V) :- !,
 simplify_g4mic_formula(all _:A, V) :- !,
     simplify_g4mic_formula(A, VA),
     ( VA = false -> V = false ; VA = true -> V = true ; V = unknown ).
-% Any other term (real predicate, variable, etc.) → unknown.
+% Any other term (real predicate, variable, etc.) -> unknown.
 simplify_g4mic_formula(_, unknown).
 
 simplify_g4mic_negate(true, false).
