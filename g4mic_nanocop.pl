@@ -47,7 +47,8 @@
 % =========================================================================
 % -------------------------------------------------------------------------
 % CORE LOGICAL OPERATORS (shared by all)
-% -------------------------------------------------------------------------
+%-------------------------------------------------------------------------
+/*
 :- op( 500, fy,  ~).              % negation
 :- op(1000, xfy, &).              % conjunction
 :- op(1100, xfy, '|').            % disjunction
@@ -68,7 +69,12 @@
 :- op(1110, xfy, <=).             % reverse implication
 :- op(1100, xfy, '~|').           % negated disjunction (NOR)
 :- op(1000, xfy, ~&).             % negated conjunction (NAND)
-:- op( 300, xf,  !).              % negated equality (for !=)
+% Note: != is NOT declared as an operator here.
+% The TPTP "!=" cannot coexist with the prefix "!" (universal quantifier)
+% because Prolog's tokenizer isolates "!" before considering operator
+% declarations. We handle "!=" via lexical preprocessing in
+% preprocess_tptp_file/2 (see below): "!=" -> "\=" in source text,
+% then \= (standard SWI op(700,xfx,\=)) is read natively.
 :- op( 299, fx,  $).              % TPTP constants ($true/$false)
 % =========================================================================
 % g4mic specific
@@ -89,6 +95,8 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % End of operators list
 %% File: minimal_driver_equal.pl  -  Version: 7.3 FINAL (time seulement dans proves)
+*/
+% :- use_module(library(pcre)).
 
 :-style_check(-singleton).
 
@@ -4841,6 +4849,40 @@ render_clean_just(Just) :-
 %  Reads a TPTP .p file and prints the equivalent prove/1 command(s).
 %  Handles axioms + conjecture by combining them as (Ax1 & Ax2 & ...) => Conj.
 
+
+% =========================================================================
+% TPTP LEXICAL PREPROCESSING
+% =========================================================================
+% Replaces "!=" with "\=" in the source text before read/2 sees the file.
+% Reason: SWI-Prolog tokenizer isolates "!" (declared as prefix universal
+% quantifier) before considering operator declarations, so any infix
+% declaration of != is defeated. \= is a standard SWI operator
+% (op(700, xfx, \=)) and is read natively without conflict.
+% The result of read/2 will then be a term A \= B, which we convert to
+% ~(A=B) in expand_multi_var_quantifiers/2.
+
+preprocess_tptp_file(InFile, OutFile) :-
+    read_file_to_string(InFile, Content, []),
+    string_chars(Content, Chars),
+    replace_neq(Chars, Processed),
+    string_chars(ProcessedStr, Processed),
+    tmp_file_stream(text, OutFile, Stream),
+
+
+    write(Stream, ProcessedStr),
+    close(Stream).
+
+% replace_neq(+CharsIn, -CharsOut)
+% Replaces every occurrence of "!=" with "\=" in a list of characters.
+% Pure Prolog, no library dependencies. Works on native and WASM.
+replace_neq([], []).
+replace_neq(['!', '='|Rest], ['\\', '='|RestOut]) :- !,
+    replace_neq(Rest, RestOut).
+replace_neq([C|Rest], [C|RestOut]) :-
+    replace_neq(Rest, RestOut).
+
+%% fof_to_prove(+Filename)
+
 fof_to_prove(Filename) :-
     catch(
         fof_to_prove_safe(Filename),
@@ -4861,9 +4903,11 @@ fof_to_prove_run(Filename) :-
 
 fof_to_prove_run_safe(Filename) :-
     file_directory_name(Filename, FileDir),
-    open(Filename, read, Stream),
+    preprocess_tptp_file(Filename, ProcessedFile),
+    open(ProcessedFile, read, Stream),
     read_tptp_formulas_limited(Stream, FileDir, Formulas, 100000, Truncated),
     close(Stream),
+    catch(delete_file(ProcessedFile), _, true),
     ( Truncated = true ->
         format('% File too large (> 100000 formulae)~n')
     ;
@@ -4910,9 +4954,11 @@ fof_to_prove_run_safe(Filename) :-
 
 fof_to_prove_safe(Filename) :-
     file_directory_name(Filename, FileDir),
-    open(Filename, read, Stream),
+    preprocess_tptp_file(Filename, ProcessedFile),
+    open(ProcessedFile, read, Stream),
     read_tptp_formulas_limited(Stream, FileDir, Formulas, 100000, Truncated),
     close(Stream),
+    catch(delete_file(ProcessedFile), _, true),
     ( Truncated = true ->
         format('% File too large (> 100000 formulae)~n')
     ;
@@ -5131,9 +5177,11 @@ prove_tptp_file_safe(Filename) :-
     file_directory_name(Filename, FileDir),
     % Cap loading at 100 000 formulae -- problems like CSR+5 have 540 000+
     % and loop forever on axiom loading alone.
-    open(Filename, read, Stream),
+    preprocess_tptp_file(Filename, ProcessedFile),
+    open(ProcessedFile, read, Stream),
     read_tptp_formulas_limited(Stream, FileDir, Formulas, 100000, Truncated),
     close(Stream),
+    catch(delete_file(ProcessedFile), _, true),
     ( Truncated = true ->
         format('% WARNING: Problem has > 100000 formulae, too large for G4+~n'),
         format('% SZS status GaveUp~n')
@@ -5176,11 +5224,13 @@ read_tptp_formulas_acc(Stream, FileDir, Formulas, Max, Count, Truncated) :-
            IncludePath = ''
         ),
         ( IncludePath \= '' ->
-            file_directory_name(IncludePath, IncludeDir),
-            open(IncludePath, read, IncStream),
-            Remaining is Max - Count,
-            read_tptp_formulas_acc(IncStream, IncludeDir, IncFormulas, Remaining, 0, Trunc1),
-            close(IncStream),
+          file_directory_name(IncludePath, IncludeDir),
+          preprocess_tptp_file(IncludePath, ProcessedInc),
+          open(ProcessedInc, read, IncStream),
+          Remaining is Max - Count,
+          read_tptp_formulas_acc(IncStream, IncludeDir, IncFormulas, Remaining, 0, Trunc1),
+          close(IncStream),
+          catch(delete_file(ProcessedInc), _, true),
             length(IncFormulas, IncCount),
             Count2 is Count + IncCount,
             ( Trunc1 = true ->
@@ -5322,6 +5372,10 @@ expand_multi_var_quantifiers(A <=> B, NewA <=> NewB) :- !,
 
 expand_multi_var_quantifiers(~A, ~NewA) :- !,
     expand_multi_var_quantifiers(A, NewA).
+
+expand_multi_var_quantifiers(A \= B, ~(NewA = NewB)) :- !,
+    expand_multi_var_quantifiers(A, NewA),
+    expand_multi_var_quantifiers(B, NewB).
 
 expand_multi_var_quantifiers(Term, Term).
 

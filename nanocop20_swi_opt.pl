@@ -1,68 +1,38 @@
-%% File: nanocop20_swi.pl  -  Version: 2.0 + opt-pathlim + opt-prove_ec-stage1 + open-path
+%% File: nanocop20_swi_opt.pl  -  Version: 2.0 + opt-pathlim
 %%
-%% Purpose: nanoCoP: A Non-clausal Connection Prover (G4+ edition)
+%% Purpose: nanoCoP: A Non-clausal Connection Prover
 %%
 %% Author:  Jens Otten (original, 2016-2021)
+%% Optim:   pathlim via nb_setval/nb_current instead of assert/retract
+%%          (revised version of DeepSeek's optimization;
+%%           occurs_check global flag kept ON for soundness)
 %%
-%% Optimizations and additions applied to original nanocop20_swi.pl:
+%% Web:     www.leancop.de/nanocop/
 %%
-%% [opt-pathlim] (validated)
-%%   pathlim flag managed via nb_setval/nb_current instead of
-%%   assert/retract. Semantically equivalent, eliminates dynamic
-%%   database manipulation overhead.
-%%
-%% [opt-prove_ec-stage1] (validated on Pelletier 47: -19% CPU,
-%%   identical proofs)
-%%   In prove_ec/6, replace the redundant pair
-%%       append(MIA,[(I^K1)^V1:Cla1|MIB],MI), ...,
-%%       append(MIA,[NewElement|MIB],MI1)
-%%   with select_replace/4 which performs split + reconstruction
-%%   in a single recursive pass, avoiding the second O(n) traversal.
-%%
-%% [open-path] (NEW, to be validated)
-%%   Capture of the open path at the last failed closure attempt
-%%   via dynamic predicate nanocop_open_path/1. Used by the G4+
-%%   wrapper to distinguish CounterSatisfiable from GaveUp:
-%%     - prove/2 succeeded                              -> Theorem
-%%     - prove/2 failed, nanocop_depth_limited=true     -> GaveUp
-%%     - prove/2 failed, nanocop_depth_limited=false    -> CounterSatisfiable
-%%       and nanocop_open_path/1 holds a partial witness.
-%%
-%% G4+ specific code preserved:
-%%   nanocop_depth_limited/0 flag for SZS status reporting
-%%   (must remain dynamic; persists across pathlim retracts to
-%%    distinguish authentic failure from depth-truncated failure).
-%%
-%% Soundness: occurs_check global flag remains ON.
-%%   Empirical validation on TPTP showed that disabling it causes
-%%   80+ soundness errors (CounterSatisfiable problems incorrectly
-%%   proved as Theorem) on KRS, GRP, GEO, LCL domains, AND a
-%%   regression in completeness on at least one previously-proved
-%%   formula. The structural argument that explicit
-%%   unify_with_occurs_check/2 calls suffice is FALSE in practice.
+%% Usage:   prove(F,P).  % where F is a first-order formula, e.g.
+%%                       %  F=((p,all X:(p=>q(X)))=>all Y:q(Y))
+%%                       %  and P is the returned connection proof
 %%
 %% Copyright: (c) 2016-2021 by Jens Otten
 %% License:   GNU General Public License
 
-:- set_prolog_flag(occurs_check,true).  % global occurs check on
+:- set_prolog_flag(occurs_check,true).  % global occurs check ON (preserved)
 
-:- dynamic(lit/4).
-:- dynamic(nanocop_depth_limited/0).  % G4+: persistent flag, search was truncated by depth limit
-:- dynamic(nanocop_open_path/1).      % MOD-4: captures last open path on failed closure
+:- dynamic(lit/4).                       % pathlim is no longer dynamic
+
+% definitions of logical connectives and quantifiers
 
 :- op(1130,xfy,<=>). :- op(1110,xfy,=>). :- op(500, fy,'~').
 :- op( 500, fy,all). :- op( 500, fy,ex). :- op(500,xfy,:).
 
 :- [operators].
-
 % -----------------------------------------------------------------
 % prove(F,Proof) - prove formula F
 
 prove(F,Proof) :- prove2(F,[cut,comp(7)],Proof).
 
 prove2(F,Set,Proof) :-
-    nb_setval(pathlim_status, none),
-    retractall(nanocop_open_path(_)),     % MOD-4: reset open-path on each call
+    nb_setval(pathlim_status, none),     % explicit init of pathlim flag
     bmatrix(F,Set,Mat), retractall(lit(_,_,_,_)),
     assert_matrix(Mat), prove(Mat,1,Set,Proof).
 
@@ -77,6 +47,7 @@ prove(Mat,PathLim,Set,[(I^0)^V:Proof]) :-
 % iterative deepening control (optimized: nb_setval instead of assert/retract)
 prove(Mat,PathLim,Set,Proof) :-
     ( nb_current(pathlim_status, set) ->
+        % a path-limit overflow occurred -> reset flag and increase limit
         nb_setval(pathlim_status, none),
         ( member(comp(PathLim),Set) -> prove(Mat,1,[],Proof)
         ; PathLim1 is PathLim+1, prove(Mat,PathLim1,Set,Proof) )
@@ -105,78 +76,26 @@ prove([Lit|Cla],MI,Path,PI,PathLim,Lem,Set,Proof) :-
          ;
          lit(NegLit,ClaB,Cla1,Grnd1),
          ( Grnd1=g -> true ; length(Path,K), K<PathLim -> true ;
-           nb_current(pathlim_status, set) -> fail ;
-           nb_setval(pathlim_status, set),
-           ( nanocop_depth_limited -> true ; assertz(nanocop_depth_limited) ),
-           fail ),
+           nb_current(pathlim_status, set) -> fail ;   % already triggered
+           nb_setval(pathlim_status, set), fail ),     % trigger deepening
          prove_ec(ClaB,Cla1,MI,PI,I^V:ClaB1,MI1),
          prove(ClaB1,MI1,[Lit|Path],[I|PI],PathLim,Lem,Set,Proof1)
        ),
        ( member(cut,Set) -> ! ; true ),
        prove(Cla,MI,Path,PI,PathLim,[Lit|Lem],Set,Proof2).
 
-% MOD-4: open-path capture clause
-%
-% Catch-all that fires only when ALL alternatives in the main
-% extension clause above have been exhausted for [Lit|Cla] (no lemma
-% match, no path reduction, no successful extension via lit/4).
-%
-% Records [Lit|Path] in nanocop_open_path/1 as a partial witness of
-% an open branch. Always fails, propagating the original failure.
-%
-% Only captures when nanocop_depth_limited is false: otherwise the
-% failure is caused by the iterative-deepening cap, not by a true
-% open path, and the witness would be misleading.
-%
-% retractall+assertz keeps only the most recent open path. This is
-% an approximation: a complete countermodel witness would require
-% accumulating all open paths, which is more expensive in time and
-% memory. The single-most-recent capture is enough to surface
-% CounterSatisfiable status to the G4+ wrapper.
-
-prove([Lit|_Cla],_MI,Path,_PI,_PathLim,_Lem,_Set,_Proof) :-
-    \+ nanocop_depth_limited,
-    retractall(nanocop_open_path(_)),
-    assertz(nanocop_open_path([Lit|Path])),
-    fail.
-
-% extension clause (e-clause)  --  OPTIMIZED VERSION
-%
-% Original code did:
-%     append(MIA,[Pivot|MIB],MI),  ...,  append(MIA,[NewPivot|MIB],MI1)
-% which is two O(n) traversals of MI for what is essentially a
-% non-deterministic "find pivot and replace it" operation.
-%
-% select_replace/4 below performs the split, the user's choice of
-% replacement, and the reconstruction in a single recursive pass.
-% Backtracking is preserved: it enumerates all positions just as
-% append/3 with three free arguments would.
-
+% extension clause (e-clause)
 prove_ec((I^K)^V:ClaB,IV:Cla,MI,PI,ClaB1,MI1) :-
-    length(PI,K),
-    select_replace(MI, (I^K1)^V1:Cla1, NewElem, MI1),
+    append(MIA,[(I^K1)^V1:Cla1|MIB],MI), length(PI,K),
     ( ClaB=[J^K:[ClaB2]|_], member(J^K1,PI),
       unify_with_occurs_check(V,V1), Cla=[_:[Cla2|_]|_],
-      select_replace(Cla1, J^K1:MI2, J^K1:MI3, Cla3),
+      append(ClaD,[J^K1:MI2|ClaE],Cla1),
       prove_ec(ClaB2,Cla2,MI2,PI,ClaB1,MI3),
-      NewElem = (I^K1)^V1:Cla3
-    ;
+      append(ClaD,[J^K1:MI3|ClaE],Cla3),
+      append(MIA,[(I^K1)^V1:Cla3|MIB],MI1)
+      ;
       (\+member(I^K1,PI);V\==V1) ->
-      ClaB1=(I^K)^V:ClaB,
-      NewElem = IV:Cla
-    ).
-
-% select_replace(+List, ?OldElem, ?NewElem, -NewList)
-%
-% Non-deterministically picks an element of List, unifies it with
-% OldElem, and produces NewList where that element is replaced by
-% NewElem. Equivalent in semantics to:
-%     append(A,[OldElem|B],List), append(A,[NewElem|B],NewList)
-% but uses a single traversal and avoids materializing A.
-
-select_replace([X|Xs], X, Y, [Y|Xs]).
-select_replace([X|Xs], O, N, [X|Ys]) :-
-    select_replace(Xs, O, N, Ys).
+      ClaB1=(I^K)^V:ClaB, append(MIA,[IV:Cla|MIB],MI1) ).
 
 % -----------------------------------------------------------------
 % positiveC(Clause,ClausePos) - generate positive start clause
@@ -274,7 +193,7 @@ assert_clauses(C,ClaB,ClaB1,ClaC,ClaC1) :- !,
                  assert(lit(M,ClaB,ClaC,Grnd)), fail ).
 
 % -----------------------------------------------------------------
-% reorderC([Matrix],[MatrixReo],I) - reorder clauses
+%  reorderC([Matrix],[MatrixReo],I) - reorder clauses
 
 reorderC([],[],_).
 reorderC([M|C],[M1|C1],I) :-

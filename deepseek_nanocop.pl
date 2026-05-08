@@ -1,4 +1,4 @@
-%% File: nanocop20_swi.pl  -  Version: 2.0 + opt-pathlim + opt-prove_ec-stage1 + open-path
+%% File: nanocop20_swi.pl  -  Version: 2.0 + opt-pathlim + opt-prove_ec-stage1 + open-path + g4-preprocess
 %%
 %% Purpose: nanoCoP: A Non-clausal Connection Prover (G4+ edition)
 %%
@@ -28,6 +28,20 @@
 %%     - prove/2 failed, nanocop_depth_limited=false    -> CounterSatisfiable
 %%       and nanocop_open_path/1 holds a partial witness.
 %%
+%% [g4-preprocess] (NEW, to be validated)
+%%   Applies invertible G4 sequent calculus rules to simplify the
+%%   formula BEFORE matrix generation. Only rules that eliminate
+%%   beta-clauses are used (L∨→, L∧→, L→→). L0→ is deliberately
+%%   omitted: it does not reduce beta-clauses and can remove
+%%   useful connection paths, hurting nanoCoP's performance.
+%%   Rules applied in optimal order:
+%%     1. L∧→  : (A & B) → C  →  A → (B → C)  (if A not conj.)
+%%     2. L∨→  : (A | B) → C  →  (A → C) & (B → C)
+%%     3. L→→  : ((A → B) → C)  →  (B → C)  (if B not impl.)
+%%   Quantifier rules are deliberately omitted: nanoCoP excels at
+%%   first-order reasoning, and pre-processing quantifiers would
+%%   risk interfering with its efficient matrix treatment.
+%%
 %% G4+ specific code preserved:
 %%   nanocop_depth_limited/0 flag for SZS status reporting
 %%   (must remain dynamic; persists across pathlim retracts to
@@ -52,6 +66,8 @@
 
 :- op(1130,xfy,<=>). :- op(1110,xfy,=>). :- op(500, fy,'~').
 :- op( 500, fy,all). :- op( 500, fy,ex). :- op(500,xfy,:).
+% :- op(1000, xfy, &).   % conjonction
+% :- op(1100, xfy, '|').  % disjonction (car | est réservé pour les listes)
 
 :- [operators].
 
@@ -63,7 +79,8 @@ prove(F,Proof) :- prove2(F,[cut,comp(7)],Proof).
 prove2(F,Set,Proof) :-
     nb_setval(pathlim_status, none),
     retractall(nanocop_open_path(_)),     % MOD-4: reset open-path on each call
-    bmatrix(F,Set,Mat), retractall(lit(_,_,_,_)),
+    preprocess_g4(F, F_simplified),       % MOD-5: G4 pre-processing
+    bmatrix(F_simplified,Set,Mat), retractall(lit(_,_,_,_)),
     assert_matrix(Mat), prove(Mat,1,Set,Proof).
 
 % start rule
@@ -116,24 +133,6 @@ prove([Lit|Cla],MI,Path,PI,PathLim,Lem,Set,Proof) :-
        prove(Cla,MI,Path,PI,PathLim,[Lit|Lem],Set,Proof2).
 
 % MOD-4: open-path capture clause
-%
-% Catch-all that fires only when ALL alternatives in the main
-% extension clause above have been exhausted for [Lit|Cla] (no lemma
-% match, no path reduction, no successful extension via lit/4).
-%
-% Records [Lit|Path] in nanocop_open_path/1 as a partial witness of
-% an open branch. Always fails, propagating the original failure.
-%
-% Only captures when nanocop_depth_limited is false: otherwise the
-% failure is caused by the iterative-deepening cap, not by a true
-% open path, and the witness would be misleading.
-%
-% retractall+assertz keeps only the most recent open path. This is
-% an approximation: a complete countermodel witness would require
-% accumulating all open paths, which is more expensive in time and
-% memory. The single-most-recent capture is enough to surface
-% CounterSatisfiable status to the G4+ wrapper.
-
 prove([Lit|_Cla],_MI,Path,_PI,_PathLim,_Lem,_Set,_Proof) :-
     \+ nanocop_depth_limited,
     retractall(nanocop_open_path(_)),
@@ -141,17 +140,6 @@ prove([Lit|_Cla],_MI,Path,_PI,_PathLim,_Lem,_Set,_Proof) :-
     fail.
 
 % extension clause (e-clause)  --  OPTIMIZED VERSION
-%
-% Original code did:
-%     append(MIA,[Pivot|MIB],MI),  ...,  append(MIA,[NewPivot|MIB],MI1)
-% which is two O(n) traversals of MI for what is essentially a
-% non-deterministic "find pivot and replace it" operation.
-%
-% select_replace/4 below performs the split, the user's choice of
-% replacement, and the reconstruction in a single recursive pass.
-% Backtracking is preserved: it enumerates all positions just as
-% append/3 with three free arguments would.
-
 prove_ec((I^K)^V:ClaB,IV:Cla,MI,PI,ClaB1,MI1) :-
     length(PI,K),
     select_replace(MI, (I^K1)^V1:Cla1, NewElem, MI1),
@@ -167,13 +155,6 @@ prove_ec((I^K)^V:ClaB,IV:Cla,MI,PI,ClaB1,MI1) :-
     ).
 
 % select_replace(+List, ?OldElem, ?NewElem, -NewList)
-%
-% Non-deterministically picks an element of List, unifies it with
-% OldElem, and produces NewList where that element is replaced by
-% NewElem. Equivalent in semantics to:
-%     append(A,[OldElem|B],List), append(A,[NewElem|B],NewList)
-% but uses a single traversal and avoids materializing A.
-
 select_replace([X|Xs], X, Y, [Y|Xs]).
 select_replace([X|Xs], O, N, [X|Ys]) :-
     select_replace(Xs, O, N, Ys).
@@ -189,6 +170,110 @@ positiveC([M|C],[M3|C2]) :-
 positiveM([],[]).
 positiveM([I:C|M],M1) :-
     ( positiveC(C,C1) -> M1=[I:C1|M2] ; M1=M2 ), positiveM(M,M2).
+
+% =========================================================================
+% MOD-5: G4 PRE-PROCESSING
+% =========================================================================
+% Only rules that eliminate beta-clauses: L∧→, L∨→, L→→
+% L0→ omitted: does not reduce beta-clauses, can remove useful paths.
+
+preprocess_g4(F, F_simplified) :-
+    preprocess_sequent([], F, Gamma, Delta),
+    rebuild_formula(Gamma, Delta, F_simplified).
+
+% preprocess_sequent(+Gamma, +Delta, -Gamma_out, -Delta_out)
+preprocess_sequent(Gamma, Delta, Gamma_out, Delta_out) :-
+    preprocess_sequent_aux(Gamma, Delta, Gamma_out, Delta_out),
+    !.  % cut après succès
+
+preprocess_sequent_aux(Gamma, Delta, Gamma_out, Delta_out) :-
+    ( Delta = (A => B) ->
+      preprocess_sequent_aux([A|Gamma], B, Gamma_out, Delta_out)
+    ;
+    saturate_gamma(Gamma, Delta, Gamma_sat, Delta_sat),
+    ( Gamma_sat \= Gamma ; Delta_sat \= Delta ->
+                               preprocess_sequent_aux(Gamma_sat, Delta_sat, Gamma_out, Delta_out)
+      ;
+      Gamma_out = Gamma_sat,
+      Delta_out = Delta_sat
+    )
+    ).
+
+% saturate_gamma(+Gamma, +Delta, -Gamma_out, -Delta_out)
+% Apply L∧→, L∨→, L→→ in optimal order until saturation.
+
+saturate_gamma(Gamma, Delta, Gamma_out, Delta_out) :-
+    ( apply_Land_implies(Gamma, Delta, Gamma1, Delta1)
+    ; apply_Lor_implies(Gamma, Delta, Gamma1, Delta1)
+    ; apply_Limplies_implies(Gamma, Delta, Gamma1, Delta1)
+    ),
+    !,
+    saturate_gamma(Gamma1, Delta1, Gamma_out, Delta_out).
+
+saturate_gamma(Gamma, Delta, Gamma, Delta).
+
+% -------------------------------------------------------------------------
+% 1. L∧→ : (A & B) → C  →  A → (B → C)
+% Guard: A must not be a conjunction (avoids infinite chaining).
+% -------------------------------------------------------------------------
+
+apply_Land_implies(Gamma, Delta, Gamma_out, Delta_out) :-
+    select(((A & B) => C), Gamma, RestGamma),
+    \+ (A = (_ & _)),
+    !,
+    NewFormula = (A => (B => C)),
+    ( member(NewFormula, RestGamma) ->
+        Gamma_out = RestGamma,
+        Delta_out = Delta
+    ;
+        Gamma_out = [NewFormula | RestGamma],
+        Delta_out = Delta
+    ).
+
+% -------------------------------------------------------------------------
+% 2. L∨→ : (A | B) → C  →  (A → C) & (B → C)
+% Eliminates a beta-clause (the disjunction).
+% -------------------------------------------------------------------------
+
+apply_Lor_implies(Gamma, Delta, Gamma_out, Delta_out) :-
+    select(((A ; B) => C), Gamma, RestGamma),
+    !,
+    New1 = (A => C),
+    New2 = (B => C),
+    ( member(New1, RestGamma) -> Gamma1 = RestGamma ; Gamma1 = [New1 | RestGamma] ),
+    ( member(New2, Gamma1)   -> Gamma_out = Gamma1 ; Gamma_out = [New2 | Gamma1] ),
+    Delta_out = Delta.
+
+% -------------------------------------------------------------------------
+% 3. L→→ : ((A → B) → C)  →  (B → C)
+% Guard: B must not be an implication (avoids infinite chaining).
+% -------------------------------------------------------------------------
+
+apply_Limplies_implies(Gamma, Delta, Gamma_out, Delta_out) :-
+    select(((_A => B) => C), Gamma, RestGamma),
+    \+ (B = (_ => _)),
+    !,
+    NewFormula = (B => C),
+    ( member(NewFormula, RestGamma) ->
+        Gamma_out = RestGamma,
+        Delta_out = Delta
+    ;
+        Gamma_out = [NewFormula | RestGamma],
+        Delta_out = Delta
+    ).
+
+% -------------------------------------------------------------------------
+% Rebuild formula from Gamma and Delta
+% Gamma = [H1, ..., Hn]  →  H1 → (H2 → ... → (Hn → Delta)...)
+% -------------------------------------------------------------------------
+
+rebuild_formula([], Delta, Delta) :- !.
+rebuild_formula([H|T], Delta, (H => Rest)) :-
+    rebuild_formula(T, Delta, Rest).
+
+% =========================================================================
+% END OF G4 PRE-PROCESSING
+% =========================================================================
 
 % -----------------------------------------------------------------
 % bmatrix(Formula,Set,Matrix) - generate indexed matrix
