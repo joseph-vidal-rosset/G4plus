@@ -53,7 +53,7 @@
 :- op(1130,xfy,<=>). :- op(1110,xfy,=>). :- op(500, fy,'~').
 :- op( 500, fy,all). :- op( 500, fy,ex). :- op(500,xfy,:).
 
-:- [operators].
+% :- [operators].
 
 % -----------------------------------------------------------------
 % prove(F,Proof) - prove formula F

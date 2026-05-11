@@ -42,66 +42,16 @@
 % AUTHORS:
 % -------
 % Joseph Vidal-Rosset (Universite de Lorraine)
-% Built upon: G4 (Roy Dyckhoff), nanoCoP (Jens Otten), leanSeq (Jens Otten)
-%
-% =========================================================================
-% -------------------------------------------------------------------------
-% CORE LOGICAL OPERATORS (shared by all)
-%-------------------------------------------------------------------------
-/*
-:- op( 500, fy,  ~).              % negation
-:- op(1000, xfy, &).              % conjunction
-:- op(1100, xfy, '|').            % disjunction
-:- op(1110, xfy, =>).             % implication
-:- op(1130, xfy, <=>).            % biconditional (STANDARD: 1130)
-:- op( 500, xfy, :).              % quantifier separator
-% -------------------------------------------------------------------------
-% QUANTIFIERS - Dual syntax (TPTP + internal)
-% -------------------------------------------------------------------------
-:- op( 500, fy,  !).              % universal (TPTP): ![X]:
-:- op( 500, fy,  ?).              % existential (TPTP): ?[X]:
-:- op( 500, fy,  all).            % universal (internal): all X:
-:- op( 500, fy,  ex).             % existential (internal): ex X:
-% -------------------------------------------------------------------------
-% EXTENDED TPTP OPERATORS (from nanocop_tptp)
-% -------------------------------------------------------------------------
-:- op(1130, xfy, <~>).            % negated equivalence
-:- op(1110, xfy, <=).             % reverse implication
-:- op(1100, xfy, '~|').           % negated disjunction (NOR)
-:- op(1000, xfy, ~&).             % negated conjunction (NAND)
-% Note: != is NOT declared as an operator here.
-% The TPTP "!=" cannot coexist with the prefix "!" (universal quantifier)
-% because Prolog's tokenizer isolates "!" before considering operator
-% declarations. We handle "!=" via lexical preprocessing in
-% preprocess_tptp_file/2 (see below): "!=" -> "\=" in source text,
-% then \= (standard SWI op(700,xfx,\=)) is read natively.
-:- op( 299, fx,  $).              % TPTP constants ($true/$false)
-% =========================================================================
-% g4mic specific
-% =========================================================================
-% =========================================================================
-% LATEX OPERATORS (formatted output)
-% ATTENTION: Respect spaces exactly!
-% =========================================================================
-:- op( 500, fy, ' \\lnot ').     % negation
-:- op(1000, xfy, ' \\land ').    % conjunction
-:- op(1100, xfy, ' \\lor ').     % disjunction
-:- op(1110, xfx, ' \\to ').      % conditional
-:- op(1120, xfx, ' \\leftrightarrow ').  % biconditional
-:- op( 500, fy, ' \\forall ').   % universal quantifier
-:- op( 500, fy, ' \\exists ').   % existential quantifier
-:- op( 500, xfy, ' ').           % space for quantifiers
-:- op(400, fx, ' \\bot ').      % falsity (#)
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% End of operators list
-%% File: minimal_driver_equal.pl  -  Version: 7.3 FINAL (time seulement dans proves)
-*/
-% :- use_module(library(pcre)).
+% Built upon: G4 sequent calculus (Roy Dyckhoff), nanoCoP (Jens Otten), leanSeq (Jens Otten)
+%==========================i
+:- use_module(library(lists)).
+:- use_module(library(statistics)).
+:- use_module(library(terms)).
 
 :-style_check(-singleton).
+:- (getenv('TPTP', _) -> true ; setenv('TPTP', '/home/joseph/src/TPTP-v9.2.1')).
 
-	   :- (getenv('TPTP', _) -> true ; setenv('TPTP', '/home/joseph/src/TPTP-v9.2.1')).
-
+:-[i_operators].
 :-[nanocop20_swi_for_g4plus].
 :-[nanocop_proof].
 :-[nanocop_tptp2].
@@ -109,7 +59,6 @@
 % Activer le format d'explication complete d'Otten
 :-retractall(proof(_)).
 :-assert(proof(readable)).
-
 :-dynamic g4mic_silent_mode/0.
 
 % =========================================================================
@@ -1633,11 +1582,11 @@ g4mic_proves(Gamma>Delta, FV, Th, SI, SO, classical, cq_c(Gamma>Delta, P)) :-
 % =========================================================================
 % HELPER PREDICATES
 % =========================================================================
-
+%
 % =========================================================================
 % END of Prover
 % =========================================================================
-
+%
 %==========================================================================
 % LATEX  UTILITIES
 %========================================================================

@@ -1,15 +1,46 @@
 % =========================================================================
 % FOF <-> G4+ FORMULA CONVERTERS
 % =========================================================================
-
-:-style_check(-singleton).
-
 % fof_to_prove/1   : reads a .p file, outputs prove(Formula). command
 % get_fof_problem/1: takes a G4+ formula, outputs fof(...) TPTP text
 
 %% fof_to_prove(+Filename)
 %  Reads a TPTP .p file and prints the equivalent prove/1 command(s).
 %  Handles axioms + conjecture by combining them as (Ax1 & Ax2 & ...) => Conj.
+
+
+% =========================================================================
+% TPTP LEXICAL PREPROCESSING
+% =========================================================================
+% Replaces "!=" with "\=" in the source text before read/2 sees the file.
+% Reason: SWI-Prolog tokenizer isolates "!" (declared as prefix universal
+% quantifier) before considering operator declarations, so any infix
+% declaration of != is defeated. \= is a standard SWI operator
+% (op(700, xfx, \=)) and is read natively without conflict.
+% The result of read/2 will then be a term A \= B, which we convert to
+% ~(A=B) in expand_multi_var_quantifiers/2.
+
+preprocess_tptp_file(InFile, OutFile) :-
+    read_file_to_string(InFile, Content, []),
+    string_chars(Content, Chars),
+    replace_neq(Chars, Processed),
+    string_chars(ProcessedStr, Processed),
+    tmp_file_stream(text, OutFile, Stream),
+
+
+    write(Stream, ProcessedStr),
+    close(Stream).
+
+% replace_neq(+CharsIn, -CharsOut)
+% Replaces every occurrence of "!=" with "\=" in a list of characters.
+% Pure Prolog, no library dependencies. Works on native and WASM.
+replace_neq([], []).
+replace_neq(['!', '='|Rest], ['\\', '='|RestOut]) :- !,
+    replace_neq(Rest, RestOut).
+replace_neq([C|Rest], [C|RestOut]) :-
+    replace_neq(Rest, RestOut).
+
+%% fof_to_prove(+Filename)
 
 fof_to_prove(Filename) :-
     catch(
@@ -31,9 +62,11 @@ fof_to_prove_run(Filename) :-
 
 fof_to_prove_run_safe(Filename) :-
     file_directory_name(Filename, FileDir),
-    open(Filename, read, Stream),
+    preprocess_tptp_file(Filename, ProcessedFile),
+    open(ProcessedFile, read, Stream),
     read_tptp_formulas_limited(Stream, FileDir, Formulas, 100000, Truncated),
     close(Stream),
+    catch(delete_file(ProcessedFile), _, true),
     ( Truncated = true ->
         format('% File too large (> 100000 formulae)~n')
     ;
@@ -47,7 +80,12 @@ fof_to_prove_run_safe(Filename) :-
                 combine_axioms(G4micAxioms, Combined),
                 NegFormula = (Combined => #),
                 format('% Running: prove(~w).~n~n', [NegFormula]),
-                ( prove(NegFormula) -> true ; true )
+                ( prove(NegFormula) -> true
+                ; format('~n% G4+ proof failed, attempting nanoCoP...~n', []),
+                  ( nanocop_proves_safe(NegFormula) -> true
+                  ; format('% nanoCoP also failed.~n', [])
+                  )
+                )
             )
         ;
             maplist(convert_axiom_formula, AllAxioms, G4micAxioms),
@@ -62,7 +100,12 @@ fof_to_prove_run_safe(Filename) :-
                   ),
                   format('~n% ~w~n', [Name]),
                   format('% Running: prove(~w).~n~n', [CombinedFormula]),
-                  ( prove(CombinedFormula) -> true ; true )
+                  ( prove(CombinedFormula) -> true
+                  ; format('~n% G4+ proof failed, attempting nanoCoP...~n', []),
+                    ( nanocop_proves_safe(CombinedFormula) -> true
+                    ; format('% nanoCoP also failed.~n', [])
+                    )
+                  )
                 )
             )
         )
@@ -70,9 +113,11 @@ fof_to_prove_run_safe(Filename) :-
 
 fof_to_prove_safe(Filename) :-
     file_directory_name(Filename, FileDir),
-    open(Filename, read, Stream),
+    preprocess_tptp_file(Filename, ProcessedFile),
+    open(ProcessedFile, read, Stream),
     read_tptp_formulas_limited(Stream, FileDir, Formulas, 100000, Truncated),
     close(Stream),
+    catch(delete_file(ProcessedFile), _, true),
     ( Truncated = true ->
         format('% File too large (> 100000 formulae)~n')
     ;
@@ -274,8 +319,8 @@ write_tptp_args([A|Rest], BV) :-
 % This module converts TPTP formulas to G4-mic syntax.
 
 % Read and process a TPTP file
-% prove_tptp_file/1 — main entry point.
-% prove_tptp_file/2 — kept for backward compatibility (TimeoutSecs ignored,
+% prove_tptp_file/1 -- main entry point.
+% prove_tptp_file/2 -- kept for backward compatibility (TimeoutSecs ignored,
 %                     inference limit is used instead).
 prove_tptp_file(Filename) :-
     prove_tptp_file(Filename, _Ignored).
@@ -289,11 +334,13 @@ prove_tptp_file(Filename, _TimeoutSecs) :-
 
 prove_tptp_file_safe(Filename) :-
     file_directory_name(Filename, FileDir),
-    % Cap loading at 100 000 formulae — problems like CSR+5 have 540 000+
+    % Cap loading at 100 000 formulae -- problems like CSR+5 have 540 000+
     % and loop forever on axiom loading alone.
-    open(Filename, read, Stream),
+    preprocess_tptp_file(Filename, ProcessedFile),
+    open(ProcessedFile, read, Stream),
     read_tptp_formulas_limited(Stream, FileDir, Formulas, 100000, Truncated),
     close(Stream),
+    catch(delete_file(ProcessedFile), _, true),
     ( Truncated = true ->
         format('% WARNING: Problem has > 100000 formulae, too large for G4+~n'),
         format('% SZS status GaveUp~n')
@@ -336,11 +383,13 @@ read_tptp_formulas_acc(Stream, FileDir, Formulas, Max, Count, Truncated) :-
            IncludePath = ''
         ),
         ( IncludePath \= '' ->
-            file_directory_name(IncludePath, IncludeDir),
-            open(IncludePath, read, IncStream),
-            Remaining is Max - Count,
-            read_tptp_formulas_acc(IncStream, IncludeDir, IncFormulas, Remaining, 0, Trunc1),
-            close(IncStream),
+          file_directory_name(IncludePath, IncludeDir),
+          preprocess_tptp_file(IncludePath, ProcessedInc),
+          open(ProcessedInc, read, IncStream),
+          Remaining is Max - Count,
+          read_tptp_formulas_acc(IncStream, IncludeDir, IncFormulas, Remaining, 0, Trunc1),
+          close(IncStream),
+          catch(delete_file(ProcessedInc), _, true),
             length(IncFormulas, IncCount),
             Count2 is Count + IncCount,
             ( Trunc1 = true ->
@@ -483,6 +532,10 @@ expand_multi_var_quantifiers(A <=> B, NewA <=> NewB) :- !,
 expand_multi_var_quantifiers(~A, ~NewA) :- !,
     expand_multi_var_quantifiers(A, NewA).
 
+expand_multi_var_quantifiers(A \= B, ~(NewA = NewB)) :- !,
+    expand_multi_var_quantifiers(A, NewA),
+    expand_multi_var_quantifiers(B, NewB).
+
 expand_multi_var_quantifiers(Term, Term).
 
 % Expand ![v0,v1,v2]: Body into ![v0]:![v1]:![v2]: Body
@@ -567,7 +620,7 @@ prove_tptp_internal(Formula, ProblemType) :-
     catch(
         (
             ( write('nanoCoP : '), nl,
-              time(call_with_inference_limit(nanocop_decides(Formula), 50000000, InfResult_eq)),
+              time(call_with_inference_limit(nanocop_decides(Formula), 80000000, InfResult_eq)),
               InfResult_eq \== inference_limit_exceeded ->
                 szs_status(ProblemType, proved, SZSStatus),
                 nl,
@@ -591,7 +644,7 @@ prove_tptp_internal(Formula, no_conjecture) :-
     NegFormula = (Formula => #),
     ( catch(
           (write('nanoCoP : '), nl,
-           time(call_with_inference_limit(nanocop_decides(NegFormula), 50000000, InfResult_nc))),
+           time(call_with_inference_limit(nanocop_decides(NegFormula), 80000000, InfResult_nc))),
           _,
           fail
       ),
@@ -609,6 +662,7 @@ prove_tptp_internal(Formula, no_conjecture) :-
           % G4+ could not classify but nanoCoP validated: still Unsatisfiable
           nl,
           format('% SZS status Unsatisfiable~n', []),
+          format('% Logic level: not determined (G4+ inference limit exceeded)~n', []),
           format('% To get proofs (sequent calculus G4 and natural deduction), you can use G4+ at https://g4-mic.vidal-rosset.net/wasm/tinker~n'),
           nl
       )
@@ -627,7 +681,7 @@ prove_tptp_internal(Formula, no_conjecture) :-
           ;
               % ProbeResult = exhausted: comp(40) found no proof of NegFormula,
               % but this does NOT establish that the axioms are genuinely
-              % satisfiable — the proof may require multiplicity > 7.
+              % satisfiable -- the proof may require multiplicity > 7.
               % Report GaveUp to avoid soundness errors.
               format('% SZS status GaveUp~n', [])
           )
@@ -639,17 +693,17 @@ prove_tptp_internal(Formula, no_conjecture) :-
 % Root cause covers two distinct errors (SYN916+1 and LCL679+1.001):
 %
 %   SYN916+1: conjecture = $false = ~(p0=>p0).
-%     nanoCoP negates internally → ~~(p0=>p0) = p0=>p0, trivially provable
-%     → spurious Theorem.
+%     nanoCoP negates internally -> ~~(p0=>p0) = p0=>p0, trivially provable
+%     -> spurious Theorem.
 %
 %   LCL679+1.001: conjecture = ~?[X]:~($false|$false).
-%     After translate_operators → ~(ex _:~(~(p0=>p0);~(p0=>p0))).
-%     nanoCoP negates → ex _:(p0=>p0) → clausification gives [[~p0,p0]]:
+%     After translate_operators -> ~(ex _:~(~(p0=>p0);~(p0=>p0))).
+%     nanoCoP negates -> ex _:(p0=>p0) -> clausification gives [[~p0,p0]]:
 %     a tautological clause that nanoCoP preprocessing removes, leaving the
-%     empty matrix → "trivially proved" → spurious Theorem.
+%     empty matrix -> "trivially proved" -> spurious Theorem.
 %
 % Fix: translate Formula to internal form and run simplify_g4mic_formula/2
-% (constant-folding with ~(p0=>p0) ≡ ⊥).  If the result is false, return
+% (constant-folding with ~(p0=>p0) = bot).  If the result is false, return
 % CounterSatisfiable without calling nanoCoP.
 prove_tptp_internal(Formula, has_conjecture) :-
     translate_formula(Formula, InternalFormula),
@@ -664,7 +718,7 @@ prove_tptp_internal(Formula, has_conjecture) :-
           setup_call_cleanup(
               true,
               (write('nanoCoP : '), nl,
-               time(call_with_inference_limit(nanocop_decides(Formula), 50000000, InfResult_hc))),
+               time(call_with_inference_limit(nanocop_decides(Formula), 80000000, InfResult_hc))),
               set_prolog_flag(occurs_check, OriginalFlag)
           ),
           _,
@@ -696,6 +750,7 @@ prove_tptp_internal(Formula, has_conjecture) :-
         % G4+ could not classify but nanoCoP validated: still a Theorem
         nl,
         format('% SZS status Theorem~n', []),
+        format('% Logic level: not determined (G4+ inference limit exceeded)~n', []),
         format('% To get proofs (sequent calculus G4 and natural deduction), you can use G4+ at https://g4-mic.vidal-rosset.net/wasm/tinker~n'),
         nl
     ).
@@ -796,22 +851,22 @@ szs_disproved_status(Formula, Status) :-
 % Evaluates the G4mic *internal* representation of a formula (i.e. after
 % translate_operators has been applied) to one of: true | false | unknown.
 %
-% The evaluation treats ~(p0=>p0) as the canonical G4mic encoding of ⊥ and
-% (~(p0=>p0) => ~(p0=>p0)) as ⊤.  Any atom or compound predicate that is
+% The evaluation treats ~(p0=>p0) as the canonical G4mic encoding of bot and
+% (~(p0=>p0) => ~(p0=>p0)) as top.  Any atom or compound predicate that is
 % neither of these constants evaluates to `unknown`.
 %
 % Properties:
-%   - If Value = false  → formula is structurally always false (CounterSatisfiable).
-%   - If Value = true   → formula is structurally always true  (Theorem).
-%   - If Value = unknown → cannot determine; proceed with normal proof search.
+%   - If Value = false  -> formula is structurally always false (CounterSatisfiable).
+%   - If Value = true   -> formula is structurally always true  (Theorem).
+%   - If Value = unknown -> cannot determine; proceed with normal proof search.
 %
 % Logical correctness: all rules respect classical two-valued semantics.
 % The catch-all clause (unknown) is conservative: it never produces a wrong
 % true/false for formulas containing real predicate/function symbols.
 % -------------------------------------------------------------------------
 
-simplify_g4mic_formula(~(p0=>p0), false) :- !.                        % G4mic ⊥
-simplify_g4mic_formula((~(p0=>p0) => ~(p0=>p0)), true) :- !.          % G4mic ⊤
+simplify_g4mic_formula(~(p0=>p0), false) :- !.                        % G4mic bot
+simplify_g4mic_formula((~(p0=>p0) => ~(p0=>p0)), true) :- !.          % G4mic top
 simplify_g4mic_formula(~A, V) :- !,
     simplify_g4mic_formula(A, VA),
     simplify_g4mic_negate(VA, V).
@@ -838,7 +893,7 @@ simplify_g4mic_formula(ex _:A, V) :- !,
 simplify_g4mic_formula(all _:A, V) :- !,
     simplify_g4mic_formula(A, VA),
     ( VA = false -> V = false ; VA = true -> V = true ; V = unknown ).
-% Any other term (real predicate, variable, etc.) → unknown.
+% Any other term (real predicate, variable, etc.) -> unknown.
 simplify_g4mic_formula(_, unknown).
 
 simplify_g4mic_negate(true, false).

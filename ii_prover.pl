@@ -51,6 +51,22 @@ g4mic_ax(Gamma > Delta, _, _, SkolemIn, SkolemIn, _, ax(Gamma>Delta, ax)) :-
 % g4mic_proves(Sequent, FreeVars, Threshold, SkolemIn, SkolemOut,
 %              LogicLevel, Proof)
 % =========================================================================
+%
+% Rule ordering rationale:
+% -------------------------
+% Invertible deterministic rules first (no branching, no loss of information):
+%   1. Axiom, L-bot                     -- base cases
+%   2. Lexists, Rforall                 -- eigenvariable introduction (enriches context)
+%   3. R->, L&                          -- structural decomposition
+%   4. L0->, L&->                       -- conditional decomposition (benefit from eigenvars)
+%   5. R&, L\/->                        -- deterministic with cut
+% Then branching rules (non-deterministic, expensive):
+%   6. L\/, R\/                         -- disjunction (two branches / choice)
+%   7. IP                               -- classical indirect proof
+%   8. L->->                            -- implication-to-implication (two branches)
+% Then threshold-based quantifier rules (non-deterministic, instantiation):
+%   9. CQ_m, Lforall, Rexists, CQ_c
+% =========================================================================
 
 % --- Rule 0: Axiom  ----------------------------
 g4mic_proves(Seq, FV, Th, SI, SO, LL, Proof) :-
@@ -61,48 +77,61 @@ g4mic_proves(Gamma>Delta, _, _, SI, SI, LL, lbot(Gamma>Delta, #)) :-
     member(LL, [intuitionistic, classical]),
     member(#, Gamma), !.
 
-% --- Rule 6: R-> ---------------------------------------------------------
+% --- Rule 4: R-> ---------------------------------------------------------
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, rcond(Gamma>Delta, P)) :-
     Delta = [A => B], !,
     g4mic_proves([A | Gamma]>[B], FV, Th, SI, SO, LL, P).
 
-% --- Rule 2: L& -----------------------------------------------------------
+% --- Rule 5: L& -----------------------------------------------------------
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, land(Gamma>Delta, P)) :-
     select((A & B), Gamma, G1), !,
     g4mic_proves([A, B | G1]>Delta, FV, Th, SI, SO, LL, P).
 
-% --- Rule 4: L0-> (modus ponens on context) -------------------------------
+% --- Rule 6: L0-> (modus ponens on context) -------------------------------
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, l0cond(Gamma>Delta, P)) :-
     select((A => B), Gamma, G1),
     member(A, G1),
     !,
     g4mic_proves([B | G1]>Delta, FV, Th, SI, SO, LL, P).
 
-% --- Rule 5: L&-> ---------------------------------------------------------
+% --- Rule 7: L&-> ---------------------------------------------------------
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, landto(Gamma>Delta, P)) :-
     select(((A & B) => C), Gamma, G1), !,
     g4mic_proves([(A => (B => C)) | G1]>Delta, FV, Th, SI, SO, LL, P).
 
-% --- Rule 7: R& (deterministic: Delta is a conjunction -> decompose immediately) --
+
+% --- Rule 2: Lexists (deterministic: existential in antecedent -> introduce eigenvar) --
+g4mic_proves(Gamma > Delta, FV, Th, SI, SO, LL, lex(Gamma>Delta, P)) :-
+    select((?[_Z-X]:A), Gamma, G1), !,
+    copy_term((X:A, FV), (f_sk(SI, FV):A1, FV)),
+    (catch(b_getval(g4_eigenvars, UsedVars), _, UsedVars = [])),
+    \+ member_check(f_sk(SI, FV), UsedVars),
+    b_setval(g4_eigenvars, [f_sk(SI, FV) | UsedVars]),
+    J1 is SI + 1,
+    g4mic_proves([A1 | G1] > Delta, FV, Th, J1, SO, LL, P).
+
+
+% --- Rule 8: R& (deterministic: Delta is a conjunction -> decompose immediately) --
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, rand(Gamma>Delta, P1, P2)) :-
     Delta = [(A & B)], !,
     g4mic_proves(Gamma>[A], FV, Th, SI, J1, LL, P1),
     g4mic_proves(Gamma>[B], FV, Th, J1, SO, LL, P2).
 
-% --- Rule 8: L\/ (left disjunction) --------------------------------------
+% --- Rule 10: L\/ (left disjunction) --------------------------------------
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, lor(Gamma>Delta, P1, P2)) :-
     select((A | B), Gamma, G1), !,
     g4mic_proves([A | G1]>Delta, FV, Th, SI, J1, LL, P1),
     g4mic_proves([B | G1]>Delta, FV, Th, J1, SO, LL, P2).
 
-% --- Rule 09: R\/ ---------------------------------------------------------
+% --- Rule 11: R\/ ---------------------------------------------------------
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, ror(Gamma>Delta, P)) :-
     Delta = [(A | B)],
     (   g4mic_proves(Gamma>[A], FV, Th, SI, SO, LL, P)
     ;   g4mic_proves(Gamma>[B], FV, Th, SI, SO, LL, P)
     ).
 
-% --- Rule 10: L\/-> (optimized) --------------------------------------------
+
+% --- Rule 9: L\/-> (optimized) --------------------------------------------
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, lorto(Gamma>Delta, P)) :-
     select(((A | B) => C), Gamma, G1), !,
     ( member(A, G1), member(B, G1) ->
@@ -115,7 +144,7 @@ g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, lorto(Gamma>Delta, P)) :-
     g4mic_proves([A=>C, B=>C | G1]>Delta, FV, Th, SI, SO, LL, P)
     ).
 
-% --- Rule 11: IP (indirect proof -- classical only, must be before L->->)  --
+% --- Rule 12: IP (indirect proof -- classical only, must be before L->->)  --
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, classical, ip(Gamma>Delta, P)) :-
     Delta = [A],
     A \= #,
@@ -123,7 +152,7 @@ g4mic_proves(Gamma>Delta, FV, Th, SI, SO, classical, ip(Gamma>Delta, P)) :-
     Th > 0,
     g4mic_proves([(A => #) | Gamma]>[#], FV, Th, SI, SO, classical, P).
 
-% --- Rule 12: L->-> --------------------------------------------------------
+% --- Rule 13: L->-> --------------------------------------------------------
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, ltoto(Gamma>Delta, P1, P2)) :-
     select(((A => B) => C), Gamma, G1),
     \+ (B = #, member(A, G1)),
@@ -131,20 +160,8 @@ g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, ltoto(Gamma>Delta, P1, P2)) :-
     g4mic_proves([A, (B => C) | G1]>[B], FV, Th, SI, J1, LL, P1),
     g4mic_proves([C | G1]>Delta, FV, Th, J1, SO, LL, P2).
 
-% =========================================================================
-% QUANTIFIER RULES (threshold-based)
-% =========================================================================
-% --- Rule 3: Lexists (deterministic: existential in antecedent -> introduce eigenvar) --
-g4mic_proves(Gamma > Delta, FV, Th, SI, SO, LL, lex(Gamma>Delta, P)) :-
-    select((?[_Z-X]:A), Gamma, G1), !,
-    copy_term((X:A, FV), (f_sk(SI, FV):A1, FV)),
-    (catch(b_getval(g4_eigenvars, UsedVars), _, UsedVars = [])),
-    \+ member_check(f_sk(SI, FV), UsedVars),
-    b_setval(g4_eigenvars, [f_sk(SI, FV) | UsedVars]),
-    J1 is SI + 1,
-    g4mic_proves([A1 | G1] > Delta, FV, Th, J1, SO, LL, P).
 
-% --- Rule 13: Rforall (deterministic: universal in succedent -> introduce eigenvar) --
+% --- Rule 3: Rforall (deterministic: universal in succedent -> introduce eigenvar) --
 g4mic_proves(Gamma > Delta, FV, Th, SI, SO, LL, rall(Gamma>Delta, P)) :-
     select((![_Z-X]:A), Delta, D1), !,
     copy_term((X:A, FV), (f_sk(SI, FV):A1, FV)),
@@ -153,6 +170,10 @@ g4mic_proves(Gamma > Delta, FV, Th, SI, SO, LL, rall(Gamma>Delta, P)) :-
     b_setval(g4_eigenvars, [f_sk(SI, FV) | UsedVars]),
     J1 is SI + 1,
     g4mic_proves(Gamma > [A1 | D1], FV, Th, J1, SO, LL, P).
+
+% =========================================================================
+% THRESHOLD-BASED QUANTIFIER RULES
+% =========================================================================
 
 % --- Rule 14: CQ_m (quantifier conversion, all logics -- must precede Lforall) --
 % (?[X]:A => B)  ->  ![X]:(A => B)

@@ -219,7 +219,7 @@ fitch_g4_proof(ip((_ > [Goal]), SubProof), Context, Scope, CurLine, NextLine, Re
 % Valid in intuitionistic and classical logic (not minimal logic)
 % Pattern: One branch uses explosion (~A with A), other branch derives Goal from B
 fitch_g4_proof(lor((Premisss > [_Goal]), SP1, SP2), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :-
-    % DS is NOT valid in minimal logic — skip this optimization
+    % DS is NOT valid in minimal logic -- skip this optimization
     current_logic_level(LogicLevel),
     LogicLevel \= minimal,
     % Try DS optimization: Check if we have A \/ B and ~A (A => #)
@@ -274,11 +274,11 @@ fitch_g4_proof(lor((Premisss > [Goal]), SP1, SP2), Context, Scope, CurLine, Next
       assert_safe_fitch_line(AssLineA, A, assumption, Scope),
       render_hypo(Scope, A, 'AS', CurLine, AssLineA, VarIn, V1),
       NewScope is Scope + 1,
-      fitch_g4_proof(SP1, [AssLineA:A|Context], NewScope, AssLineA, EndA, _GoalA, V1, V2),
+      fitch_g4_proof(SP1, [AssLineA:A|Context], NewScope, AssLineA, EndA, GoalA, V1, V2),
       AssLineB is EndA + 1,
       assert_safe_fitch_line(AssLineB, B, assumption, Scope),
       render_hypo(Scope, B, 'AS', EndA, AssLineB, V2, V3),
-      fitch_g4_proof(SP2, [AssLineB:B|Context], NewScope, AssLineB, EndB, _GoalB, V3, V4),
+      fitch_g4_proof(SP2, [AssLineB:B|Context], NewScope, AssLineB, EndB, GoalB, V3, V4),
       ElimLine is EndB + 1,
       assert_safe_fitch_line(ElimLine, Goal, lor(DisjLine, AssLineA, EndA, AssLineB, EndB), Scope),
       format(atom(Just), '$ \\lor E $ ~w,~w-~w,~w-~w', [DisjLine, AssLineA, EndA, AssLineB, EndB]),

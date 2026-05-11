@@ -42,14 +42,14 @@
 % AUTHORS:
 % -------
 % Joseph Vidal-Rosset (Universite de Lorraine)
-% Built upon: G4 (Roy Dyckhoff), nanoCoP (Jens Otten), leanSeq (Jens Otten)
-% =========================================================================
-% OPERATOR DECLARATIONS - Unified for g4mic + nanoCop + TPTP
-% =========================================================================
+% Built upon: G4 sequent calculus (Roy Dyckhoff), nanoCoP (Jens Otten), leanSeq (Jens Otten)
+%==========================i
 :- use_module(library(lists)).
 :- use_module(library(statistics)).
 :- use_module(library(terms)).
-:- [i_operators].
+:-style_check(-singleton).
+:- (getenv('TPTP', _) -> true ; setenv('TPTP', '/home/joseph/src/TPTP-v9.2.1')).
+:-[i_operators].
 :- [ii_prover].
 :- [iii_latex].
 :- [iv_detections].
@@ -61,7 +61,6 @@
 :- [x_tptp].
 
 :-style_check(-singleton).
-
 :- (getenv('TPTP', _) -> true ; setenv('TPTP', '/home/joseph/src/TPTP-v9.2.1')).
 
 :-[nanocop20_swi_for_g4plus].
@@ -73,6 +72,7 @@
 :-assert(proof(readable)).
 
 :-dynamic g4mic_silent_mode/0.
+
 % =========================================================================
 % MAIN INTERFACE
 % =========================================================================
@@ -119,13 +119,13 @@ nanocop_proves(Formula) :-
             % VERIFIER le resultat
             Result='Theorem'
         ),
-        50000000,
+        80000000,
         InfResult
     ),
     ( InfResult == inference_limit_exceeded ->
         % Limite atteinte: verifier avec nanocop_decides si c'est quand meme un theoreme
         ( catch(
-              ( call_with_inference_limit(nanocop_decides(Formula), 50000000, InfResult2),
+              ( call_with_inference_limit(nanocop_decides(Formula), 80000000, InfResult2),
                 InfResult2 \== inference_limit_exceeded ),
               _, fail
           ) ->
@@ -175,6 +175,11 @@ nanocop_decides(Formula) :-
 %   nanocop_decides:  comp(40),  prove_tptp_internal limits: 2000000
 %   nanocop_probe:    comp(40),  50000 inferences, 2s time
 %   nanocop_proves:   comp(40),  2000000 / fallback 5000000
+%
+% v1.4 upgrade history:
+%   prove_tptp_internal / nanocop_proves: 2M -> 50M -> 80M
+%   nanocop_probe: 50K/2s -> 500K/5s (unchanged in this round)
+%   g4mic_logic_level_internal: 10M -> 80M
 
 nanocop_decides_equality(Formula) :-
     assertz(g4mic_silent_mode),
@@ -1198,7 +1203,7 @@ g4mic_decides(Formula) :-
 decide(X) :- g4mic_decides(X).
 
 % =========================================================================
-% g4mic_logic_level/2 — Determine the logic level WITHOUT building a proof term.
+% g4mic_logic_level/2 -- Determine the logic level WITHOUT building a proof term.
 % =========================================================================
 % Used by the TPTP path after nanoCoP validation.
 % Returns: minimal | intuitionistic | classical
@@ -1226,7 +1231,7 @@ g4mic_logic_level_internal(F2, intuitionistic) :-
 
 g4mic_logic_level_internal(F2, classical) :-
     catch(call_with_inference_limit(
-        provable_at_level([] > [F2], classical, _), 10000000, InfRes), _, fail),
+        provable_at_level([] > [F2], classical, _), 80000000, InfRes), _, fail),
     InfRes \== inference_limit_exceeded, !.
 
 % =========================================================================
