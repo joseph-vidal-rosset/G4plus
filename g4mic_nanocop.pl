@@ -1460,7 +1460,7 @@ g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, land(Gamma>Delta, P)) :-
 g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, l0cond(Gamma>Delta, P)) :-
     select((A => B), Gamma, G1),
     member(A, G1),
-    !,
+    ( LL == minimal, B == # -> true ; ! ),
     g4mic_proves([B | G1]>Delta, FV, Th, SI, SO, LL, P).
 
 % --- Rule 7: L&-> ---------------------------------------------------------
