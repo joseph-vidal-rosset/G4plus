@@ -70,37 +70,6 @@ Wall-clock timings taken inside an Emacs inferior-Prolog buffer are
 dominated by the cost of displaying the LaTeX output; use them only for
 rough comparison against themselves.
 
-## Current work: compartmentalising Γ
-
-`select3_/4` is the dominant cost — roughly 38% of CPU, with 513k calls
-and 89k redos for 139k successes. More than three quarters of the scans
-of Γ fail. The cause is structural: Γ is a flat list, and each of the
-eight left rules scans it independently looking for its own principal
-connective.
-
-Plan: hold Γ as compartments keyed by principal connective (atoms,
-conjunctions, disjunctions, and the four L→ forms of G4). Each rule
-then consults only its own compartment; an empty compartment means
-immediate failure with no scan at all. Sorting is incremental — when L&
-decomposes `A & B`, it inserts `A` and `B` into their compartments in
-constant time, so the classification is never recomputed globally.
-
-The classification should be computed in a **single** insertion
-predicate. Beyond avoiding duplication, this turns the exhaustiveness
-and mutual exclusivity of the cases into a property that can be stated
-and checked, rather than an implicit assumption spread across the
-pattern of each rule.
-
-Δ remains a flat list: it is near-singleton in practice (`Delta = [A]`
-in most rules), and only R∀ and R∃ `select` on it.
-
-Known pitfall: `select/3` imposes one enumeration order on principal
-formulas, and compartments impose another. If proofs diverge, that is a
-choice to be made explicit and justified, not a discrepancy to be
-worked around. Expected gain: 15-20%, not the full 38%.
-
-Use a dedicated branch, and run the TPTP suite before deploying.
-
 ## Optimisations already applied
 
 1. **`g4mic_ax`** — the atomicity guard was tested once per element of
@@ -125,9 +94,49 @@ Use a dedicated branch, and run the TPTP suite before deploying.
    iteration limit. Replaced by `intuitionistic` in four places,
    including `g4mic_logic_level_internal/2` on the TPTP path. Up to
    −30% on hard classical formulas.
+6. **Compartmentalising Γ** — `select3_/4` was the dominant cost,
+   roughly 38% of CPU, because Γ is a flat list and each of the eight
+   left rules scanned it independently for its own principal
+   connective. Γ is now held as eight lists (Atoms, Conj, Disj,
+   ImplAtom, LandTo, LorTo, LtoTo, Quant) keyed by principal connective,
+   threaded as eight separate arguments through `g4mic_proves`/`g4mic_ax`
+   (not wrapped in a compound term — see below). Each left rule consults
+   only its own bucket; an empty bucket means immediate failure with no
+   scan. A single predicate, `gamma_insert/17`, does the classification,
+   turning the six-shape partition (atomic, `&`, `|`, `=>`, `!`, `?`)
+   into one checkable property instead of an assumption spread across
+   every rule. `L0→` deliberately still scans across *all* antecedent
+   shapes (ImplAtom, LandTo, LorTo, LtoTo, and the implication-shaped
+   members of Quant, in that fixed order) before falling back to the
+   shape-specific rules — it fires on any implication whose antecedent
+   is already present in Γ, not just the textbook atomic case, and that
+   existing behaviour is preserved. Δ stays a flat list, unchanged.
+   Enumeration order across buckets does not reproduce the original
+   flat-list order (an accepted divergence — can change which valid
+   proof is found first and its rendered premise order, never
+   provability or classification); this exposed one pre-existing bug in
+   the ND-tree renderer's `landto` clause (a blind `select/3` with no
+   check it had picked the formula actually consumed), fixed by the same
+   set-difference technique `lorto` and `extract_new_formula` already
+   used correctly. Proof-tree nodes carry the eight buckets plus Δ as
+   their first nine arguments during search;
+   `normalize_proof_gammas/2` is the one place that rebuilds the
+   original flat-list `Gamma>Delta` sequent, once per completed proof
+   (proportional to proof size, not search-tree size), so none of the
+   LaTeX/ND-tree/Fitch rendering code had to change. −16.4% CPU (median
+   of 7 interleaved rounds against the pre-refactor baseline),
+   inferences down 39%. Branch `compartmentalise-gamma`.
 
-Cumulative effect: about −20% on the test suite. All five verified
-byte-for-byte on SWI-Prolog 9.0.4 and 10.0.1.
+Cumulative effect: about −20% on the test suite from items 1-5, plus
+−16.4% from item 6. All verified byte-for-byte on SWI-Prolog 9.0.4 and
+10.0.1, except item 6, whose validation criterion is documented above
+(proof/premise-order divergence is accepted; provability and
+classification are not) — see "Validation procedure" for what was
+actually checked: 116/116 tests with byte-identical pass/fail and
+SZS-status lines, identical classification via `g4mic_logic_level/2`
+over all 45 hierarchy tests, and 50 TPTP problems (SYN category, rating
+0.00) with zero discrepancies between pre- and post-refactor SZS
+status.
 
 ## Approaches already tested and set aside
 
@@ -149,6 +158,18 @@ byte-for-byte on SWI-Prolog 9.0.4 and 10.0.1.
   in the WASM build, where load time is visible to the user. Regenerate
   it only once the current refactoring is finished, and note that a QLF
   file is tied to the SWI-Prolog version that produced it.
+- **Wrapping Γ's eight compartments in one `g/8` compound term.** The
+  first working version of item 6 above did this — Γ as a single
+  `g(Atoms,Conj,Disj,ImplAtom,LandTo,LorTo,LtoTo,Quant)` term, rebuilt
+  wholesale on every insert/select. Correct (116/116), but slower than
+  the flat-list baseline despite 25% fewer inferences: microbenchmark
+  showed rebuilding the 9-word `g/8` term costs about 2× a plain list
+  cons, since SWI allocates a fresh compound cell even when only one of
+  the eight fields changes. Fixed by threading the eight buckets as
+  separate arguments instead (7 args → 15 on `g4mic_proves`): unchanged
+  buckets flow through as free variable references at zero cost, and
+  only the touched bucket pays a cons. Do not reintroduce a Γ wrapper
+  term on the search path.
 
 ## Conventions
 
