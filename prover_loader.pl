@@ -7,7 +7,7 @@
 
 % Load the main prover
 
-:- ['g4mic_nanocop_optimised.pl'].
+:- ['g4mic_nanocop.pl'].
 % :- [o_driver].
 % Load the test suite
 :- ['test_suite.pl'].

@@ -35,7 +35,7 @@ member_check(Term, List) :-
 % =========================================================================
 % GAMMA COMPARTMENTS
 % =========================================================================
-% Ported from g4mic_nanocop_optimised.pl (branch compartmentalise-gamma):
+% Ported from g4mic_nanocop.pl (the unified prover; branch compartmentalise-gamma):
 % Gamma is held as eight separate arguments -- Atoms,Conj,Disj,ImplAtom,
 % LandTo,LorTo,LtoTo,Quant -- threaded directly through g4mic_proves/g4mic_ax,
 % one list per principal-connective bucket, instead of a flat list. Each
@@ -79,10 +79,11 @@ member_check(Term, List) :-
 % expect -- so neither of those needs to change.
 %
 % Scope note: this file had none of the five propositional
-% micro-optimisations already applied to g4mic_nanocop_optimised.pl
-% (atomicity-guard hoist, guard hoists, the atomic_formula/connective
-% table, memberchk swaps, redundant-re-search removal) -- only the
-% compartmentalisation (item 6) is ported here, at the user's request.
+% micro-optimisations already applied to g4mic_nanocop.pl (the unified
+% prover): atomicity-guard hoist, guard hoists, the atomic_formula/
+% connective table, memberchk swaps, redundant-re-search removal --
+% only the compartmentalisation (item 6) is ported here, at the user's
+% request.
 % Rule bodies below preserve this file's original member/select choices
 % and conditional ordering wherever compartmentalisation doesn't force
 % a change; atomic_formula/connective is introduced only because
