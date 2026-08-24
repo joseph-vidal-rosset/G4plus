@@ -724,8 +724,8 @@ prove(Left <=> Right) :-
         % Test direction 1
         retractall(current_proof_sequent(_)),
         assertz(current_proof_sequent(Left => Right)),
-        ( catch(time((decide_silent(Left => Right, Proof1, Logic1))), _, fail) ->
-            Direction1Valid = true
+        ( catch(time((decide_silent(Left => Right, Proof1Raw, Logic1))), _, fail) ->
+            Direction1Valid = true, normalize_proof_gammas(Proof1Raw, Proof1)
         ;
             Direction1Valid = false, Proof1 = none, Logic1 = none
         ),
@@ -733,8 +733,8 @@ prove(Left <=> Right) :-
         % Test direction 2
         retractall(current_proof_sequent(_)),
         assertz(current_proof_sequent(Right => Left)),
-        ( catch(time((decide_silent(Right => Left, Proof2, Logic2))), _, fail) ->
-            Direction2Valid = true
+        ( catch(time((decide_silent(Right => Left, Proof2Raw, Logic2))), _, fail) ->
+            Direction2Valid = true, normalize_proof_gammas(Proof2Raw, Proof2)
         ;
             Direction2Valid = false, Proof2 = none, Logic2 = none
         ),
@@ -1023,7 +1023,16 @@ prove(Formula) :-
 % OUTPUT WITH MODE DETECTION
 % =========================================================================
 
-output_proof_results(Proof, LogicType, _OriginalFormula) :-
+output_proof_results(ProofIn, LogicType, _OriginalFormula) :-
+    % Gamma is threaded as eight separate bucket arguments throughout
+    % search (see ii_prover.pl's GAMMA COMPARTMENTS section). Rendering
+    % (raw dump, bussproofs, ND-tree, Fitch) is the only place that
+    % needs the original flat-list Gamma>Delta sequent, so normalize
+    % once here rather than in provable_at_level/3 -- most callers of
+    % provable_at_level (g4mic_logic_level/2 and friends) never render
+    % a proof at all, and paying this cost on every search would be
+    % pure waste for them.
+    normalize_proof_gammas(ProofIn, Proof),
     extract_formula_from_proof(Proof, Formula),
     detect_and_set_logic_level(Formula),
     retractall(current_logic_level(_)),
@@ -1090,9 +1099,10 @@ provable_at_level(Sequent, constructive, P) :-
     logic_iteration_limit(constructive, MaxIter),
     for(Threshold, 0, MaxIter),
     Sequent = (Gamma > Delta),
+    gamma_from_list(Gamma, At,Cj,Dj,I0,IA,IO,IT,Qt),
     init_eigenvars,  % Initialize before each attempt
-    ( g4mic_proves(Gamma > Delta, [], Threshold, 1, _, minimal, P) -> true    % <- Essayer minimal d'abord
-    ; init_eigenvars, g4mic_proves(Gamma > Delta, [], Threshold, 1, _, intuitionistic, P)     % <- Then intuitionistic if failure
+    ( g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, [], Threshold, 1, _, minimal, P) -> true    % <- Essayer minimal d'abord
+    ; init_eigenvars, g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, [], Threshold, 1, _, intuitionistic, P)     % <- Then intuitionistic if failure
     ),
     !.
 
@@ -1101,8 +1111,9 @@ provable_at_level(Sequent, LogicLevel, Proof) :-
     logic_iteration_limit(LogicLevel, MaxIter),
     for(Threshold, 0, MaxIter),
     Sequent = (Gamma > Delta),
+    gamma_from_list(Gamma, At,Cj,Dj,I0,IA,IO,IT,Qt),
     init_eigenvars,
-    g4mic_proves(Gamma > Delta, [], Threshold, 1, _, LogicLevel, Proof),
+    g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, [], Threshold, 1, _, LogicLevel, Proof),
     !.
 
 % =========================================================================
@@ -1110,10 +1121,11 @@ provable_at_level(Sequent, LogicLevel, Proof) :-
 % =========================================================================
 provable_at_level(Sequent, classical, Proof) :-
     Sequent = (Gamma > Delta),
+    gamma_from_list(Gamma, At,Cj,Dj,I0,IA,IO,IT,Qt),
     logic_iteration_limit(classical, MaxIter),
     for(Threshold, 0, MaxIter),
     init_eigenvars,
-    g4mic_proves(Gamma > Delta, [], Threshold, 1, _, classical, Proof),
+    g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, [], Threshold, 1, _, classical, Proof),
     !.
 
 % =========================================================================

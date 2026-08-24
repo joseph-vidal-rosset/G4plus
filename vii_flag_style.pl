@@ -102,10 +102,22 @@ fitch_g4_proof(l0cond((Premisss > _), SubProof), Context, Scope, CurLine, NextLi
     fitch_g4_proof(SubProof, [DerLine:Cons|Context], Scope, DerLine, NextLine, ResLine, V1, VarOut).
 
 % L/\->
+% Identify the consumed (A&B)=>C by the same set-difference technique
+% extract_new_formula/lorto already use for the ADDED formula, rather
+% than a bare select/3 over Premisses: with Gamma held as compartments
+% (see ii_prover.pl's GAMMA COMPARTMENTS section) two or more
+% (_&_)=>_ candidates can appear in either order in the flattened
+% list, and a plain "first match" select no longer reliably lands on
+% the one this rule actually fired on.
 fitch_g4_proof(landto((Premisses > _), SubProof), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- !,
     extract_new_formula(Premisses, SubProof, NewFormula),
-    select(((A & B) => C), Premisses, _),
-    once(member(ImpLine:((A & B) => C), Context)),
+    SubProof =.. [_|[(SubPremisses > _)|_]],
+    ( member(((A & B) => C), Premisses),
+      \+ member(((A & B) => C), SubPremisses)
+    ->  true
+    ;   select(((A & B) => C), Premisses, _)
+    ),
+    find_context_line(((A & B) => C), Context, ImpLine),
     derive_and_continue(Scope, NewFormula, '$ \\land \\to E $ ~w', [ImpLine],
                        landto(ImpLine), SubProof, Context, CurLine, NextLine, ResLine, VarIn, VarOut).
 

@@ -21,6 +21,18 @@ Main file: `g4mic_nanocop.pl`.
 Support files: `test_suite.pl`, `i_operators.pl`,
 `nanocop20_swi_for_g4plus.pl`, `nanocop_proof.pl`, `nanocop_tptp2.pl`.
 
+A second, modular decomposition of the same prover exists in parallel:
+`o_driver.pl` loads `i_operators.pl`, `ii_prover.pl` (the core
+`g4mic_ax`/`g4mic_proves` engine), `iii_latex.pl`, `iv_detections.pl`,
+`v_sc_printer.pl` (sequent-calculus rendering), `vi_common_nd.pl`,
+`vii_flag_style.pl` (Fitch rendering, `fitch_g4_proof/8`),
+`viii_tree_style.pl` (ND-tree rendering), and `x_tptp.pl`. It shares
+`test_suite.pl` and passes the same 116/116. Load with
+`consult(o_driver)` (not `prover_loader.pl`, which loads the monolithic
+file instead). Keep the two in sync: a change to the engine or renderer
+logic in one normally belongs in the other too — see item 6 below for
+an example of doing this safely.
+
 Formulas containing equality or function symbols are routed to nanoCoP
 by `g4mic_needs_nanocop/1`. This is a deliberate design decision, not a
 gap to be closed: axiomatised equality would flood Γ with universal
@@ -127,16 +139,34 @@ rough comparison against themselves.
    of 7 interleaved rounds against the pre-refactor baseline),
    inferences down 39%. Branch `compartmentalise-gamma`.
 
-Cumulative effect: about −20% on the test suite from items 1-5, plus
-−16.4% from item 6. All verified byte-for-byte on SWI-Prolog 9.0.4 and
-10.0.1, except item 6, whose validation criterion is documented above
-(proof/premise-order divergence is accepted; provability and
-classification are not) — see "Validation procedure" for what was
-actually checked: 116/116 tests with byte-identical pass/fail and
-SZS-status lines, identical classification via `g4mic_logic_level/2`
-over all 45 hierarchy tests, and 50 TPTP problems (SYN category, rating
-0.00) with zero discrepancies between pre- and post-refactor SZS
-status.
+   Ported to the modular prover (`ii_prover.pl`/`o_driver.pl`/
+   `vii_flag_style.pl`) the same day, same branch, same validation
+   procedure. `ii_prover.pl` had none of items 1-5 applied — only the
+   compartmentalisation was in scope, so rule bodies keep this file's
+   original `member`/`select` choices and conditional ordering
+   wherever compartmentalisation didn't force a change (`atomic_formula`/
+   `connective` was introduced anyway, since the Atoms bucket needs an
+   atomicity test to be defined *somewhere*). Bigger relative gain here
+   — −27.0% CPU (median of 7 interleaved rounds; 2.599s → 1.896s) —
+   because there was more redundant scanning to eliminate going in.
+   Same landto bug, same fix, found independently by re-running the
+   same two Pelletier problems. Validated the same way: 116/116,
+   byte-identical pass/fail and SZS-status lines against this file's
+   own pre-change reference log, 0/45 mismatches via
+   `g4mic_logic_level/2`, and the same 50 TPTP problems with zero
+   discrepancies against this file's own pre-change baseline.
+
+Cumulative effect: about −20% on the test suite from items 1-5
+(unified prover only — not applied to the modular prover, see item 6),
+plus −16.4% (unified) / −27.0% (modular) from item 6. All verified
+byte-for-byte on SWI-Prolog 9.0.4 and 10.0.1, except item 6, whose
+validation criterion is documented above (proof/premise-order
+divergence is accepted; provability and classification are not) — see
+"Validation procedure" for what was actually checked in each case:
+116/116 tests with byte-identical pass/fail and SZS-status lines,
+identical classification via `g4mic_logic_level/2` over all 45
+hierarchy tests, and 50 TPTP problems (SYN category, rating 0.00) with
+zero discrepancies between pre- and post-refactor SZS status.
 
 ## Approaches already tested and set aside
 
