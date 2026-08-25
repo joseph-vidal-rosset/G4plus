@@ -203,13 +203,13 @@ bmatrix(F,Set,M) :-
       ; bmatrix(F1,0,M1,[],[],_,1,_,_), ( member(reo(I),Set) ->
         reorderC([M1],[_:M],I) ; _:M=M1 ) ).
 
-%% Ajout : support de la syntaxe TPTP ![X]:F et ?[X]:F
+%% Added: support for the TPTP syntax ![X]:F and ?[X]:F
 bmatrix(![X]:F1, Pol, M, FreeV, FV, Paths, I, I1, K) :- !,
     bmatrix(all X:F1, Pol, M, FreeV, FV, Paths, I, I1, K).
 
 bmatrix(?[X]:F1, Pol, M, FreeV, FV, Paths, I, I1, K) :- !,
     bmatrix(ex X:F1, Pol, M, FreeV, FV, Paths, I, I1, K).
-%%% fin de l'ajout
+%%% end of the addition
 
 bmatrix((F1<=>F2),Pol,M,FreeV,FV,Paths,I,I1,K) :- !,
     bmatrix(((F1=>F2),(F2=>F1)),Pol,M,FreeV,FV,Paths,I,I1,K).

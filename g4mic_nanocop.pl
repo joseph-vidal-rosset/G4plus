@@ -56,7 +56,7 @@
 :-[nanocop_proof].
 :-[nanocop_tptp2].
 
-% Activer le format d'explication complete d'Otten
+% Enable Otten's full explanation format
 :-retractall(proof(_)).
 :-assert(proof(readable)).
 :-dynamic g4mic_silent_mode/0.
@@ -65,7 +65,7 @@
 % MAIN INTERFACE
 % =========================================================================
 
-% Wrapper public: catchee nanocop_gave_up pour appels directs
+% Public wrapper: catches nanocop_gave_up, for direct calls
 nanocop_proves_safe(Formula) :-
     catch(
         nanocop_proves(Formula),
@@ -74,13 +74,13 @@ nanocop_proves_safe(Formula) :-
     ).
 
 nanocop_proves(Formula) :-
-    % Forcer l'affichage
+    % Force display
     retractall(g4mic_silent_mode),
 
-    % Limite d'inferences avec LOGIQUE CORRECTE
+    % Inference limit, with the CORRECT logic
     call_with_inference_limit(
         (
-            % Detecter l'egalite AVANT traduction
+            % Detect equality BEFORE translation
             (nanocop_contains_equality(Formula) ->
                 HasEquality = true
             ;
@@ -89,14 +89,14 @@ nanocop_proves(Formula) :-
 
             translate_formula(Formula, InternalFormula),
 
-            % N'appeler leancop_equal QUE si egalite presente
+            % Call leancop_equal ONLY when equality is present
             (HasEquality = true ->
                 leancop_equal(InternalFormula, FormulaToProve)
             ;
                 FormulaToProve = InternalFormula
             ),
 
-            % IMPORTANT : PAS DE NEGATION - prove2 gere la refutation en interne
+            % IMPORTANT: NO NEGATION -- prove2 handles the refutation internally
             ( time(prove2(FormulaToProve, [cut,comp(40)], Proof)) ->
               Result='Theorem'
             ;
@@ -104,14 +104,14 @@ nanocop_proves(Formula) :-
             ),
             bmatrix(FormulaToProve, [cut,comp(40)], Matrix),
             output_result(Formula, Matrix, Proof, Result),
-            % VERIFIER le resultat
+            % Check the result
             Result='Theorem'
         ),
         80000000,
         InfResult
     ),
     ( InfResult == inference_limit_exceeded ->
-        % Limite atteinte: verifier avec nanocop_decides si c'est quand meme un theoreme
+        % Limit reached: ask nanocop_decides whether it is a theorem anyway
         ( catch(
               ( call_with_inference_limit(nanocop_decides(Formula), 80000000, InfResult2),
                 InfResult2 \== inference_limit_exceeded ),
@@ -126,13 +126,13 @@ nanocop_proves(Formula) :-
     ; true ),!.
 
 % =========================================================================
-% nanocop_decides/1 :   Version SILENCIEUSE (avec stats)
+% nanocop_decides/1 :   SILENT version (with stats)
 % =========================================================================
 
 nanocop_decides(Formula) :-
     assertz(g4mic_silent_mode),
 
-    % Detecter l'egalite AVANT traduction
+    % Detect equality BEFORE translation
     (nanocop_contains_equality(Formula) ->
         HasEquality = true
     ;
@@ -141,14 +141,14 @@ nanocop_decides(Formula) :-
 
     translate_formula(Formula, InternalFormula),
 
-    % N'appeler leancop_equal QUE si egalite presente
+    % Call leancop_equal ONLY when equality is present
     (HasEquality = true ->
         leancop_equal(InternalFormula, FormulaToProve)
     ;
         FormulaToProve = InternalFormula
     ),
 
-    % IMPORTANT : PAS DE NEGATION - prove2 gere la refutation en interne
+    % IMPORTANT: NO NEGATION -- prove2 handles the refutation internally
     retractall(nanocop_depth_limited),
     prove2(FormulaToProve, [cut,comp(40)], _Proof),
     retractall(g4mic_silent_mode), !.
@@ -172,7 +172,7 @@ nanocop_decides(Formula) :-
 nanocop_decides_equality(Formula) :-
     assertz(g4mic_silent_mode),
 
-    % Detecter l'egalite AVANT traduction
+    % Detect equality BEFORE translation
     (nanocop_contains_equality(Formula) ->
         HasEquality = true
     ;
@@ -181,20 +181,20 @@ nanocop_decides_equality(Formula) :-
 
     translate_formula(Formula, InternalFormula),
 
-    % N'appeler leancop_equal QUE si egalite presente
+    % Call leancop_equal ONLY when equality is present
     (HasEquality = true ->
         leancop_equal(InternalFormula, FormulaToProve)
     ;
         FormulaToProve = InternalFormula
     ),
 
-    % IMPORTANT : PAS DE NEGATION - prove2 gere la refutation en interne
+    % IMPORTANT: NO NEGATION -- prove2 handles the refutation internally
     retractall(nanocop_depth_limited),
     prove2(FormulaToProve, [cut,comp(40)], _Proof),
     retractall(g4mic_silent_mode), !.
 
 % =========================================================================
-% NANOCOP PROBE (sans cut) - pour determiner si la recherche est exhaustive
+% NANOCOP PROBE (no cut) -- to determine whether the search is exhaustive
 % =========================================================================
 % Runs prove2 WITHOUT cut under inference limit. The result tells us:
 %   proved          - formula is provable
@@ -1089,7 +1089,7 @@ provable_at_level(Sequent, constructive, P) :-
     Sequent = (Gamma > Delta),
     gamma_from_list(Gamma, At,Cj,Dj,I0,IA,IO,IT,Qt),
     init_eigenvars,  % Initialize before each attempt
-    ( g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Gamma,Delta, [], Threshold, 1, _, minimal, P) -> true    % <- Essayer minimal d'abord
+    ( g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Gamma,Delta, [], Threshold, 1, _, minimal, P) -> true    % <- Try minimal first
     ; init_eigenvars, g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Gamma,Delta, [], Threshold, 1, _, intuitionistic, P)     % <- Then intuitionistic if failure
     ),
     !.
@@ -1428,29 +1428,52 @@ g4mic_ax(At,_Cj,_Dj,_I0,_IA,_IO,_IT,_Qt,Fl,Delta, _, _, SkolemIn, SkolemIn, _,
     ).
 
 % atomic_formula(+F): F has no logical connective as principal symbol.
-% Single indexed lookup on the principal functor instead of five \=/2 tests.
+% The five shapes are listed as clause heads of connective_shape/1 rather
+% than as name/arity pairs looked up by functor/3: SWI indexes a
+% single-argument predicate on the principal functor of its argument, so
+% \+ connective_shape(F) is one jump-table lookup where functor/3 plus a
+% two-argument table lookup was a functor decomposition, an atom index
+% and an arity test. Measured -14.5% on the test alone.
+% The compound/1 guard is what makes an unbound F atomic, as before:
+% without it, connective_shape(F) would unify F with _ & _ and succeed.
 atomic_formula(F) :-
     (   compound(F)
-    ->  functor(F, Name, Arity),
-        \+ connective(Name, Arity)
+    ->  \+ connective_shape(F)
     ;   true
     ).
 
-connective(&,   2).
-connective('|', 2).
-connective(=>,  2).
-connective(!,   1).
-connective(?,   1).
+connective_shape(_ & _).
+connective_shape(_ | _).
+connective_shape(_ => _).
+connective_shape(!_).
+connective_shape(?_).
 
 % =========================================================================
 % GAMMA COMPARTMENTS
 % =========================================================================
-% Gamma is held as eight separate arguments -- Atoms,Conj,Disj,ImplAtom,
-% LandTo,LorTo,LtoTo,Quant -- threaded directly through g4mic_proves/g4mic_ax,
-% one list per principal-connective bucket, instead of a flat list. Each
-% propositional left rule consults only its own bucket instead of
-% scanning all of Gamma. See CLAUDE.md, "Current work: compartmentalising
-% Gamma".
+% Gamma is held in two forms at once, both threaded through
+% g4mic_proves/16 and g4mic_ax/16:
+%
+%   - eight separate arguments -- Atoms,Conj,Disj,ImplAtom,LandTo,LorTo,
+%     LtoTo,Quant -- one list per principal-connective bucket. Each
+%     propositional left rule consults only its own bucket instead of
+%     scanning all of Gamma;
+%   - Fl, the same members as one flat list in INSERTION ORDER (most
+%     recent first), which every proof node records as its Gamma>Delta
+%     sequent.
+%
+% Fl is not redundant, and it is not a convenience: everything
+% downstream of search -- the bussproofs renderer, the ND-tree
+% translator, fitch_g4_proof/8 -- re-derives which formula each rule
+% acted on by searching Gamma, and that re-derivation depends on Gamma's
+% order. Bucket order is not insertion order and cannot be made to
+% reproduce it. Flattening the buckets instead of threading Fl silently
+% loses 19 natural-deduction trees across 8 tests; no static bucket
+% order fixes it. Every rule must keep Fl in step with the buckets: a
+% rule that removes from a bucket removes from Fl (selectchk/3), and a
+% rule that inserts conses onto Fl in the same order the original
+% flat-list code used. See CLAUDE.md, "Architecture of proof search --
+% the flat-Gamma invariant".
 %
 % The eight buckets are passed as bare list arguments rather than
 % wrapped in a single compound term: an earlier version wrapped them in
@@ -1463,7 +1486,7 @@ connective(?,   1).
 % Bucket membership is exhaustive and mutually exclusive over the six
 % shapes a Gamma member can have after negation normalisation (~A is
 % rewritten to A => # before the prover runs -- see subst_neg/2):
-%   Atoms    -- atomic formulas (functor not in connective/2), incl. #
+%   Atoms    -- atomic formulas (no connective_shape/1 match), incl. #
 %   Conj     -- A & B
 %   Disj     -- A | B
 %   ImplAtom -- A => B, A atomic                  (textbook G4 L0-> case)
@@ -1473,51 +1496,47 @@ connective(?,   1).
 %   Quant    -- ![Z-X]:A, ?[Z-X]:A, and the two quantified-antecedent
 %               implication forms (![Z-X]:A)=>B, (?[Z-X]:A)=>B
 %
-% L0-> (see g4mic_proves/7 below) fires on ANY implication in Gamma
-% whose antecedent is already present elsewhere, regardless of the
-% antecedent's shape -- this is intentional, existing behaviour, not the
-% textbook atomic-only case, and compartmentalisation preserves it:
-% gamma_all_implications_select/11 scans ImplAtom, LandTo, LorTo, LtoTo
-% and the implication-shaped members of Quant, in that fixed order,
-% before L&->/L\/->/L->-> fall back to their own bucket. That fixed
-% order does not reproduce the original flat-list select/3 enumeration
-% order -- an accepted, documented divergence (CLAUDE.md's "known
-% pitfall"): it can change which valid proof is found first (and hence
-% premise order in rendered output), never provability or logic-level
-% classification.
+% Rules that select from a single bucket (L&, L\/, L\/->, L->->, Lexists,
+% Lforall, CQ_m, CQ_c) agree with flat-Gamma order for free: filtering a
+% LIFO sequence preserves relative order, so the head of Conj *is* the
+% first conjunction of Gamma.
 %
-% Proof-tree nodes carry the same eight buckets plus Delta as their
-% first nine arguments (e.g. ax(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, ax)),
-% rather than the original single Gamma>Delta sequent term.
-% normalize_proof_gammas/2 is the one place that translates this wide,
-% search-internal shape back into the familiar Gamma>Delta flat-list
-% sequent that the raw-term dump, bussproofs/ND-tree/Fitch renderers
-% and fitch_g4_proof/8 already expect -- so none of that rendering code
-% needs to change. It runs once per completed proof (proportional to
-% proof size, not search-tree size); see output_proof_results/3 and the
-% biconditional branch of g4mic_decides/1, the only two call sites that
-% actually render a proof.
+% L0-> is the exception, and the reason gamma_remove/17 exists. It fires
+% on ANY implication in Gamma whose antecedent is already present
+% elsewhere, regardless of the antecedent's shape -- intentional,
+% existing behaviour, not the textbook atomic-only case -- so its
+% candidates range over five buckets at once, and no concatenation of
+% those five reproduces the global order. It therefore enumerates over
+% Fl and deletes the chosen implication from the buckets afterwards.
 % =========================================================================
 
 % gamma_insert(+F, +At,+Cj,+Dj,+I0,+IA,+IO,+IT,+Qt, -AtO,-CjO,-DjO,-I0O,-IAO,-IOO,-ITO,-QtO):
 % the single classification point. Reuses atomic_formula/1 (same
-% functor/connective test as the Axiom rule), so "atomic" means the
-% same thing everywhere.
-gamma_insert(F, At,Cj,Dj,I0,IA,IO,IT,Qt, [F|At],Cj,Dj,I0,IA,IO,IT,Qt) :-
-    atomic_formula(F), !.
+% functor test as the Axiom rule), so "atomic" means the same thing
+% everywhere.
+%
+% Clause order is chosen for first-argument indexing, not for reading:
+% the three shapes with a concrete principal functor come first, so SWI
+% can jump straight to the matching clause. Putting the atomic clause
+% first -- its head argument is a plain variable -- defeats the index
+% altogether and makes every insertion run atomic_formula/1 before
+% anything else. The five shapes are mutually exclusive, so the order
+% carries no meaning beyond that. Measured -21.5% on the predicate.
 gamma_insert((A & B), At,Cj,Dj,I0,IA,IO,IT,Qt, At,[(A&B)|Cj],Dj,I0,IA,IO,IT,Qt) :- !.
 gamma_insert((A | B), At,Cj,Dj,I0,IA,IO,IT,Qt, At,Cj,[(A|B)|Dj],I0,IA,IO,IT,Qt) :- !.
 gamma_insert((A => B), At,Cj,Dj,I0,IA,IO,IT,Qt, AtO,CjO,DjO,I0O,IAO,IOO,ITO,QtO) :- !,
     gamma_insert_impl(A, (A => B), At,Cj,Dj,I0,IA,IO,IT,Qt, AtO,CjO,DjO,I0O,IAO,IOO,ITO,QtO).
+gamma_insert(F, At,Cj,Dj,I0,IA,IO,IT,Qt, [F|At],Cj,Dj,I0,IA,IO,IT,Qt) :-
+    atomic_formula(F), !.
 gamma_insert(F, At,Cj,Dj,I0,IA,IO,IT,Qt, At,Cj,Dj,I0,IA,IO,IT,[F|Qt]).
     % F = ![Z-X]:A or ?[Z-X]:A -- the only shapes left once atomic/&/|/=>
     % have been ruled out (closed six-shape assumption above).
 
-gamma_insert_impl(A, F, At,Cj,Dj,I0,IA,IO,IT,Qt, At,Cj,Dj,[F|I0],IA,IO,IT,Qt) :-
-    atomic_formula(A), !.
 gamma_insert_impl((_ & _), F, At,Cj,Dj,I0,IA,IO,IT,Qt, At,Cj,Dj,I0,[F|IA],IO,IT,Qt) :- !.
 gamma_insert_impl((_ | _), F, At,Cj,Dj,I0,IA,IO,IT,Qt, At,Cj,Dj,I0,IA,[F|IO],IT,Qt) :- !.
 gamma_insert_impl((_ => _), F, At,Cj,Dj,I0,IA,IO,IT,Qt, At,Cj,Dj,I0,IA,IO,[F|IT],Qt) :- !.
+gamma_insert_impl(A, F, At,Cj,Dj,I0,IA,IO,IT,Qt, At,Cj,Dj,[F|I0],IA,IO,IT,Qt) :-
+    atomic_formula(A), !.
 gamma_insert_impl(_, F, At,Cj,Dj,I0,IA,IO,IT,Qt, At,Cj,Dj,I0,IA,IO,IT,[F|Qt]).
     % A = ![Z-X]:_ or ?[Z-X]:_ -- quantified-antecedent implication
     % (CQ_c / CQ_m trigger).
@@ -1538,92 +1557,41 @@ gamma_insert_list([F|Fs], At,Cj,Dj,I0,IA,IO,IT,Qt, AtO,CjO,DjO,I0O,IAO,IOO,ITO,Q
 gamma_from_list(List, At,Cj,Dj,I0,IA,IO,IT,Qt) :-
     gamma_insert_list(List, [],[],[],[],[],[],[],[], At,Cj,Dj,I0,IA,IO,IT,Qt).
 
-% gamma_to_list(+At,...,+Qt, -FlatList): flatten all eight buckets into
-% one list, in a fixed canonical order. Used only where a genuine flat
-% list is required (proof rendering) -- never on the search path. Does
-% not reproduce the original insertion order; see the design note above.
 % gamma_remove(+F, +At..+Qt, -AtO..-QtO): delete one occurrence of F from
-% the bucket its principal connective assigns it to. Dispatches exactly
-% like gamma_shape_member/9, so a formula is always removed from the
-% bucket gamma_insert/17 put it in. Used by L0->, which enumerates
-% candidates over the insertion-ordered flat Gamma (see Rule 6) and must
-% then delete the chosen implication from the buckets.
-gamma_remove(F, At,Cj,Dj,I0,IA,IO,IT,Qt, At1,Cj,Dj,I0,IA,IO,IT,Qt) :-
-    atomic_formula(F), !, selectchk(F, At, At1).
+% the bucket its principal connective assigns it to -- the mirror of
+% gamma_insert/17, and ordered for the same indexing reason. Used by
+% L0->, which enumerates candidates over the insertion-ordered flat
+% Gamma (see Rule 6) and must then delete the chosen implication from
+% the buckets.
 gamma_remove((A & B), At,Cj,Dj,I0,IA,IO,IT,Qt, At,Cj1,Dj,I0,IA,IO,IT,Qt) :- !,
     selectchk((A&B), Cj, Cj1).
 gamma_remove((A | B), At,Cj,Dj,I0,IA,IO,IT,Qt, At,Cj,Dj1,I0,IA,IO,IT,Qt) :- !,
     selectchk((A|B), Dj, Dj1).
 gamma_remove((A => B), At,Cj,Dj,I0,IA,IO,IT,Qt, At,Cj,Dj,I01,IA1,IO1,IT1,Qt1) :- !,
     gamma_remove_impl(A, (A => B), I0,IA,IO,IT,Qt, I01,IA1,IO1,IT1,Qt1).
+gamma_remove(F, At,Cj,Dj,I0,IA,IO,IT,Qt, At1,Cj,Dj,I0,IA,IO,IT,Qt) :-
+    atomic_formula(F), !, selectchk(F, At, At1).
 gamma_remove(F, At,Cj,Dj,I0,IA,IO,IT,Qt, At,Cj,Dj,I0,IA,IO,IT,Qt1) :-
     selectchk(F, Qt, Qt1).
 
-gamma_remove_impl(A, F, I0,IA,IO,IT,Qt, I01,IA,IO,IT,Qt) :-
-    atomic_formula(A), !, selectchk(F, I0, I01).
 gamma_remove_impl((_ & _), F, I0,IA,IO,IT,Qt, I0,IA1,IO,IT,Qt) :- !,
     selectchk(F, IA, IA1).
 gamma_remove_impl((_ | _), F, I0,IA,IO,IT,Qt, I0,IA,IO1,IT,Qt) :- !,
     selectchk(F, IO, IO1).
 gamma_remove_impl((_ => _), F, I0,IA,IO,IT,Qt, I0,IA,IO,IT1,Qt) :- !,
     selectchk(F, IT, IT1).
+gamma_remove_impl(A, F, I0,IA,IO,IT,Qt, I01,IA,IO,IT,Qt) :-
+    atomic_formula(A), !, selectchk(F, I0, I01).
 gamma_remove_impl(_, F, I0,IA,IO,IT,Qt, I0,IA,IO,IT,Qt1) :-
     selectchk(F, Qt, Qt1).
 
-% gamma_all_implications_select(-A, -B, +I0,+IA,+IO,+IT,+Qt, -I0O,-IAO,-IOO,-ITO,-QtO):
-% the candidate generator for L0->. See the design note above for why
-% this must range over every antecedent shape. Plain disjunction (not
-% if-then-else) so backtracking into a later candidate of an earlier
-% bucket -- or into a later bucket entirely -- both work, exactly as
-% select/3 backtracking did on the flat list.
-gamma_all_implications_select(A, B, I0,IA,IO,IT,Qt, I0o,IA,IO,IT,Qt) :-
-    select((A=>B), I0, I0o).
-gamma_all_implications_select(A, B, I0,IA,IO,IT,Qt, I0,IAo,IO,IT,Qt) :-
-    select((A=>B), IA, IAo).
-gamma_all_implications_select(A, B, I0,IA,IO,IT,Qt, I0,IA,IOo,IT,Qt) :-
-    select((A=>B), IO, IOo).
-gamma_all_implications_select(A, B, I0,IA,IO,IT,Qt, I0,IA,IO,ITo,Qt) :-
-    select((A=>B), IT, ITo).
-gamma_all_implications_select(A, B, I0,IA,IO,IT,Qt, I0,IA,IO,IT,Qto) :-
-    select((A=>B), Qt, Qto).
-
-% gamma_shape_member(+F, +At,+Cj,+Dj,+I0,+IA,+IO,+IT,+Qt): is F present
-% in Gamma, without removing it? Dispatches on F's own principal
-% connective to the matching bucket -- this is the L0-> "is A already
-% present" presence test.
-gamma_shape_member(F, At,_,_,_,_,_,_,_) :-
-    atomic_formula(F), !, member(F, At).
-gamma_shape_member((A & B), _,Cj,_,_,_,_,_,_) :- !, member((A&B), Cj).
-gamma_shape_member((A | B), _,_,Dj,_,_,_,_,_) :- !, member((A|B), Dj).
-gamma_shape_member((A => B), _,_,_,I0,IA,IO,IT,Qt) :- !,
-    gamma_shape_member_impl(A, (A => B), I0,IA,IO,IT,Qt).
-gamma_shape_member(F, _,_,_,_,_,_,_,Qt) :-
-    member(F, Qt).
-
-gamma_shape_member_impl(A, F, I0,_,_,_,_) :-
-    atomic_formula(A), !, member(F, I0).
-gamma_shape_member_impl((_ & _), F, _,IA,_,_,_) :- !, member(F, IA).
-gamma_shape_member_impl((_ | _), F, _,_,IO,_,_) :- !, member(F, IO).
-gamma_shape_member_impl((_ => _), F, _,_,_,IT,_) :- !, member(F, IT).
-gamma_shape_member_impl(_, F, _,_,_,_,Qt) :-
-    member(F, Qt).
-    % A = ![Z-X]:_ or ?[Z-X]:_ -- look up in Quant, same bucket it was
-    % inserted into.
-
-% normalize_proof_gammas(+ProofIn, -ProofOut): every proof-tree node
-% embeds the nine search-internal arguments (the eight buckets plus
-% Delta) that were active when its rule fired -- e.g.
-% ax(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, ax). The raw-term dump, the
-% bussproofs/ND-tree/Fitch renderers and fitch_g4_proof/8 all expect the
-% original single Gamma>Delta flat-list sequent instead. This walks a
-% completed proof term once (proportional to proof size, not
-% search-tree size) and rebuilds that flat-list sequent at every node,
-% so nothing downstream of provable_at_level/3 ever sees the eight
-% buckets separately.
-% Proof nodes are built directly as the familiar Gamma>Delta sequent
-% term: each rule receives Fl, the flat Gamma in insertion order, and
-% records it. Nothing has to be translated afterwards, so this is now
-% the identity -- kept only so existing call sites need no change.
+% normalize_proof_gammas(+ProofIn, -ProofOut): proof nodes are built
+% directly as the familiar Gamma>Delta sequent term -- each rule
+% receives Fl, the flat Gamma in insertion order, and records it -- so
+% nothing has to be translated afterwards and this is the identity. It
+% is kept because output_proof_results/3 and the biconditional branch of
+% g4mic_decides/1 call it, and because it is the hook a future change
+% that stops threading Fl would need (see CLAUDE.md, "Open item").
 normalize_proof_gammas(Proof, Proof).
 
 % =========================================================================
@@ -1764,20 +1732,6 @@ g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Fl,Delta, FV, Th, SI, SO, LL,
     (   g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Fl,[A], FV, Th, SI, SO, LL, P)
     ;   g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Fl,[B], FV, Th, SI, SO, LL, P)
     ).
-/*
-% --- Rule 9: L\/-> (optimized) --------------------------------------------
-g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, lorto(Gamma>Delta, P)) :-
-    select(((A | B) => C), Gamma, G1), !,
-    ( memberchk(A, G1), memberchk(B, G1) ->
-      g4mic_proves([B=>C, A=>C | G1]>Delta, FV, Th, SI, SO, LL, P)
-    ; memberchk(A, G1) ->
-      g4mic_proves([A=>C | G1]>Delta, FV, Th, SI, SO, LL, P)
-    ; memberchk(B, G1) ->
-      g4mic_proves([B=>C | G1]>Delta, FV, Th, SI, SO, LL, P)
-    ;
-    g4mic_proves([A=>C, B=>C | G1]>Delta, FV, Th, SI, SO, LL, P)
-    ).
-*/
 % --- Rule 1: L-bot -----------------------------------------------------
 g4mic_proves(_At,_Cj,_Dj,_I0,_IA,_IO,_IT,_Qt,Fl,Delta, _, _, SI, SI, LL,
              lbot(Fl>Delta, #)) :-
@@ -1805,18 +1759,6 @@ g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Fl,Delta, FV, Th, SI, SO, LL,
     gamma_insert(C, At,Cj,Dj,I0,IA,IO,IT0,Qt, At2,Cj2,Dj2,I02,IA2,IO2,IT2,Qt2),
     g4mic_proves(At1,Cj1,Dj1,I01,IA1,IO1,IT1,Qt1,[A,(B => C)|Fl0],[B], FV, Th, SI, J1, LL, P1),
     g4mic_proves(At2,Cj2,Dj2,I02,IA2,IO2,IT2,Qt2,[C|Fl0],Delta, FV, Th, J1, SO, LL, P2).
-
-/*
-% --- Rule 3: Rforall (deterministic: universal in succedent -> introduce eigenvar) --
-g4mic_proves(Gamma > Delta, FV, Th, SI, SO, LL, rall(Gamma>Delta, P)) :-
-    select((![_Z-X]:A), Delta, D1), !,
-    copy_term((X:A, FV), (f_sk(SI, FV):A1, FV)),
-    (catch(b_getval(g4_eigenvars, UsedVars), _, UsedVars = [])),
-    \+ member_check(f_sk(SI, FV), UsedVars),
-    b_setval(g4_eigenvars, [f_sk(SI, FV) | UsedVars]),
-    J1 is SI + 1,
-    g4mic_proves(Gamma > [A1 | D1], FV, Th, J1, SO, LL, P).
-*/
 % =========================================================================
 % THRESHOLD-BASED QUANTIFIER RULES
 % =========================================================================
@@ -1937,7 +1879,7 @@ is_atomic_formula(Formula) :-
 % NEW: Test if a formula is a negation (in LaTeX display sense)
 % A negative formula is represented as (' \\lnot ' X) par rewrite/4.
 % We want to consider any formula starting with ' \\lnot ' as
-% "non-parenthesable" - i.e. ne PAS entourer par des parentheses externe.
+% "non-parenthesable" -- i.e. do NOT wrap it in outer parentheses.
 % -------------------------------------------------------------------------
 is_negative_formula((' \\lnot ' _)) :- !.
 
@@ -2602,7 +2544,7 @@ is_fol_formula(Formula) :-
     ), !.
 
 % =========================================================================
-% DETECTION DES COMPOSANTS
+% COMPONENT DETECTION
 % =========================================================================
 
 % Quantificateurs
@@ -3856,7 +3798,7 @@ assert_safe_fitch_line(N, Formula, Just, Scope) :-
     ).
 
 % =========================================================================
-% GESTION DES SUBSTITUTIONS @
+% SUBSTITUTION HANDLING @
 % =========================================================================
 
 fitch_g4_proof(@(ProofTerm, _), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :-
@@ -4042,10 +3984,10 @@ fitch_g4_proof(lor((Premisss > [_Goal]), SP1, SP2), Context, Scope, CurLine, Nex
         ( find_disj_context(A, B, Context, DisjLine) -> true
         ; find_context_line((A | B), Context, DisjLine)
         ),
-        % CORRECTION: Chercher explicitement (A => #) dans le contexte
+        % Look (A => #) up explicitly in the context
         % Do not use find_context_line which could match another implication
         member(NegLine:NegFormula, Context),
-        NegFormula = (A => #),  % Verifier EXACTEMENT que c'est bien A => #
+        NegFormula = (A => #),  % Check the shape is EXACTLY A => #
         % Derive B by DS (without showing the explosion subproof)
         DerLine is CurLine + 1,
         assert_safe_fitch_line(DerLine, B, ds(DisjLine, NegLine), Scope),
@@ -4059,9 +4001,9 @@ fitch_g4_proof(lor((Premisss > [_Goal]), SP1, SP2), Context, Scope, CurLine, Nex
         ( find_disj_context(A, B, Context, DisjLine) -> true
         ; find_context_line((A | B), Context, DisjLine)
         ),
-        % CORRECTION: Chercher explicitement (B => #) dans le contexte
+        % Look (B => #) up explicitly in the context
         member(NegLine:NegFormula, Context),
-        NegFormula = (B => #),  % Verifier EXACTEMENT que c'est bien B => #
+        NegFormula = (B => #),  % Check the shape is EXACTLY B => #
         DerLine is CurLine + 1,
         assert_safe_fitch_line(DerLine, A, ds(DisjLine, NegLine), Scope),
         format(atom(Just), '$ DS $ ~w,~w', [DisjLine, NegLine]),
@@ -4190,7 +4132,7 @@ fitch_g4_proof(lall((Premisses > _), SubProof), Context, Scope, CurLine, NextLin
 % Rexists
 fitch_g4_proof(rex((_ > [Goal]), SubProof), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- !,
     fitch_g4_proof(SubProof, Context, Scope, CurLine, SubEnd, _WitnessLine, VarIn, V1),
-    % CORRECTION: Reference SubEnd (witness line), not WitnessLine
+    % Reference SubEnd (witness line), not WitnessLine
     derive_formula(Scope, Goal, '$ \\exists I $ ~w', [SubEnd], rex(SubEnd),
                   SubEnd, NextLine, ResLine, V1, VarOut).
 % Lexists
@@ -4208,7 +4150,7 @@ fitch_g4_proof(lex((Premisses > [Goal]), SubProof), Context, Scope, CurLine, Nex
       fitch_g4_proof(SubProof, [WitLine:Witness|Context], NewScope, WitLine, SubEnd, _GoalLine, V1, V2),
       ElimLine is SubEnd + 1,
       assert_safe_fitch_line(ElimLine, Goal, lex(ExistLine, WitLine, SubEnd), Scope),
-      % CORRECTION: Reference SubEnd (last line of subproof)
+      % Reference SubEnd (last line of the subproof)
       format(atom(Just), '$ \\exists E $ ~w,~w-~w', [ExistLine, WitLine, SubEnd]),
       render_have(Scope, Goal, Just, SubEnd, ElimLine, V2, VarOut),
       NextLine = ElimLine, ResLine = ElimLine
@@ -4220,12 +4162,12 @@ fitch_g4_proof(lex_lor((Premisses > [Goal]), SP1, SP2), Context, Scope, CurLine,
     member(WitA, Prem1), contains_skolem(WitA), \+ is_quantified(WitA),
     member(WitB, Prem2), contains_skolem(WitB), \+ is_quantified(WitB),
 
-    % CORRECTION: Trouver le quantificateur existentiel comme dans lex normale
+    % Find the existential quantifier, as in the plain lex case
     select((?[Z-X]:Body), Premisses, _),
     find_context_line(?[Z-X]:Body, Context, ExistLine),
 
     WitLine is CurLine + 1,
-    % CORRECTION: Ajouter assert_safe_fitch_line AVANT render_hypo
+    % Call assert_safe_fitch_line BEFORE render_hypo
     assert_safe_fitch_line(WitLine, (WitA | WitB), assumption, Scope),
     render_hypo(Scope, (WitA | WitB), 'AS', CurLine, WitLine, VarIn, V1),
     NewScope is Scope + 1,
@@ -4236,13 +4178,13 @@ fitch_g4_proof(lex_lor((Premisses > [Goal]), SP1, SP2), Context, Scope, CurLine,
     DisjElim is EndB + 1,
     CaseAStart is WitLine + 1,
     CaseBStart is EndA + 1,
-    % CORRECTION: Ajouter assert_safe_fitch_line AVANT render_have pour lor
+    % Call assert_safe_fitch_line BEFORE render_have, for lor
     format(atom(DisjJust), '$ \\lor E $ ~w,~w-~w,~w-~w',
            [WitLine, CaseAStart, GoalA, CaseBStart, GoalB]),
     assert_safe_fitch_line(DisjElim, Goal, lor(WitLine, CaseAStart, CaseBStart, GoalA, GoalB), NewScope),
     render_have(NewScope, Goal, DisjJust, EndB, DisjElim, V3, V4),
     ElimLine is DisjElim + 1,
-    % CORRECTION: Use the actual ExistLine found with find_context_line
+    % Use the actual ExistLine found with find_context_line
     format(atom(ExistJust), '$ \\exists E $ ~w-~w', [WitLine, DisjElim]),
     assert_safe_fitch_line(ElimLine, Goal, lex(ExistLine, WitLine, DisjElim), Scope),
     render_have(Scope, Goal, ExistJust, DisjElim, ElimLine, V4, VarOut),

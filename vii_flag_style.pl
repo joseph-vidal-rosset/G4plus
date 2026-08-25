@@ -58,7 +58,7 @@ assert_safe_fitch_line(N, Formula, Just, Scope) :-
     ).
 
 % =========================================================================
-% GESTION DES SUBSTITUTIONS @
+% SUBSTITUTION HANDLING @
 % =========================================================================
 
 fitch_g4_proof(@(ProofTerm, _), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :-
@@ -244,10 +244,10 @@ fitch_g4_proof(lor((Premisss > [_Goal]), SP1, SP2), Context, Scope, CurLine, Nex
         ( find_disj_context(A, B, Context, DisjLine) -> true
         ; find_context_line((A | B), Context, DisjLine)
         ),
-        % CORRECTION: Chercher explicitement (A => #) dans le contexte
+        % Look (A => #) up explicitly in the context
         % Do not use find_context_line which could match another implication
         member(NegLine:NegFormula, Context),
-        NegFormula = (A => #),  % Verifier EXACTEMENT que c'est bien A => #
+        NegFormula = (A => #),  % Check the shape is EXACTLY A => #
         % Derive B by DS (without showing the explosion subproof)
         DerLine is CurLine + 1,
         assert_safe_fitch_line(DerLine, B, ds(DisjLine, NegLine), Scope),
@@ -261,9 +261,9 @@ fitch_g4_proof(lor((Premisss > [_Goal]), SP1, SP2), Context, Scope, CurLine, Nex
         ( find_disj_context(A, B, Context, DisjLine) -> true
         ; find_context_line((A | B), Context, DisjLine)
         ),
-        % CORRECTION: Chercher explicitement (B => #) dans le contexte
+        % Look (B => #) up explicitly in the context
         member(NegLine:NegFormula, Context),
-        NegFormula = (B => #),  % Verifier EXACTEMENT que c'est bien B => #
+        NegFormula = (B => #),  % Check the shape is EXACTLY B => #
         DerLine is CurLine + 1,
         assert_safe_fitch_line(DerLine, A, ds(DisjLine, NegLine), Scope),
         format(atom(Just), '$ DS $ ~w,~w', [DisjLine, NegLine]),
@@ -392,7 +392,7 @@ fitch_g4_proof(lall((Premisses > _), SubProof), Context, Scope, CurLine, NextLin
 % Rexists
 fitch_g4_proof(rex((_ > [Goal]), SubProof), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- !,
     fitch_g4_proof(SubProof, Context, Scope, CurLine, SubEnd, _WitnessLine, VarIn, V1),
-    % CORRECTION: Reference SubEnd (witness line), not WitnessLine
+    % Reference SubEnd (witness line), not WitnessLine
     derive_formula(Scope, Goal, '$ \\exists I $ ~w', [SubEnd], rex(SubEnd),
                   SubEnd, NextLine, ResLine, V1, VarOut).
 % Lexists
@@ -410,7 +410,7 @@ fitch_g4_proof(lex((Premisses > [Goal]), SubProof), Context, Scope, CurLine, Nex
       fitch_g4_proof(SubProof, [WitLine:Witness|Context], NewScope, WitLine, SubEnd, _GoalLine, V1, V2),
       ElimLine is SubEnd + 1,
       assert_safe_fitch_line(ElimLine, Goal, lex(ExistLine, WitLine, SubEnd), Scope),
-      % CORRECTION: Reference SubEnd (last line of subproof)
+      % Reference SubEnd (last line of the subproof)
       format(atom(Just), '$ \\exists E $ ~w,~w-~w', [ExistLine, WitLine, SubEnd]),
       render_have(Scope, Goal, Just, SubEnd, ElimLine, V2, VarOut),
       NextLine = ElimLine, ResLine = ElimLine
@@ -422,12 +422,12 @@ fitch_g4_proof(lex_lor((Premisses > [Goal]), SP1, SP2), Context, Scope, CurLine,
     member(WitA, Prem1), contains_skolem(WitA), \+ is_quantified(WitA),
     member(WitB, Prem2), contains_skolem(WitB), \+ is_quantified(WitB),
 
-    % CORRECTION: Trouver le quantificateur existentiel comme dans lex normale
+    % Find the existential quantifier, as in the plain lex case
     select((?[Z-X]:Body), Premisses, _),
     find_context_line(?[Z-X]:Body, Context, ExistLine),
 
     WitLine is CurLine + 1,
-    % CORRECTION: Ajouter assert_safe_fitch_line AVANT render_hypo
+    % Call assert_safe_fitch_line BEFORE render_hypo
     assert_safe_fitch_line(WitLine, (WitA | WitB), assumption, Scope),
     render_hypo(Scope, (WitA | WitB), 'AS', CurLine, WitLine, VarIn, V1),
     NewScope is Scope + 1,
@@ -438,13 +438,13 @@ fitch_g4_proof(lex_lor((Premisses > [Goal]), SP1, SP2), Context, Scope, CurLine,
     DisjElim is EndB + 1,
     CaseAStart is WitLine + 1,
     CaseBStart is EndA + 1,
-    % CORRECTION: Ajouter assert_safe_fitch_line AVANT render_have pour lor
+    % Call assert_safe_fitch_line BEFORE render_have, for lor
     format(atom(DisjJust), '$ \\lor E $ ~w,~w-~w,~w-~w',
            [WitLine, CaseAStart, GoalA, CaseBStart, GoalB]),
     assert_safe_fitch_line(DisjElim, Goal, lor(WitLine, CaseAStart, CaseBStart, GoalA, GoalB), NewScope),
     render_have(NewScope, Goal, DisjJust, EndB, DisjElim, V3, V4),
     ElimLine is DisjElim + 1,
-    % CORRECTION: Use the actual ExistLine found with find_context_line
+    % Use the actual ExistLine found with find_context_line
     format(atom(ExistJust), '$ \\exists E $ ~w-~w', [WitLine, DisjElim]),
     assert_safe_fitch_line(ElimLine, Goal, lex(ExistLine, WitLine, DisjElim), Scope),
     render_have(Scope, Goal, ExistJust, DisjElim, ElimLine, V4, VarOut),

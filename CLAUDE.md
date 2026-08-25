@@ -31,6 +31,41 @@ Main file: `g4mic_nanocop.pl`.
 Support files: `test_suite.pl`, `i_operators.pl`,
 `nanocop20_swi_for_g4plus.pl`, `nanocop_proof.pl`, `nanocop_tptp2.pl`.
 
+## The two packagings are one program
+
+The same prover exists twice: the single file `g4mic_nanocop.pl`, and a
+modular decomposition loaded with `consult(o_driver)` — `o_driver.pl`
+pulls in `i_operators.pl`, `ii_prover.pl` (the engine), `iii_latex.pl`,
+`iv_detections.pl`, `v_sc_printer.pl`, `vi_common_nd.pl`,
+`vii_flag_style.pl`, `viii_tree_style.pl`, `ix_clean_fitch.pl`,
+`x_tptp.pl`. (`prover_loader.pl` loads the single file instead.)
+
+They are not merely "kept in sync": **every predicate the modular files
+define is clause-for-clause identical to its counterpart in
+`g4mic_nanocop.pl`**, and both produce byte-identical output on the test
+suite. `ii_prover.pl` is the engine block of `g4mic_nanocop.pl` copied
+verbatim, from the `EIGENVARIABLE REGISTRY` banner to the `END of
+Prover` banner, under its own file header. A change to one belongs in
+the other, unchanged.
+
+Check the invariant rather than trusting it. The cheap check is that
+both runs of the suite agree byte for byte:
+
+```sh
+for L in g4mic_nanocop o_driver; do
+  swipl -q -g "consult($L), consult(test_suite), run_tests, halt." -t halt \
+    | grep -v -E "seconds|Start:|Total execution" > $L.log
+done
+diff g4mic_nanocop.log o_driver.log     # must be empty
+```
+
+The sharper check, when that diff is not empty and you need to know
+where: read every clause of both with `read_term/3`, print it with
+`portray_clause/1` (which normalises variable names and layout), group
+by functor/arity, and diff per predicate. Only the load directives
+(`:-/1`) may legitimately differ.
+
+
 Formulas containing equality or function symbols are routed to nanoCoP
 by `g4mic_needs_nanocop/1`. This is a deliberate design decision, not a
 gap to be closed: axiomatised equality would flood Γ with universal
@@ -68,8 +103,15 @@ grep -oE 'Passed: [0-9]+  Failed: [0-9]+  Errors: [0-9]+' new.log
 grep -c 'Disagreement' new.log              # 1 = the banner text only
 ```
 
-Logic-level classification must stay at 37 minimal / 6 intuitionistic /
-8 classical. The reference log is 12696 lines after filtering.
+Logic-level classification must stay at 29 minimal / 6 intuitionistic /
+10 classical over the 45 `hierarchy_test/4` facts, with zero mismatches
+against the level each fact declares:
+
+```prolog
+findall(N, (hierarchy_test(_,N,F,E), g4mic_logic_level(F,L), L \== E), Bad).
+```
+
+The reference log is 12565 lines after filtering.
 
 Compare logs produced by the same SWI-Prolog version. SWI 9.x and 10.x
 differ cosmetically in newline placement after `write/1`
@@ -164,10 +206,26 @@ enumerate over `Fl`.
    iteration limit. Replaced by `intuitionistic` in four places,
    including `g4mic_logic_level_internal/2` on the TPTP path.
 6. **Γ compartments plus flat `Fl`** — see the section above.
+7. **First-argument indexing on the bucket dispatchers** —
+   `gamma_insert/17`, `gamma_insert_impl/18`, `gamma_remove/17` and
+   `gamma_remove_impl/12` each led with a variable-headed clause whose
+   body ran `atomic_formula/1`. A variable in the first argument
+   position defeats SWI's clause index entirely, so every call ran the
+   atomicity test before anything else. The three clauses with a
+   concrete principal functor (`&`, `|`, `=>`) now come first and the
+   atomic clause is fourth; the five shapes are mutually exclusive, so
+   the order carries no meaning beyond indexing. −21.5% on
+   `gamma_insert` in isolation.
+   In the same pass, `atomic_formula/1` stopped decomposing its argument
+   with `functor/3` to look up a `connective(Name, Arity)` table, and
+   now tests `\+ connective_shape(F)` against five clause heads — one
+   jump-table lookup instead of a decomposition plus a two-argument
+   table probe. −14.5% on the test in isolation. Together, **−6.8%** on
+   the suite (1.434 s to 1.336 s, medians of 7 interleaved rounds),
+   byte-for-byte identical output.
 
-Cumulative: −27.7% on the suite (1.957 s to 1.415 s), −56.9% on
-Pelletier 25, −24.3% on Lepage, all verified byte-for-byte on
-SWI-Prolog 10.0.1.
+Cumulative: −31.7% on the suite (1.957 s to 1.336 s), all verified
+byte-for-byte on SWI-Prolog 10.0.1.
 
 ## Approaches already tested and set aside
 
@@ -186,16 +244,26 @@ SWI-Prolog 10.0.1.
   in the WASM build, where load time is visible to the user. A QLF file
   is tied to the SWI-Prolog version that produced it, so regenerating it
   belongs in the deployment script, not in a manual step.
+- **Consulting the buckets for L0→'s presence test.** L0→ does
+  `select((A => B), Fl, Fl0), memberchk(A, Fl0)`; the `memberchk` scans
+  all of Γ where a bucket lookup would scan one list. Rejected as
+  written: `memberchk/2` *unifies*, and `A` can carry free variables
+  from a previous L∀ instantiation, so which member matches first
+  decides which binding the proof takes. A bucket lookup reproduces that
+  choice only when `A`'s shape puts `A` and `A => B` in different
+  buckets — which fails exactly for the `(X=>Y)=>B` and quantified-`A`
+  cases. Any attempt must handle those two, and must be validated
+  byte-for-byte, not just on 116/116.
 
 ## Open item
 
 Making the ND translator read the principal formula from the proof term
 instead of re-deriving it by searching Γ would remove the coupling that
-makes `Fl` necessary, and would let `Fl` be dropped (`select3_/4` is
-back at 18.1% because `Fl` is scanned by each rule that fires). It
-touches every rule and its ND clause, and it does **not** preserve
-byte-for-byte output, so it needs a fresh reference log inspected by
-hand. Not urgent.
+makes `Fl` necessary, and would let `Fl` be dropped — `select3_/4` is
+the largest remaining single cost (about 9% of search CPU) precisely
+because `Fl` is scanned by each rule that fires. It touches every rule
+and its ND clause, and it does **not** preserve byte-for-byte output, so
+it needs a fresh reference log inspected by hand. Not urgent.
 
 ## Working practice
 

@@ -67,7 +67,7 @@
 :-[nanocop_proof].
 :-[nanocop_tptp2].
 
-% Activer le format d'explication complete d'Otten
+% Enable Otten's full explanation format
 :-retractall(proof(_)).
 :-assert(proof(readable)).
 
@@ -77,7 +77,7 @@
 % MAIN INTERFACE
 % =========================================================================
 
-% Wrapper public: catchee nanocop_gave_up pour appels directs
+% Public wrapper: catches nanocop_gave_up, for direct calls
 nanocop_proves_safe(Formula) :-
     catch(
         nanocop_proves(Formula),
@@ -86,13 +86,13 @@ nanocop_proves_safe(Formula) :-
     ).
 
 nanocop_proves(Formula) :-
-    % Forcer l'affichage
+    % Force display
     retractall(g4mic_silent_mode),
 
-    % Limite d'inferences avec LOGIQUE CORRECTE
+    % Inference limit, with the CORRECT logic
     call_with_inference_limit(
         (
-            % Detecter l'egalite AVANT traduction
+            % Detect equality BEFORE translation
             (nanocop_contains_equality(Formula) ->
                 HasEquality = true
             ;
@@ -101,14 +101,14 @@ nanocop_proves(Formula) :-
 
             translate_formula(Formula, InternalFormula),
 
-            % N'appeler leancop_equal QUE si egalite presente
+            % Call leancop_equal ONLY when equality is present
             (HasEquality = true ->
                 leancop_equal(InternalFormula, FormulaToProve)
             ;
                 FormulaToProve = InternalFormula
             ),
 
-            % IMPORTANT : PAS DE NEGATION - prove2 gere la refutation en interne
+            % IMPORTANT: NO NEGATION -- prove2 handles the refutation internally
             ( time(prove2(FormulaToProve, [cut,comp(40)], Proof)) ->
               Result='Theorem'
             ;
@@ -116,14 +116,14 @@ nanocop_proves(Formula) :-
             ),
             bmatrix(FormulaToProve, [cut,comp(40)], Matrix),
             output_result(Formula, Matrix, Proof, Result),
-            % VERIFIER le resultat
+            % Check the result
             Result='Theorem'
         ),
         80000000,
         InfResult
     ),
     ( InfResult == inference_limit_exceeded ->
-        % Limite atteinte: verifier avec nanocop_decides si c'est quand meme un theoreme
+        % Limit reached: ask nanocop_decides whether it is a theorem anyway
         ( catch(
               ( call_with_inference_limit(nanocop_decides(Formula), 80000000, InfResult2),
                 InfResult2 \== inference_limit_exceeded ),
@@ -138,13 +138,13 @@ nanocop_proves(Formula) :-
     ; true ),!.
 
 % =========================================================================
-% nanocop_decides/1 :   Version SILENCIEUSE (avec stats)
+% nanocop_decides/1 :   SILENT version (with stats)
 % =========================================================================
 
 nanocop_decides(Formula) :-
     assertz(g4mic_silent_mode),
 
-    % Detecter l'egalite AVANT traduction
+    % Detect equality BEFORE translation
     (nanocop_contains_equality(Formula) ->
         HasEquality = true
     ;
@@ -153,14 +153,14 @@ nanocop_decides(Formula) :-
 
     translate_formula(Formula, InternalFormula),
 
-    % N'appeler leancop_equal QUE si egalite presente
+    % Call leancop_equal ONLY when equality is present
     (HasEquality = true ->
         leancop_equal(InternalFormula, FormulaToProve)
     ;
         FormulaToProve = InternalFormula
     ),
 
-    % IMPORTANT : PAS DE NEGATION - prove2 gere la refutation en interne
+    % IMPORTANT: NO NEGATION -- prove2 handles the refutation internally
     retractall(nanocop_depth_limited),
     prove2(FormulaToProve, [cut,comp(40)], _Proof),
     retractall(g4mic_silent_mode), !.
@@ -184,7 +184,7 @@ nanocop_decides(Formula) :-
 nanocop_decides_equality(Formula) :-
     assertz(g4mic_silent_mode),
 
-    % Detecter l'egalite AVANT traduction
+    % Detect equality BEFORE translation
     (nanocop_contains_equality(Formula) ->
         HasEquality = true
     ;
@@ -193,20 +193,20 @@ nanocop_decides_equality(Formula) :-
 
     translate_formula(Formula, InternalFormula),
 
-    % N'appeler leancop_equal QUE si egalite presente
+    % Call leancop_equal ONLY when equality is present
     (HasEquality = true ->
         leancop_equal(InternalFormula, FormulaToProve)
     ;
         FormulaToProve = InternalFormula
     ),
 
-    % IMPORTANT : PAS DE NEGATION - prove2 gere la refutation en interne
+    % IMPORTANT: NO NEGATION -- prove2 handles the refutation internally
     retractall(nanocop_depth_limited),
     prove2(FormulaToProve, [cut,comp(40)], _Proof),
     retractall(g4mic_silent_mode), !.
 
 % =========================================================================
-% NANOCOP PROBE (sans cut) - pour determiner si la recherche est exhaustive
+% NANOCOP PROBE (no cut) -- to determine whether the search is exhaustive
 % =========================================================================
 % Runs prove2 WITHOUT cut under inference limit. The result tells us:
 %   proved          - formula is provable

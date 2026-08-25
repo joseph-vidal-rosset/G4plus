@@ -60,7 +60,7 @@ is_atomic_formula(Formula) :-
 % NEW: Test if a formula is a negation (in LaTeX display sense)
 % A negative formula is represented as (' \\lnot ' X) par rewrite/4.
 % We want to consider any formula starting with ' \\lnot ' as
-% "non-parenthesable" - i.e. ne PAS entourer par des parentheses externe.
+% "non-parenthesable" -- i.e. do NOT wrap it in outer parentheses.
 % -------------------------------------------------------------------------
 is_negative_formula((' \\lnot ' _)) :- !.
 
