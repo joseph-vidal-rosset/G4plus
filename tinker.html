@@ -29,7 +29,12 @@
     }
   };
   </script>
-  <script defer src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-chtml.js"></script>
+  <!-- MathJax served locally (/var/www/html/mathjax): the CDN copy is 283 KB,
+     78% of every third-party byte this page pulls, and the bussproofs
+     extension and the web fonts are further requests to the same host.
+     MathJax resolves [mathjax] relative to this script, so those follow
+     it here automatically. -->
+  <script defer src="/mathjax/tex-chtml.js"></script>
 
   <!-- LZ-String, for URL compression -->
   <script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"></script>
