@@ -4,6 +4,16 @@ Notes for anyone working on this codebase, human or AI assistant. They
 record the conventions, the validation procedure, and the results of
 past optimisation work, so that finished experiments are not repeated.
 
+## Language rule — no exceptions
+
+**Every comment in every source file is written in English.** This holds
+for all files, all languages, and all kinds of comment: block headers,
+inline notes, `%` comments in Prolog, commented-out code kept for
+reference, and commit messages. No French, no mixed-language comments.
+Identifiers and predicate names are English too.
+
+Conversation with the user may be in French; the files may not.
+
 ## What this project is
 
 G4+ is a first-order theorem prover written in SWI-Prolog. It combines
@@ -21,18 +31,6 @@ Main file: `g4mic_nanocop.pl`.
 Support files: `test_suite.pl`, `i_operators.pl`,
 `nanocop20_swi_for_g4plus.pl`, `nanocop_proof.pl`, `nanocop_tptp2.pl`.
 
-A second, modular decomposition of the same prover exists in parallel:
-`o_driver.pl` loads `i_operators.pl`, `ii_prover.pl` (the core
-`g4mic_ax`/`g4mic_proves` engine), `iii_latex.pl`, `iv_detections.pl`,
-`v_sc_printer.pl` (sequent-calculus rendering), `vi_common_nd.pl`,
-`vii_flag_style.pl` (Fitch rendering, `fitch_g4_proof/8`),
-`viii_tree_style.pl` (ND-tree rendering), and `x_tptp.pl`. It shares
-`test_suite.pl` and passes the same 116/116. Load with
-`consult(o_driver)` (not `prover_loader.pl`, which loads the monolithic
-file instead). Keep the two in sync: a change to the engine or renderer
-logic in one normally belongs in the other too — see item 6 below for
-an example of doing this safely.
-
 Formulas containing equality or function symbols are routed to nanoCoP
 by `g4mic_needs_nanocop/1`. This is a deliberate design decision, not a
 gap to be closed: axiomatised equality would flood Γ with universal
@@ -41,12 +39,14 @@ is not meaningful for such formulas in any case.
 
 ## Validation procedure
 
-Passing 116/116 in the test suite is a necessary condition, not the
-acceptance criterion. For any change meant to preserve behaviour, the
-criterion is **byte-for-byte identity of the output** with a reference
-log produced *before* the change.
+Passing 116/116 is a necessary condition, not the acceptance criterion.
+For any change meant to preserve behaviour, the criterion is
+**byte-for-byte identity of the output** with a reference log produced
+*before* the change.
 
-Generate the reference log first:
+Generate the reference log first, and **never delete it**. If it is not
+in the repository, regenerate it from the last known-good commit before
+touching anything:
 
 ```sh
 swipl -q -g "consult(g4mic_nanocop), consult(test_suite), run_tests, halt." -t halt \
@@ -57,14 +57,24 @@ After each change, regenerate and `diff` against `ref.log`. The filter
 removes timing lines only; any other difference is a regression until
 shown otherwise.
 
+Byte-for-byte identity is not sufficient on its own, because a broken
+renderer can fail silently. Check all five:
+
+```sh
+diff ref.log new.log                        # must be empty
+grep -c 'missing referenced line' new.log   # must be 0
+grep -c 'begin{prooftree}' new.log          # must be 182
+grep -oE 'Passed: [0-9]+  Failed: [0-9]+  Errors: [0-9]+' new.log
+grep -c 'Disagreement' new.log              # 1 = the banner text only
+```
+
+Logic-level classification must stay at 37 minimal / 6 intuitionistic /
+8 classical. The reference log is 12696 lines after filtering.
+
 Compare logs produced by the same SWI-Prolog version. SWI 9.x and 10.x
 differ cosmetically in newline placement after `write/1`
-(`nanocop_decides: true` on one line versus two); the logical content
-is identical.
-
-For any change touching the classification path, check additionally
-that the verdicts of `g4mic_logic_level/2` are unchanged over the
-registered tests (currently 37 minimal, 6 intuitionistic, 8 classical).
+(`nanocop_decides: true` on one line versus two); the logical content is
+identical.
 
 ## Benchmarking
 
@@ -82,6 +92,59 @@ Wall-clock timings taken inside an Emacs inferior-Prolog buffer are
 dominated by the cost of displaying the LaTeX output; use them only for
 rough comparison against themselves.
 
+## Architecture of proof search — the flat-Γ invariant
+
+Γ is held in two forms at once, and both are threaded through
+`g4mic_proves/16` and `g4mic_ax/16`:
+
+- **Eight buckets** (`At, Cj, Dj, I0, IA, IO, IT, Qt`), keyed by
+  principal connective. Each rule consults only its own bucket, so a
+  rule that cannot fire costs nothing instead of scanning all of Γ.
+  This is what removed `select3_/4` as the dominant cost.
+- **`Fl`**, the same members as one flat list in **insertion order**
+  (most recent first). Proof nodes record `Fl`, so every proof term is
+  built directly as the familiar `Fl>Delta` sequent.
+
+`Fl` is not redundant. Everything downstream of search — the
+bussproofs renderer, the ND-tree translator, `fitch_g4_proof/8` —
+re-derives which formula each rule acted on by searching Γ, and that
+re-derivation is sensitive to Γ's order. Bucket order is not insertion
+order and cannot be made to reproduce it: buckets are LIFO
+*individually*, but a global LIFO cannot be recovered from eight local
+LIFOs plus a fixed concatenation order. Dropping `Fl` and flattening the
+buckets instead silently breaks 19 natural-deduction trees across 8
+tests (measured); no static bucket order fixes it (19, 12 and 27
+failures for three orders tried, floor of 7 under hill-climbing).
+
+Two invariants must hold together, and both are load-bearing:
+
+1. **Every rule keeps `Fl` in step with the buckets.** A rule that
+   removes a formula from a bucket must remove it from `Fl`
+   (`selectchk/3`), and a rule that inserts must cons onto `Fl` in the
+   same order the original flat-list code used — `[A, B | G1]` means A
+   before B.
+2. **`gamma_insert_list/17` inserts right-to-left**, so the head of its
+   argument list ends up at the head of its bucket. Folding
+   left-to-right reverses them, and every rule that selects from a
+   bucket then picks a different principal formula from the one flat-Γ
+   order dictates. This was a real bug; it broke DN Dummett and, in
+   cascade, part of the rendering.
+
+`gamma_remove/17` is the mirror of `gamma_insert/17`: it deletes a
+formula from whichever bucket its principal connective assigns it to.
+L0→ needs it, because L0→ enumerates candidates over `Fl` (to preserve
+global order) and must then delete the chosen implication from the
+buckets.
+
+`normalize_proof_gammas/2` is now the identity, kept only so existing
+call sites need no change.
+
+Rules that select from a single bucket (L&, L∨, L∨→, L→→, L∃, L∀, CQ_m,
+CQ_c) agree with flat-Γ order automatically: filtering a LIFO sequence
+preserves relative order, so the head of `Cj` *is* the first conjunction
+of Γ. Only L0→, which ranges over five buckets, had to be rewritten to
+enumerate over `Fl`.
+
 ## Optimisations already applied
 
 1. **`g4mic_ax`** — the atomicity guard was tested once per element of
@@ -89,120 +152,57 @@ rough comparison against themselves.
    if `B` is atomic, any `A` unifying with it is atomic too, so the
    guard on `B` alone is equivalent and costs one test per sequent
    instead of one per element. This accounted for 4.09M `\=/2` calls.
-   About −15%.
 2. **Guard hoists** — `Th > 0` moved before the `\+ member` scan in IP;
    the threshold test moved before `member`/`select` in L∀ and R∃.
-   Neutral in time, but free.
 3. **`atomic_formula`** — five `\=/2` tests replaced by a
    `connective/2` table indexed on the principal functor.
-4. **`memberchk/2`** where the call is a pure test: L⊥ (ground
-   arguments), under the `\+` of IP and L→→, and in the if-then-else
-   conditions of L∨→, where once-semantics already applies. This
-   substitution is **not** valid in L0→: the `minimal` + `B == #`
-   branch can backtrack into `member/2`.
+4. **`memberchk/2`** where the call is a pure test. Not valid in L0→:
+   the `minimal` + `B == #` branch can backtrack into `member/2`.
 5. **Redundant re-search** — after `minimal` fails for all thresholds
    T=0..4, calling `provable_at_level(..., constructive, _)` repeats
    every one of those minimal attempts, since both use the same
    iteration limit. Replaced by `intuitionistic` in four places,
-   including `g4mic_logic_level_internal/2` on the TPTP path. Up to
-   −30% on hard classical formulas.
-6. **Compartmentalising Γ** — `select3_/4` was the dominant cost,
-   roughly 38% of CPU, because Γ is a flat list and each of the eight
-   left rules scanned it independently for its own principal
-   connective. Γ is now held as eight lists (Atoms, Conj, Disj,
-   ImplAtom, LandTo, LorTo, LtoTo, Quant) keyed by principal connective,
-   threaded as eight separate arguments through `g4mic_proves`/`g4mic_ax`
-   (not wrapped in a compound term — see below). Each left rule consults
-   only its own bucket; an empty bucket means immediate failure with no
-   scan. A single predicate, `gamma_insert/17`, does the classification,
-   turning the six-shape partition (atomic, `&`, `|`, `=>`, `!`, `?`)
-   into one checkable property instead of an assumption spread across
-   every rule. `L0→` deliberately still scans across *all* antecedent
-   shapes (ImplAtom, LandTo, LorTo, LtoTo, and the implication-shaped
-   members of Quant, in that fixed order) before falling back to the
-   shape-specific rules — it fires on any implication whose antecedent
-   is already present in Γ, not just the textbook atomic case, and that
-   existing behaviour is preserved. Δ stays a flat list, unchanged.
-   Enumeration order across buckets does not reproduce the original
-   flat-list order (an accepted divergence — can change which valid
-   proof is found first and its rendered premise order, never
-   provability or classification); this exposed one pre-existing bug in
-   the ND-tree renderer's `landto` clause (a blind `select/3` with no
-   check it had picked the formula actually consumed), fixed by the same
-   set-difference technique `lorto` and `extract_new_formula` already
-   used correctly. Proof-tree nodes carry the eight buckets plus Δ as
-   their first nine arguments during search;
-   `normalize_proof_gammas/2` is the one place that rebuilds the
-   original flat-list `Gamma>Delta` sequent, once per completed proof
-   (proportional to proof size, not search-tree size), so none of the
-   LaTeX/ND-tree/Fitch rendering code had to change. −16.4% CPU (median
-   of 7 interleaved rounds against the pre-refactor baseline),
-   inferences down 39%. Branch `compartmentalise-gamma`.
+   including `g4mic_logic_level_internal/2` on the TPTP path.
+6. **Γ compartments plus flat `Fl`** — see the section above.
 
-   Ported to the modular prover (`ii_prover.pl`/`o_driver.pl`/
-   `vii_flag_style.pl`) the same day, same branch, same validation
-   procedure. `ii_prover.pl` had none of items 1-5 applied — only the
-   compartmentalisation was in scope, so rule bodies keep this file's
-   original `member`/`select` choices and conditional ordering
-   wherever compartmentalisation didn't force a change (`atomic_formula`/
-   `connective` was introduced anyway, since the Atoms bucket needs an
-   atomicity test to be defined *somewhere*). Bigger relative gain here
-   — −27.0% CPU (median of 7 interleaved rounds; 2.599s → 1.896s) —
-   because there was more redundant scanning to eliminate going in.
-   Same landto bug, same fix, found independently by re-running the
-   same two Pelletier problems. Validated the same way: 116/116,
-   byte-identical pass/fail and SZS-status lines against this file's
-   own pre-change reference log, 0/45 mismatches via
-   `g4mic_logic_level/2`, and the same 50 TPTP problems with zero
-   discrepancies against this file's own pre-change baseline.
-
-Cumulative effect: about −20% on the test suite from items 1-5
-(unified prover only — not applied to the modular prover, see item 6),
-plus −16.4% (unified) / −27.0% (modular) from item 6. All verified
-byte-for-byte on SWI-Prolog 9.0.4 and 10.0.1, except item 6, whose
-validation criterion is documented above (proof/premise-order
-divergence is accepted; provability and classification are not) — see
-"Validation procedure" for what was actually checked in each case:
-116/116 tests with byte-identical pass/fail and SZS-status lines,
-identical classification via `g4mic_logic_level/2` over all 45
-hierarchy tests, and 50 TPTP problems (SYN category, rating 0.00) with
-zero discrepancies between pre- and post-refactor SZS status.
+Cumulative: −27.7% on the suite (1.957 s to 1.415 s), −56.9% on
+Pelletier 25, −24.3% on Lepage, all verified byte-for-byte on
+SWI-Prolog 10.0.1.
 
 ## Approaches already tested and set aside
 
-- **Reordering the inference rules.** Six permutations were measured
-  (L⊥ moved early and late, R∀ and L∨→ repositioned): all within 2% of
-  each other, which is within measurement noise. Rule order is not the
-  lever here.
+- **Reordering the inference rules.** Six permutations measured: all
+  within 2% of each other, inside measurement noise.
 - **`set_prolog_flag(optimise, true)`.** No measurable gain. It inlines
   arithmetic and drops debugging information; the bottleneck is list
   traversal, which it does not touch.
-- **Logtalk.** A microbenchmark of 3M calls gave 0.08s for a direct
-  Prolog call against 0.70s for a Logtalk message send — an 8.7×
-  overhead. Logtalk is an object layer that compiles *to* Prolog and
-  offers encapsulation and protocols; it is not an optimising compiler.
+- **Logtalk.** 3M calls: 0.08 s for a direct Prolog call against 0.70 s
+  for a Logtalk message send — an 8.7× overhead. Logtalk is an object
+  layer that compiles *to* Prolog, not an optimising compiler.
 - **QLF pre-compilation.** No effect on execution speed, since
   `consult` already compiles to WAM code. It does cut **process
-  startup** by about 5× (0.122s to 0.026s), which is worth having on
+  startup** by about 5× (0.122 s to 0.026 s), which is worth having on
   the TPTP path, where SystemOnTPTP spawns one process per problem, and
-  in the WASM build, where load time is visible to the user. Regenerate
-  it only once the current refactoring is finished, and note that a QLF
-  file is tied to the SWI-Prolog version that produced it.
-- **Wrapping Γ's eight compartments in one `g/8` compound term.** The
-  first working version of item 6 above did this — Γ as a single
-  `g(Atoms,Conj,Disj,ImplAtom,LandTo,LorTo,LtoTo,Quant)` term, rebuilt
-  wholesale on every insert/select. Correct (116/116), but slower than
-  the flat-list baseline despite 25% fewer inferences: microbenchmark
-  showed rebuilding the 9-word `g/8` term costs about 2× a plain list
-  cons, since SWI allocates a fresh compound cell even when only one of
-  the eight fields changes. Fixed by threading the eight buckets as
-  separate arguments instead (7 args → 15 on `g4mic_proves`): unchanged
-  buckets flow through as free variable references at zero cost, and
-  only the touched bucket pays a cons. Do not reintroduce a Γ wrapper
-  term on the search path.
+  in the WASM build, where load time is visible to the user. A QLF file
+  is tied to the SWI-Prolog version that produced it, so regenerating it
+  belongs in the deployment script, not in a manual step.
 
-## Conventions
+## Open item
 
-Comments and identifiers in English. Keep explanations concise and
-technical: state what changed and why, rather than narrating routine
-steps.
+Making the ND translator read the principal formula from the proof term
+instead of re-deriving it by searching Γ would remove the coupling that
+makes `Fl` necessary, and would let `Fl` be dropped (`select3_/4` is
+back at 18.1% because `Fl` is scanned by each rule that fires). It
+touches every rule and its ND clause, and it does **not** preserve
+byte-for-byte output, so it needs a fresh reference log inspected by
+hand. Not urgent.
+
+## Working practice
+
+- Work on a dedicated branch. Run the TPTP suite before deploying.
+- Commit a passing state **before** any cleanup, and do the cleanup in a
+  separate commit. Mixing the two makes review impossible and hides
+  which one caused a breakage.
+- Never delete `ref.log` or the scripts that regenerate it.
+- Keep explanations concise and technical: state what changed and why,
+  rather than narrating routine steps.

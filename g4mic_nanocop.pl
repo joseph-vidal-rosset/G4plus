@@ -1089,8 +1089,8 @@ provable_at_level(Sequent, constructive, P) :-
     Sequent = (Gamma > Delta),
     gamma_from_list(Gamma, At,Cj,Dj,I0,IA,IO,IT,Qt),
     init_eigenvars,  % Initialize before each attempt
-    ( g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, [], Threshold, 1, _, minimal, P) -> true    % <- Essayer minimal d'abord
-    ; init_eigenvars, g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, [], Threshold, 1, _, intuitionistic, P)     % <- Then intuitionistic if failure
+    ( g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Gamma,Delta, [], Threshold, 1, _, minimal, P) -> true    % <- Essayer minimal d'abord
+    ; init_eigenvars, g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Gamma,Delta, [], Threshold, 1, _, intuitionistic, P)     % <- Then intuitionistic if failure
     ),
     !.
 
@@ -1101,7 +1101,7 @@ provable_at_level(Sequent, LogicLevel, Proof) :-
     Sequent = (Gamma > Delta),
     gamma_from_list(Gamma, At,Cj,Dj,I0,IA,IO,IT,Qt),
     init_eigenvars,
-    g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, [], Threshold, 1, _, LogicLevel, Proof),
+    g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Gamma,Delta, [], Threshold, 1, _, LogicLevel, Proof),
     !.
 
 % =========================================================================
@@ -1113,7 +1113,7 @@ provable_at_level(Sequent, classical, Proof) :-
     logic_iteration_limit(classical, MaxIter),
     for(Threshold, 0, MaxIter),
     init_eigenvars,
-    g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, [], Threshold, 1, _, classical, Proof),
+    g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Gamma,Delta, [], Threshold, 1, _, classical, Proof),
     !.
 
 % =========================================================================
@@ -1415,8 +1415,8 @@ member_check(Term, [Elem|Rest]) :-
 % RULE 0: AXIOM
 % =========================================================================
 
-g4mic_ax(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, _, _, SkolemIn, SkolemIn, _,
-         ax(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, ax)) :-
+g4mic_ax(At,_Cj,_Dj,_I0,_IA,_IO,_IT,_Qt,Fl,Delta, _, _, SkolemIn, SkolemIn, _,
+         ax(Fl>Delta, ax)) :-
     Delta = [B],
     (   nonvar(B)
     ->  atomic_formula(B),
@@ -1524,10 +1524,16 @@ gamma_insert_impl(_, F, At,Cj,Dj,I0,IA,IO,IT,Qt, At,Cj,Dj,I0,IA,IO,IT,[F|Qt]).
 
 % gamma_insert_list(+Formulas, +At,...,+Qt, -AtO,...,-QtO): fold
 % gamma_insert/17 over a list, for the sites that used to do [A, B | G1].
+% Inserts RIGHT-TO-LEFT: the tail is inserted first, so the head of
+% Formulas ends up at the head of its bucket. This matches the flat-list
+% convention [A, B | G1], where A precedes B. Folding left-to-right would
+% reverse them inside the bucket, and the rules that select from a bucket
+% would then pick a different principal formula than the flat Gamma order
+% dictates.
 gamma_insert_list([], At,Cj,Dj,I0,IA,IO,IT,Qt, At,Cj,Dj,I0,IA,IO,IT,Qt).
 gamma_insert_list([F|Fs], At,Cj,Dj,I0,IA,IO,IT,Qt, AtO,CjO,DjO,I0O,IAO,IOO,ITO,QtO) :-
-    gamma_insert(F, At,Cj,Dj,I0,IA,IO,IT,Qt, At1,Cj1,Dj1,I01,IA1,IO1,IT1,Qt1),
-    gamma_insert_list(Fs, At1,Cj1,Dj1,I01,IA1,IO1,IT1,Qt1, AtO,CjO,DjO,I0O,IAO,IOO,ITO,QtO).
+    gamma_insert_list(Fs, At,Cj,Dj,I0,IA,IO,IT,Qt, At1,Cj1,Dj1,I01,IA1,IO1,IT1,Qt1),
+    gamma_insert(F, At1,Cj1,Dj1,I01,IA1,IO1,IT1,Qt1, AtO,CjO,DjO,I0O,IAO,IOO,ITO,QtO).
 
 gamma_from_list(List, At,Cj,Dj,I0,IA,IO,IT,Qt) :-
     gamma_insert_list(List, [],[],[],[],[],[],[],[], At,Cj,Dj,I0,IA,IO,IT,Qt).
@@ -1536,10 +1542,33 @@ gamma_from_list(List, At,Cj,Dj,I0,IA,IO,IT,Qt) :-
 % one list, in a fixed canonical order. Used only where a genuine flat
 % list is required (proof rendering) -- never on the search path. Does
 % not reproduce the original insertion order; see the design note above.
-gamma_to_list(At,Cj,Dj,I0,IA,IO,IT,Qt, FlatList) :-
-    append(At, Cj, L1), append(L1, Dj, L2), append(L2, I0, L3),
-    append(L3, IA, L4), append(L4, IO, L5), append(L5, IT, L6),
-    append(L6, Qt, FlatList).
+% gamma_remove(+F, +At..+Qt, -AtO..-QtO): delete one occurrence of F from
+% the bucket its principal connective assigns it to. Dispatches exactly
+% like gamma_shape_member/9, so a formula is always removed from the
+% bucket gamma_insert/17 put it in. Used by L0->, which enumerates
+% candidates over the insertion-ordered flat Gamma (see Rule 6) and must
+% then delete the chosen implication from the buckets.
+gamma_remove(F, At,Cj,Dj,I0,IA,IO,IT,Qt, At1,Cj,Dj,I0,IA,IO,IT,Qt) :-
+    atomic_formula(F), !, selectchk(F, At, At1).
+gamma_remove((A & B), At,Cj,Dj,I0,IA,IO,IT,Qt, At,Cj1,Dj,I0,IA,IO,IT,Qt) :- !,
+    selectchk((A&B), Cj, Cj1).
+gamma_remove((A | B), At,Cj,Dj,I0,IA,IO,IT,Qt, At,Cj,Dj1,I0,IA,IO,IT,Qt) :- !,
+    selectchk((A|B), Dj, Dj1).
+gamma_remove((A => B), At,Cj,Dj,I0,IA,IO,IT,Qt, At,Cj,Dj,I01,IA1,IO1,IT1,Qt1) :- !,
+    gamma_remove_impl(A, (A => B), I0,IA,IO,IT,Qt, I01,IA1,IO1,IT1,Qt1).
+gamma_remove(F, At,Cj,Dj,I0,IA,IO,IT,Qt, At,Cj,Dj,I0,IA,IO,IT,Qt1) :-
+    selectchk(F, Qt, Qt1).
+
+gamma_remove_impl(A, F, I0,IA,IO,IT,Qt, I01,IA,IO,IT,Qt) :-
+    atomic_formula(A), !, selectchk(F, I0, I01).
+gamma_remove_impl((_ & _), F, I0,IA,IO,IT,Qt, I0,IA1,IO,IT,Qt) :- !,
+    selectchk(F, IA, IA1).
+gamma_remove_impl((_ | _), F, I0,IA,IO,IT,Qt, I0,IA,IO1,IT,Qt) :- !,
+    selectchk(F, IO, IO1).
+gamma_remove_impl((_ => _), F, I0,IA,IO,IT,Qt, I0,IA,IO,IT1,Qt) :- !,
+    selectchk(F, IT, IT1).
+gamma_remove_impl(_, F, I0,IA,IO,IT,Qt, I0,IA,IO,IT,Qt1) :-
+    selectchk(F, Qt, Qt1).
 
 % gamma_all_implications_select(-A, -B, +I0,+IA,+IO,+IT,+Qt, -I0O,-IAO,-IOO,-ITO,-QtO):
 % the candidate generator for L0->. See the design note above for why
@@ -1591,16 +1620,11 @@ gamma_shape_member_impl(_, F, _,_,_,_,Qt) :-
 % search-tree size) and rebuilds that flat-list sequent at every node,
 % so nothing downstream of provable_at_level/3 ever sees the eight
 % buckets separately.
-normalize_proof_gammas(Proof, Proof) :-
-    atomic(Proof), !.
-normalize_proof_gammas(Proof, ProofOut) :-
-    Proof =.. [Tag, At,Cj,Dj,I0,IA,IO,IT,Qt,Delta | Rest], !,
-    gamma_to_list(At,Cj,Dj,I0,IA,IO,IT,Qt, FlatGamma),
-    maplist(normalize_proof_arg, Rest, RestOut),
-    ProofOut =.. [Tag, (FlatGamma > Delta) | RestOut].
-
-normalize_proof_arg(Arg, ArgOut) :-
-    ( compound(Arg) -> normalize_proof_gammas(Arg, ArgOut) ; ArgOut = Arg ).
+% Proof nodes are built directly as the familiar Gamma>Delta sequent
+% term: each rule receives Fl, the flat Gamma in insertion order, and
+% records it. Nothing has to be translated afterwards, so this is now
+% the identity -- kept only so existing call sites need no change.
+normalize_proof_gammas(Proof, Proof).
 
 % =========================================================================
 % g4mic_proves/7
@@ -1625,24 +1649,25 @@ normalize_proof_arg(Arg, ArgOut) :-
 % =========================================================================
 
 % --- Rule 0: Axiom  ----------------------------
-g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, FV, Th, SI, SO, LL, Proof) :-
-    g4mic_ax(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, FV, Th, SI, SO, LL, Proof), !.
+g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Fl,Delta, FV, Th, SI, SO, LL, Proof) :-
+    g4mic_ax(At,Cj,Dj,I0,IA,IO,IT,Qt,Fl,Delta, FV, Th, SI, SO, LL, Proof), !.
 
 
 % --- Rule 4: R-> ---------------------------------------------------------
-g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, FV, Th, SI, SO, LL,
-             rcond(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, P)) :-
+g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Fl,Delta, FV, Th, SI, SO, LL,
+             rcond(Fl>Delta, P)) :-
     Delta = [A => B], !,
     gamma_insert(A, At,Cj,Dj,I0,IA,IO,IT,Qt, At1,Cj1,Dj1,I01,IA1,IO1,IT1,Qt1),
-    g4mic_proves(At1,Cj1,Dj1,I01,IA1,IO1,IT1,Qt1,[B], FV, Th, SI, SO, LL, P).
+    g4mic_proves(At1,Cj1,Dj1,I01,IA1,IO1,IT1,Qt1,[A|Fl],[B], FV, Th, SI, SO, LL, P).
 
 
 % --- Rule 5: L& -----------------------------------------------------------
-g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, FV, Th, SI, SO, LL,
-             land(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, P)) :-
+g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Fl,Delta, FV, Th, SI, SO, LL,
+             land(Fl>Delta, P)) :-
     select((A & B), Cj, Cj0), !,
+    selectchk((A & B), Fl, Fl0),
     gamma_insert_list([A, B], At,Cj0,Dj,I0,IA,IO,IT,Qt, At1,Cj1,Dj1,I01,IA1,IO1,IT1,Qt1),
-    g4mic_proves(At1,Cj1,Dj1,I01,IA1,IO1,IT1,Qt1,Delta, FV, Th, SI, SO, LL, P).
+    g4mic_proves(At1,Cj1,Dj1,I01,IA1,IO1,IT1,Qt1,[A,B|Fl0],Delta, FV, Th, SI, SO, LL, P).
 
 
 % --- Rule 6: L0-> (modus ponens on context) -------------------------------
@@ -1650,85 +1675,94 @@ g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, FV, Th, SI, SO, LL,
 % elsewhere, regardless of the antecedent's shape -- see the design note
 % above the GAMMA COMPARTMENTS section for why gamma_all_implications_select/11
 % must range over every antecedent-shape bucket rather than just ImplAtom.
-g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, FV, Th, SI, SO, LL,
-             l0cond(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, P)) :-
-    gamma_all_implications_select(A, B, I0,IA,IO,IT,Qt, I0g,IAg,IOg,ITg,Qtg),
-    gamma_shape_member(A, At,Cj,Dj,I0g,IAg,IOg,ITg,Qtg),
+g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Fl,Delta, FV, Th, SI, SO, LL,
+             l0cond(Fl>Delta, P)) :-
+    select((A => B), Fl, Fl0),
+    memberchk(A, Fl0),
     ( LL == minimal, B == # -> true ; ! ),
-    gamma_insert(B, At,Cj,Dj,I0g,IAg,IOg,ITg,Qtg, At1,Cj1,Dj1,I01,IA1,IO1,IT1,Qt1),
-    g4mic_proves(At1,Cj1,Dj1,I01,IA1,IO1,IT1,Qt1,Delta, FV, Th, SI, SO, LL, P).
+    gamma_remove((A => B), At,Cj,Dj,I0,IA,IO,IT,Qt, Atg,Cjg,Djg,I0g,IAg,IOg,ITg,Qtg),
+    gamma_insert(B, Atg,Cjg,Djg,I0g,IAg,IOg,ITg,Qtg, At1,Cj1,Dj1,I01,IA1,IO1,IT1,Qt1),
+    g4mic_proves(At1,Cj1,Dj1,I01,IA1,IO1,IT1,Qt1,[B|Fl0],Delta, FV, Th, SI, SO, LL, P).
 
 
 % --- Rule 7: L&-> ---------------------------------------------------------
-g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, FV, Th, SI, SO, LL,
-             landto(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, P)) :-
+g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Fl,Delta, FV, Th, SI, SO, LL,
+             landto(Fl>Delta, P)) :-
     select(((A & B) => C), IA, IA0), !,
+    selectchk(((A & B) => C), Fl, Fl0),
     gamma_insert((A => (B => C)), At,Cj,Dj,I0,IA0,IO,IT,Qt, At1,Cj1,Dj1,I01,IA1,IO1,IT1,Qt1),
-    g4mic_proves(At1,Cj1,Dj1,I01,IA1,IO1,IT1,Qt1,Delta, FV, Th, SI, SO, LL, P).
+    g4mic_proves(At1,Cj1,Dj1,I01,IA1,IO1,IT1,Qt1,[(A => (B => C))|Fl0],Delta, FV, Th, SI, SO, LL, P).
 
 
 % --- Rule 2: Lexists (deterministic: existential in antecedent -> introduce eigenvar) --
-g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, FV, Th, SI, SO, LL,
-             lex(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, P)) :-
+g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Fl,Delta, FV, Th, SI, SO, LL,
+             lex(Fl>Delta, P)) :-
     select((?[_Z-X]:A), Qt, Qt0), !,
+    selectchk((?[_Z-X]:A), Fl, Fl0),
     copy_term((X:A, FV), (f_sk(SI, FV):A1, FV)),
     (catch(b_getval(g4_eigenvars, UsedVars), _, UsedVars = [])),
     \+ member_check(f_sk(SI, FV), UsedVars),
     b_setval(g4_eigenvars, [f_sk(SI, FV) | UsedVars]),
     J1 is SI + 1,
     gamma_insert(A1, At,Cj,Dj,I0,IA,IO,IT,Qt0, At1,Cj1,Dj1,I01,IA1,IO1,IT1,Qt1),
-    g4mic_proves(At1,Cj1,Dj1,I01,IA1,IO1,IT1,Qt1,Delta, FV, Th, J1, SO, LL, P).
+    g4mic_proves(At1,Cj1,Dj1,I01,IA1,IO1,IT1,Qt1,[A1|Fl0],Delta, FV, Th, J1, SO, LL, P).
 
 % --- Rule 3: Rforall (deterministic: universal in succedent -> introduce eigenvar) --
-g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, FV, Th, SI, SO, LL,
-             rall(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, P)) :-
+g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Fl,Delta, FV, Th, SI, SO, LL,
+             rall(Fl>Delta, P)) :-
     select((![_Z-X]:A), Delta, D1), !,
     copy_term((X:A, FV), (f_sk(SI, FV):A1, FV)),
     (catch(b_getval(g4_eigenvars, UsedVars), _, UsedVars = [])),
     \+ member_check(f_sk(SI, FV), UsedVars),
     b_setval(g4_eigenvars, [f_sk(SI, FV) | UsedVars]),
     J1 is SI + 1,
-    g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,[A1 | D1], FV, Th, J1, SO, LL, P).
+    g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Fl,[A1 | D1], FV, Th, J1, SO, LL, P).
 
 
 % --- Rule 8: R& (deterministic: Delta is a conjunction -> decompose immediately) --
-g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, FV, Th, SI, SO, LL,
-             rand(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, P1, P2)) :-
+g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Fl,Delta, FV, Th, SI, SO, LL,
+             rand(Fl>Delta, P1, P2)) :-
     Delta = [(A & B)], !,
-    g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,[A], FV, Th, SI, J1, LL, P1),
-    g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,[B], FV, Th, J1, SO, LL, P2).
+    g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Fl,[A], FV, Th, SI, J1, LL, P1),
+    g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Fl,[B], FV, Th, J1, SO, LL, P2).
 
 % --- Rule 10: L\/ (left disjunction) --------------------------------------
-g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, FV, Th, SI, SO, LL,
-             lor(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, P1, P2)) :-
+g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Fl,Delta, FV, Th, SI, SO, LL,
+             lor(Fl>Delta, P1, P2)) :-
     select((A | B), Dj, Dj0), !,
+    selectchk((A | B), Fl, Fl0),
     gamma_insert(A, At,Cj,Dj0,I0,IA,IO,IT,Qt, AtA,CjA,DjA,I0A,IAA,IOA,ITA,QtA),
     gamma_insert(B, At,Cj,Dj0,I0,IA,IO,IT,Qt, AtB,CjB,DjB,I0B,IAB,IOB,ITB,QtB),
-    g4mic_proves(AtA,CjA,DjA,I0A,IAA,IOA,ITA,QtA,Delta, FV, Th, SI, J1, LL, P1),
-    g4mic_proves(AtB,CjB,DjB,I0B,IAB,IOB,ITB,QtB,Delta, FV, Th, J1, SO, LL, P2).
+    g4mic_proves(AtA,CjA,DjA,I0A,IAA,IOA,ITA,QtA,[A|Fl0],Delta, FV, Th, SI, J1, LL, P1),
+    g4mic_proves(AtB,CjB,DjB,I0B,IAB,IOB,ITB,QtB,[B|Fl0],Delta, FV, Th, J1, SO, LL, P2).
 
 
 % --- Rule 9: L\/-> (optimized) --------------------------------------------
-g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, FV, Th, SI, SO, LL,
-             lorto(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, P)) :-
+g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Fl,Delta, FV, Th, SI, SO, LL,
+             lorto(Fl>Delta, P)) :-
     select(((A | B) => C), IO, IO0), !,
-    ( gamma_shape_member(A, At,Cj,Dj,I0,IA,IO0,IT,Qt), gamma_shape_member(B, At,Cj,Dj,I0,IA,IO0,IT,Qt) ->
-      gamma_insert_list([(B=>C), (A=>C)], At,Cj,Dj,I0,IA,IO0,IT,Qt, At1,Cj1,Dj1,I01,IA1,IO1,IT1,Qt1)
-    ; gamma_shape_member(A, At,Cj,Dj,I0,IA,IO0,IT,Qt) ->
-      gamma_insert((A=>C), At,Cj,Dj,I0,IA,IO0,IT,Qt, At1,Cj1,Dj1,I01,IA1,IO1,IT1,Qt1)
-    ; gamma_shape_member(B, At,Cj,Dj,I0,IA,IO0,IT,Qt) ->
-      gamma_insert((B=>C), At,Cj,Dj,I0,IA,IO0,IT,Qt, At1,Cj1,Dj1,I01,IA1,IO1,IT1,Qt1)
+    selectchk(((A | B) => C), Fl, Fl0),
+    ( memberchk(A, Fl0), memberchk(B, Fl0) ->
+      gamma_insert_list([(B=>C), (A=>C)], At,Cj,Dj,I0,IA,IO0,IT,Qt, At1,Cj1,Dj1,I01,IA1,IO1,IT1,Qt1),
+      Fl1 = [(B=>C), (A=>C)|Fl0]
+    ; memberchk(A, Fl0) ->
+      gamma_insert((A=>C), At,Cj,Dj,I0,IA,IO0,IT,Qt, At1,Cj1,Dj1,I01,IA1,IO1,IT1,Qt1),
+      Fl1 = [(A=>C)|Fl0]
+    ; memberchk(B, Fl0) ->
+      gamma_insert((B=>C), At,Cj,Dj,I0,IA,IO0,IT,Qt, At1,Cj1,Dj1,I01,IA1,IO1,IT1,Qt1),
+      Fl1 = [(B=>C)|Fl0]
     ;
-      gamma_insert_list([(A=>C), (B=>C)], At,Cj,Dj,I0,IA,IO0,IT,Qt, At1,Cj1,Dj1,I01,IA1,IO1,IT1,Qt1)
+      gamma_insert_list([(A=>C), (B=>C)], At,Cj,Dj,I0,IA,IO0,IT,Qt, At1,Cj1,Dj1,I01,IA1,IO1,IT1,Qt1),
+      Fl1 = [(A=>C), (B=>C)|Fl0]
     ),
-    g4mic_proves(At1,Cj1,Dj1,I01,IA1,IO1,IT1,Qt1,Delta, FV, Th, SI, SO, LL, P).
+    g4mic_proves(At1,Cj1,Dj1,I01,IA1,IO1,IT1,Qt1,Fl1,Delta, FV, Th, SI, SO, LL, P).
 
 % --- Rule 11: R\/ ---------------------------------------------------------
-g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, FV, Th, SI, SO, LL,
-             ror(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, P)) :-
+g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Fl,Delta, FV, Th, SI, SO, LL,
+             ror(Fl>Delta, P)) :-
     Delta = [(A | B)],
-    (   g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,[A], FV, Th, SI, SO, LL, P)
-    ;   g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,[B], FV, Th, SI, SO, LL, P)
+    (   g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Fl,[A], FV, Th, SI, SO, LL, P)
+    ;   g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Fl,[B], FV, Th, SI, SO, LL, P)
     ).
 /*
 % --- Rule 9: L\/-> (optimized) --------------------------------------------
@@ -1745,31 +1779,32 @@ g4mic_proves(Gamma>Delta, FV, Th, SI, SO, LL, lorto(Gamma>Delta, P)) :-
     ).
 */
 % --- Rule 1: L-bot -----------------------------------------------------
-g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, _, _, SI, SI, LL,
-             lbot(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, #)) :-
+g4mic_proves(_At,_Cj,_Dj,_I0,_IA,_IO,_IT,_Qt,Fl,Delta, _, _, SI, SI, LL,
+             lbot(Fl>Delta, #)) :-
     memberchk(LL, [intuitionistic, classical]),
-    memberchk(#, At), !.
+    memberchk(#, Fl), !.
 
 % --- Rule 12: IP (indirect proof -- classical only, must be before L->->)  --
-g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, FV, Th, SI, SO, classical,
-             ip(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, P)) :-
+g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Fl,Delta, FV, Th, SI, SO, classical,
+             ip(Fl>Delta, P)) :-
     Delta = [A],
     A \= #,
     Th > 0,
-    \+ gamma_shape_member((A => #), At,Cj,Dj,I0,IA,IO,IT,Qt),
+    \+ memberchk((A => #), Fl),
     gamma_insert((A => #), At,Cj,Dj,I0,IA,IO,IT,Qt, At1,Cj1,Dj1,I01,IA1,IO1,IT1,Qt1),
-    g4mic_proves(At1,Cj1,Dj1,I01,IA1,IO1,IT1,Qt1,[#], FV, Th, SI, SO, classical, P).
+    g4mic_proves(At1,Cj1,Dj1,I01,IA1,IO1,IT1,Qt1,[(A => #)|Fl],[#], FV, Th, SI, SO, classical, P).
 
 % --- Rule 13: L->-> --------------------------------------------------------
-g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, FV, Th, SI, SO, LL,
-             ltoto(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, P1, P2)) :-
+g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Fl,Delta, FV, Th, SI, SO, LL,
+             ltoto(Fl>Delta, P1, P2)) :-
     select(((A => B) => C), IT, IT0),
-    \+ (B = #, gamma_shape_member(A, At,Cj,Dj,I0,IA,IO,IT0,Qt)),
+    selectchk(((A => B) => C), Fl, Fl0),
+    \+ (B = #, memberchk(A, Fl0)),
     !,
     gamma_insert_list([A, (B => C)], At,Cj,Dj,I0,IA,IO,IT0,Qt, At1,Cj1,Dj1,I01,IA1,IO1,IT1,Qt1),
     gamma_insert(C, At,Cj,Dj,I0,IA,IO,IT0,Qt, At2,Cj2,Dj2,I02,IA2,IO2,IT2,Qt2),
-    g4mic_proves(At1,Cj1,Dj1,I01,IA1,IO1,IT1,Qt1,[B], FV, Th, SI, J1, LL, P1),
-    g4mic_proves(At2,Cj2,Dj2,I02,IA2,IO2,IT2,Qt2,Delta, FV, Th, J1, SO, LL, P2).
+    g4mic_proves(At1,Cj1,Dj1,I01,IA1,IO1,IT1,Qt1,[A,(B => C)|Fl0],[B], FV, Th, SI, J1, LL, P1),
+    g4mic_proves(At2,Cj2,Dj2,I02,IA2,IO2,IT2,Qt2,[C|Fl0],Delta, FV, Th, J1, SO, LL, P2).
 
 /*
 % --- Rule 3: Rforall (deterministic: universal in succedent -> introduce eigenvar) --
@@ -1789,44 +1824,48 @@ g4mic_proves(Gamma > Delta, FV, Th, SI, SO, LL, rall(Gamma>Delta, P)) :-
 % --- Rule 14: CQ_m (quantifier conversion, all logics -- must precede Lforall) --
 % (?[X]:A => B)  ->  ![X]:(A => B)
 % Placed before Lforall so that the universal form is available for instantiation.
-g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, FV, Th, SI, SO, LL,
-             cq_m(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, P)) :-
+g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Fl,Delta, FV, Th, SI, SO, LL,
+             cq_m(Fl>Delta, P)) :-
     select((?[Z-X]:A) => B, Qt, Qt0),
+    selectchk((?[Z-X]:A) => B, Fl, Fl0),
     gamma_insert(![Z-X]:(A => B), At,Cj,Dj,I0,IA,IO,IT,Qt0, At1,Cj1,Dj1,I01,IA1,IO1,IT1,Qt1),
-    g4mic_proves(At1,Cj1,Dj1,I01,IA1,IO1,IT1,Qt1,Delta, FV, Th, SI, SO, LL, P).
+    g4mic_proves(At1,Cj1,Dj1,I01,IA1,IO1,IT1,Qt1,[![Z-X]:(A => B)|Fl0],Delta, FV, Th, SI, SO, LL, P).
 
 % --- Rule 15: Lforall (universal instantiation, Otten's limitation) -----------
-g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, FV, Th, SI, SO, LL,
-             lall(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, P)) :-
+g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Fl,Delta, FV, Th, SI, SO, LL,
+             lall(Fl>Delta, P)) :-
     length(FV, Len), Len =< Th,
     member((![_Z-X]:A), Qt),
     copy_term((X:A, FV), (Y:A1, FV)),
     gamma_insert(A1, At,Cj,Dj,I0,IA,IO,IT,Qt, At1,Cj1,Dj1,I01,IA1,IO1,IT1,Qt1),
-    g4mic_proves(At1,Cj1,Dj1,I01,IA1,IO1,IT1,Qt1,Delta, [Y | FV], Th, SI, SO, LL, P), !.
+    g4mic_proves(At1,Cj1,Dj1,I01,IA1,IO1,IT1,Qt1,[A1|Fl],Delta, [Y | FV], Th, SI, SO, LL, P), !.
 
 % --- Rule 16: Rexists ----------------------------------------------------------
-g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, FV, Th, SI, SO, LL,
-             rex(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, P)) :-
+g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Fl,Delta, FV, Th, SI, SO, LL,
+             rex(Fl>Delta, P)) :-
     length(FV, Len), Len < Th,
     select((?[_Z-X]:A), Delta, D1), !,
     copy_term((X:A, FV), (Y:A1, FV)),
-    g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,[A1 | D1], [Y | FV], Th, SI, SO, LL, P), !.
+    g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Fl,[A1 | D1], [Y | FV], Th, SI, SO, LL, P), !.
 
 % =========================================================================
 % CLASSICAL QUANTIFIER CONVERSION RULE (classical)
 % =========================================================================
 
 % --- Rule 17: CQ_c (classical quantifier shift) ---------------------------
-g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, FV, Th, SI, SO, classical,
-             cq_c(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, P)) :-
+g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Fl,Delta, FV, Th, SI, SO, classical,
+             cq_c(Fl>Delta, P)) :-
     select((![Z-X]:A) => B, Qt, Qt0),
+    selectchk((![Z-X]:A) => B, Fl, Fl0),
     ( member((?[ZT-YT]:AT) => B, Qt0),
       \+ \+ ((A => B) = AT) ->
-        gamma_insert(?[ZT-YT]:AT, At,Cj,Dj,I0,IA,IO,IT,Qt0, At1,Cj1,Dj1,I01,IA1,IO1,IT1,Qt1)
+        gamma_insert(?[ZT-YT]:AT, At,Cj,Dj,I0,IA,IO,IT,Qt0, At1,Cj1,Dj1,I01,IA1,IO1,IT1,Qt1),
+        Fl1 = [?[ZT-YT]:AT|Fl0]
     ;
-        gamma_insert(?[Z-X]:(A => B), At,Cj,Dj,I0,IA,IO,IT,Qt0, At1,Cj1,Dj1,I01,IA1,IO1,IT1,Qt1)
+        gamma_insert(?[Z-X]:(A => B), At,Cj,Dj,I0,IA,IO,IT,Qt0, At1,Cj1,Dj1,I01,IA1,IO1,IT1,Qt1),
+        Fl1 = [?[Z-X]:(A => B)|Fl0]
     ),
-    g4mic_proves(At1,Cj1,Dj1,I01,IA1,IO1,IT1,Qt1,Delta, FV, Th, SI, SO, classical, P).
+    g4mic_proves(At1,Cj1,Dj1,I01,IA1,IO1,IT1,Qt1,Fl1,Delta, FV, Th, SI, SO, classical, P).
 
 % =========================================================================
 % HELPER PREDICATES
