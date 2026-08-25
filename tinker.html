@@ -31,7 +31,7 @@
   </script>
   <script defer src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-chtml.js"></script>
 
-  <!-- LZ-String pour compression d'URLs -->
+  <!-- LZ-String, for URL compression -->
   <script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"></script>
 
   <style>
@@ -99,7 +99,7 @@
     display: inline;
 }
 
-/* Style pour les preuves MathJax */
+/* Styling for MathJax-rendered proofs */
 .mathjax-proof-container {
     margin: 1em 0;
     padding: 1em;
@@ -579,7 +579,7 @@ function shareURL() {
 
     setInterval(addCopyButtonsToConsole, 1000);
 
-    // ===== FONCTION MathJax AVEC ANTI-CLIGNOTEMENT =====
+    // ===== MathJax RENDERING, WITH FLICKER SUPPRESSION =====
 
     let lastRenderedContent = {
       sequent: '',
@@ -597,19 +597,19 @@ function shareURL() {
       line = line.trim();
       if (!line || line === '') return null;
 
-      // Ignorer les lignes qui n'ont ni \fa ni \fh ni \fj
+      // Skip lines that have none of \fa, \fh, \fj
       if (!line.includes('\\fa') && !line.includes('\\fh') && !line.includes('\\fj')) {
         return null;
       }
 
-      // Compter TOUTES les lignes verticales (\fa + \fh + \fj)
+      // Count EVERY vertical line (\fa + \fh + \fj)
       const faMatches = line.match(/\\fa/g);
       const fhMatches = line.match(/\\fh/g);
       const fjMatches = line.match(/\\fj/g);
       const faCount = faMatches ? faMatches.length : 0;
       const fhCount = fhMatches ? fhMatches.length : 0;
       const fjCount = fjMatches ? fjMatches.length : 0;
-      const indentLevel = faCount + fhCount + fjCount;  // Total des vlines
+      const indentLevel = faCount + fhCount + fjCount;  // total number of vlines
 
       // \fh marks a flagged hypothesis
       const hasFlag = fhCount > 0;
@@ -627,10 +627,10 @@ function shareURL() {
       let formula = parts[0].trim();
       let justification = parts[1] ? parts[1].trim() : '';
 
-      // GARDER le LaTeX original pour MathJax
+      // KEEP the original LaTeX for MathJax
       formula = formula.replace(/\\\\/g, '').trim();
 
-      // Nettoyer les justifications
+      // Clean up the justifications
       justification = justification
         .replace(/\$/g, '')
         .replace(/\\\\/g, '')
@@ -739,7 +739,7 @@ function shareURL() {
               segmentStart = null;
             }
             if (hasThisLevel && shouldBreak) {
-              segmentStart = i; // Commencer nouveau segment
+              segmentStart = i; // start a new segment
             }
           }
         }
@@ -751,7 +751,7 @@ function shareURL() {
         }
       }
 
-      // DESSIN DU TEXTE, DRAPEAUX ET FORMULES
+      // DRAW THE TEXT, FLAGS AND FORMULAS
       lines.forEach((line, index) => {
         const y = lineYPositions[index];
         // Formula position: just right of its scope's vertical line
@@ -892,7 +892,7 @@ function shareURL() {
         'tree'
       );
 
-      // NOUVELLE SECTION: Fitch-style Natural Deduction (SVG)
+      // NEW SECTION: Fitch-style natural deduction (SVG)
       const fitchStartMatch = textContent.match(/(?:🚩\s*Natural\s+Deduction\s*[-\s]*Flag\s+Style|[-]{3,}\s*Natural\s+Deduction\s*\(flag style\)\s*[-]{3,})/i);
       if (fitchStartMatch) {
         const fitchStartPos = textContent.indexOf(fitchStartMatch[0]);
@@ -967,7 +967,7 @@ function shareURL() {
 
     setTimeout(renderBussproofsWithMathJax, 2000);
     */
-    // ===== FIN FONCTION MathJax =====
+    // ===== END OF MathJax RENDERING =====
 
     // ===== MANUAL MathJax CONTROL, via Ctrl+M =====
     let mathJaxManualMode = true;  // manual mode on by default
@@ -1093,7 +1093,7 @@ function shareURL() {
       console.log('=== CONSOLE CONTENT DEBUG ===');
       console.log('Total length:', text.length);
 
-      // Trouver les marqueurs
+      // Find the markers
       const markers = ['sequent', 'Sequent', 'Flag', 'fitch', 'Tree', 'tree'];
       markers.forEach(marker => {
         const idx = text.indexOf(marker);
@@ -1103,12 +1103,12 @@ function shareURL() {
         }
       });
 
-      // Compter les blocs LaTeX
+      // Count the LaTeX blocks
       const prooftrees = (text.match(/\\begin\{prooftree\}/g) || []).length;
       const fitches = (text.match(/\\begin\{fitch\}/g) || []).length;
       console.log(`\nLaTeX blocks: ${prooftrees} prooftree(s), ${fitches} fitch block(s)`);
 
-      // Tester les extractions
+      // Test the extractions
       console.log('\n=== TESTING EXTRACTIONS ===');
       console.log('Sequent:', getLatexByStyle('sequent') ? '✓ OK' : '✗ FAIL');
       console.log('Flag:', getLatexByStyle('fitch') ? '✓ OK' : '✗ FAIL');
@@ -1308,7 +1308,7 @@ document.addEventListener('keydown', function(event) {
   });
 </script>
 <script>
-  // Solution avec vidage du cache au bon moment
+  // Approach: clear the cache at the right moment
   setTimeout(() => {
     const updateURLFromConsole = () => {
       const inputs = document.querySelectorAll('input[type="text"], textarea');
@@ -1322,7 +1322,7 @@ document.addEventListener('keydown', function(event) {
               if (text && (text.startsWith('prove(') || text.startsWith('decide('))) {
                 // CLEAR THE CACHE after the run
                 setTimeout(() => {
-                  window.latexBlocks = []; // Vide le cache des blocs LaTeX
+                  window.latexBlocks = []; // clear the LaTeX-block cache
                   console.log('🧹 Latex cache cleared after execution');
                 }, 2000); // 2 seconds after the run
               }
@@ -1374,7 +1374,7 @@ document.addEventListener('keydown', function(event) {
     }, 8000); // 8 seconds of grace
   }
 
-  // Fonction pour vider VRAIMENT la console
+  // Really empty the console
   function clearConsoleOutput() {
     const consoleDiv = document.querySelector('.tinker-console');
     if (!consoleDiv) return;
@@ -1393,7 +1393,7 @@ document.addEventListener('keydown', function(event) {
     // Method 2: remove the output elements by hand
     const allChildren = Array.from(consoleDiv.children);
     allChildren.forEach(child => {
-      // Garder seulement les inputs
+      // Keep the inputs only
       if (child.tagName !== 'INPUT' && child.tagName !== 'TEXTAREA') {
         // Check whether the element holds an input
         const hasInput = child.querySelector('input, textarea');
@@ -1500,7 +1500,7 @@ document.addEventListener('keydown', function(event) {
      const openParens = (value.match(/\(/g) || []).length;
      const closeParens = (value.match(/\)/g) || []).length;
 
-     // Retirer les anciennes classes
+     // Remove the previous classes
      input.classList.remove('parens-unbalanced', 'parens-highlight');
 
      // Add the appropriate class
@@ -1565,7 +1565,7 @@ document.addEventListener('keydown', function(event) {
          if (!scratchFound) {
              console.log('ℹ️  scratch.pl not found in the file list');
          }
-     }, 1500); // Attendre 1.5 secondes que Tinker initialise les fichiers
+     }, 1500); // give Tinker 1.5 s to initialise the file list
  });
  // ===== FIN CHARGEMENT AUTOMATIQUE =====
 </script>

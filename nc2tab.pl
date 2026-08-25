@@ -574,7 +574,7 @@ beta_parts(~(A & B), ~A, ~B).
 beta_parts(~(A , B), ~A, ~B).
 beta_parts(A | B, A, B).
 beta_parts((A ; B), A, B).
-%% Dans beta_parts :
+%% In beta_parts:
 beta_parts(A <=> B, [A, B], [~A, ~B]).
 beta_parts(~(A <=> B), [A, ~B], [~A, B]).
 
@@ -639,7 +639,7 @@ is_negative_lit(~_) :- !.
 is_negative_lit(-_).
 
 %% ============================================================
-%% PRETTY PRINTER DE L'ARBRE
+%% TREE PRETTY PRINTER
 %% ============================================================
 
 %% ============================================================

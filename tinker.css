@@ -249,7 +249,7 @@ button.tinker-query-run {
 }
 
 .tinker-console-output div {
-    white-space: pre-wrap;     /* Respecte les sauts de ligne */
+    white-space: pre-wrap;     /* Preserve line breaks */
     font-family: monospace;    /* Fixed-width font */
     line-height: 1.4;          /* Espacement vertical */
 }
@@ -376,7 +376,7 @@ div, pre, span {
 }
 
 .tinker-console-output div {
-    white-space: pre-wrap;     /* Respecte les sauts de ligne */
+    white-space: pre-wrap;     /* Preserve line breaks */
     font-family: monospace;    /* Fixed-width font */
     line-height: 1.4;          /* Espacement vertical */
 }
@@ -395,13 +395,13 @@ img[alt="Preuve Fitch"] {
 /* =============================================================================
    SCROLLBARS -- better visibility
    ============================================================================= */
-/* Pour Firefox */
+/* Firefox */
 * {
     scrollbar-width: thin;
     scrollbar-color: #666666 #e0e0e0;
 }
 
-/* Pour Chrome, Edge, Safari */
+/* Chrome, Edge, Safari */
 ::-webkit-scrollbar {
     width: 12px;
     height: 12px;

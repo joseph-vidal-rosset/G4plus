@@ -1908,7 +1908,7 @@ write_formula_with_parens((A ' \\to ' B)) :-
 write_formula_with_parens('='(A, B)) :- !,
     write('('), write_formula_with_parens(A), write(' = '), write_formula_with_parens(B), write(')').
 
-% Autres operateurs
+% Other operators
 write_formula_with_parens((A ' \\lor ' B)) :-
     !,
     write_with_context(A, 'lor_left'),
