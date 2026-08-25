@@ -115,7 +115,7 @@
     font-family: sans-serif;
 }
 
-/* TPTP Styles - Intégré dans les boutons */
+/* TPTP styles -- integrated into the buttons */
 .tptp-files {
     display: inline;
     margin-left: 5px;
@@ -294,11 +294,11 @@
     window.Prolog = Prolog;
     Term = new term.Term(Tinker.console.elem);
 
-    // Fonction pour mettre à jour l'URL basée sur l'input courant
-    // La logique de mise à jour de l'URL a été déplacée/consolidée dans le script "SOLUTION FINALE"
-    // pour éviter les conflits et les troncatures dues à une logique concurrente avec un court debounce.
+    // Update the URL from the current input
+    // The URL-update logic has been moved into the "FINAL SOLUTION" script
+    // to avoid conflicts and truncation caused by a competing short-debounce path.
 
-    // Fonction pour attacher les listeners à l'input de la console
+    // Attach the listeners to the console input
     function attachInputListeners() {
       const consoleInput = document.querySelector('.tinker-console input[type="text"]') ||
                           document.querySelector('.tinker-console textarea');
@@ -306,8 +306,8 @@
       if (consoleInput && !consoleInput.dataset.listenersAttached) {
         consoleInput.dataset.listenersAttached = 'true';
 
-        // Les listeners 'input' et 'keydown' ont été supprimés ici
-        // car la logique est gérée de manière plus robuste dans le dernier script.
+        // The 'input' and 'keydown' listeners were removed here,
+        // because the last script handles that more robustly.
 
         console.log('✓ URL listeners attached to console input (only flag set)');
         return true;
@@ -315,10 +315,10 @@
       return false;
     }
 
-    // Essayer d'attacher immédiatement
+    // Try to attach right away
     setTimeout(attachInputListeners, 1000);
 
-    // Observer les changements dans la console pour ré-attacher si l'input est recréé
+    // Watch the console for changes, to re-attach if the input is recreated
     const observer = new MutationObserver(() => {
       const input = document.querySelector('.tinker-console input[type="text"]') ||
                    document.querySelector('.tinker-console textarea');
@@ -332,7 +332,7 @@
       observer.observe(consoleDiv, { childList: true, subtree: true });
     }
 
-    // Fallback: réessayer périodiquement
+    // Fallback: retry periodically
     setInterval(() => {
       const input = document.querySelector('.tinker-console input[type="text"]') ||
                    document.querySelector('.tinker-console textarea');
@@ -451,7 +451,7 @@
 
       console.log('🔍 Starting button creation, latexBlocks:', window.latexBlocks.map((b, i) => `[${i}]:${b.type}`).join(', '));
 
-      // COLLECTER TOUS LES NŒUDS D'ABORD pour éviter de les perdre pendant la manipulation du DOM
+      // COLLECT EVERY NODE FIRST, so none is lost while the DOM is manipulated
       const walker = document.createTreeWalker(
         consoleDiv,
         NodeFilter.SHOW_TEXT,
@@ -464,7 +464,7 @@
         { pattern: /^\\end\{fitch\}$/m, blockType: 'fitch' }
       ];
 
-      // Collecter tous les nœuds qui correspondent
+      // Collect every matching node
       const nodesToProcess = [];
       let node;
       while (node = walker.nextNode()) {
@@ -481,16 +481,16 @@
 
       console.log(`📋 Found ${nodesToProcess.length} nodes to process`);
 
-      // Maintenant traiter tous les nœuds
+      // Now process all the nodes
       let prooftreeCount = 0;
       let fitchCount = 0;
 
       nodesToProcess.forEach(({ node, parent, blockType }) => {
-        // Calculer le nombre total de chaque type dans latexBlocks
+        // Total count of each kind in latexBlocks
         const numProoftrees = window.latexBlocks.filter(b => b.type === 'prooftree').length;
 
-        // Calculer l'index: pour prooftree, c'est prooftreeCount
-        // pour fitch, c'est numProoftrees + fitchCount
+        // Index: for prooftree it is prooftreeCount,
+        // for fitch it is numProoftrees + fitchCount
         const blockIndex = blockType === 'prooftree' ? prooftreeCount : numProoftrees + fitchCount;
 
         console.log(`➕ Creating button: type=${blockType}, prooftreeCount=${prooftreeCount}, fitchCount=${fitchCount}, blockIndex=${blockIndex}`);
@@ -547,23 +547,23 @@
       */
 
 function shareURL() {
-      // 1. Tenter de lire la valeur actuelle du champ de saisie
+      // 1. Try to read the current value of the input field
       const consoleInput = document.querySelector('.tinker-console input[type="text"]') ||
                            document.querySelector('.tinker-console textarea');
-      // Commencer par la valeur trimée de l'input, ou une chaîne vide
+      // Start from the trimmed input value, or an empty string
       let query = consoleInput ? consoleInput.value.trim() : '';
 
-      // 2. LOGIQUE DE REPLI : Si l'input est vide, on utilise la dernière requête exécutée (window.lastQuery)
+      // 2. FALLBACK: if the input is empty, use the last executed query (window.lastQuery)
       if (!query && window.lastQuery) {
           query = window.lastQuery;
       }
 
-      // 3. Procéder UNIQUEMENT si une requête valide existe (actuelle ou en mémoire)
+      // 3. Proceed ONLY if a valid query exists, current or remembered
       if (query) {
-        // Mettre à jour lastQuery pour garantir la synchronisation
+        // Update lastQuery to keep the two in step
         window.lastQuery = query;
 
-        // Encodage de la requête complète (garantit le point et les parenthèses finales)
+        // Encode the whole query (keeps the final period and closing parentheses)
         const url = window.location.origin + window.location.pathname + '#' + encodeURIComponent(query);
 
         navigator.clipboard.writeText(url).then(() => {
@@ -591,7 +591,7 @@ function shareURL() {
 
     // ===== FITCH PARSER - LaTeX to SVG =====
     /**
-     * Parse une ligne LaTeX Fitch
+     * Parse one LaTeX Fitch line
      */
     function parseFitchLine(line) {
       line = line.trim();
@@ -611,10 +611,10 @@ function shareURL() {
       const fjCount = fjMatches ? fjMatches.length : 0;
       const indentLevel = faCount + fhCount + fjCount;  // Total des vlines
 
-      // \fh indique une hypothèse avec drapeau
+      // \fh marks a flagged hypothesis
       const hasFlag = fhCount > 0;
 
-      // \fj indique la dernière prémisse (avec drapeau de fermeture)
+      // \fj marks the last premise (with the closing flag)
       const isPremise = fjCount > 0;
 
       let content = line
@@ -662,25 +662,25 @@ function shareURL() {
 
       const X_NUM = 30, X_START = 60, INDENT_WIDTH = 20;
       const Y_START = 30, LINE_HEIGHT = 35, FLAG_WIDTH = 30;
-      const FORMULA_OFFSET = 9; // écart entre la vline et la formule
+      const FORMULA_OFFSET = 9; // gap between the vline and the formula
 
-      // Calculer X_JUSTIF: colonne alignée basée sur la formule la plus « lointaine »
-      // (indentation + longueur de formule), avec estimation ~9px/char MathJax
+      // X_JUSTIF: aligned column, based on the formula reaching furthest right
+      // (indentation + formula length), estimating ~9px per MathJax character
       const maxFormulaRight = Math.max(...lines.map(l => {
         const xPos = X_START + ((l.indentLevel - 1) * INDENT_WIDTH) + FORMULA_OFFSET;
         return xPos + (l.formula.length * 9);
       }));
-      const X_JUSTIF = maxFormulaRight + 30; // marge confortable entre formule et justification
+      const X_JUSTIF = maxFormulaRight + 30; // comfortable margin between formula and justification
 
-      // Calculer la largeur SVG en fonction des formules + justifications
+      // SVG width, from the formulas plus the justifications
       const maxJustifLength = Math.max(...lines.map(l => l.justification ? l.justification.length : 0));
       const svgWidth = Math.max(650, X_JUSTIF + (maxJustifLength * 8) + 40);
 
-      // Calculer les espaces supplémentaires pour estimer la hauteur
+      // Extra spacing, used to estimate the height
       let estimatedExtraSpace = 0;
       for (let i = 1; i < lines.length; i++) {
         if (lines[i].hasFlag && lines[i-1].indentLevel >= lines[i].indentLevel) {
-          // Vérifier qu'il y avait une sous-preuve profonde avant
+          // Check that a deeper subproof came before
           for (let j = i - 1; j >= 0 && j >= i - 5; j--) {
             if (lines[j].indentLevel > lines[i].indentLevel) {
               estimatedExtraSpace += 10;
@@ -698,12 +698,12 @@ function shareURL() {
         .justif { font-family: 'Times New Roman', serif; font-size: 14px; fill: #555; }
       </style></defs>`;
 
-      // CALCULER D'ABORD LES POSITIONS Y DE CHAQUE LIGNE (avec espaces)
+      // FIRST COMPUTE THE Y POSITION OF EVERY LINE (spacing included)
       const lineYPositions = [];
       let cumulativeSpace = 0;
 
       for (let i = 0; i < lines.length; i++) {
-        // Détecter gaps entre sous-preuves de même niveau
+        // Detect gaps between subproofs at the same level
         if (i > 0 && lines[i].hasFlag && lines[i-1].indentLevel >= lines[i].indentLevel) {
           for (let j = i - 1; j >= 0 && j >= i - 5; j--) {
             if (lines[j].indentLevel > lines[i].indentLevel) {
@@ -715,7 +715,7 @@ function shareURL() {
         lineYPositions[i] = Y_START + (i * LINE_HEIGHT) + cumulativeSpace;
       }
 
-      // DESSIN DES LIGNES VERTICALES avec gaps pour sous-preuves
+      // DRAW THE VERTICAL LINES, with gaps for subproofs
       const maxIndent = Math.max(...lines.map(l => l.indentLevel));
       for (let level = 1; level <= maxIndent; level++) {
         const x = X_START + ((level - 1) * INDENT_WIDTH);
@@ -723,7 +723,7 @@ function shareURL() {
 
         for (let i = 0; i < lines.length; i++) {
           const hasThisLevel = lines[i].indentLevel >= level;
-          // Détecter si on doit créer un gap (nouvelle sous-preuve au même niveau)
+          // Decide whether a gap is needed (a new subproof at the same level)
           const shouldBreak = i > 0 &&
                              lines[i].hasFlag &&
                              lines[i].indentLevel === level &&
@@ -754,18 +754,18 @@ function shareURL() {
       // DESSIN DU TEXTE, DRAPEAUX ET FORMULES
       lines.forEach((line, index) => {
         const y = lineYPositions[index];
-        // Position de la formule: juste à droite de sa ligne verticale de portée
+        // Formula position: just right of its scope's vertical line
         const xBase = X_START + ((line.indentLevel - 1) * INDENT_WIDTH) + FORMULA_OFFSET;
 
-        // Numéro de ligne
+        // Line number
         svg += `<text x="${X_NUM}" y="${y}" class="line-num">${line.lineNumber}</text>`;
 
-        // Drapeau pour hypothèse (\fh) OU dernière prémisse (\fj)
+        // Flag for a hypothesis (\fh) OR the last premise (\fj)
         const shouldDrawFlag = line.hasFlag || line.isPremise;
 
         if (shouldDrawFlag) {
           const x = X_START + ((line.indentLevel - 1) * INDENT_WIDTH);
-          // Drapeau à position fixe y+5 (juste en-dessous de la ligne de référence)
+          // Flag at the fixed position y+5, just below the reference line
           svg += `<line x1="${x}" y1="${y + 5}" x2="${x + FLAG_WIDTH}" y2="${y + 5}" stroke="black" stroke-width="1"/>`;
         }
 
@@ -776,7 +776,7 @@ function shareURL() {
           <div xmlns="http://www.w3.org/1999/xhtml" style="font-size: 16px;">\\(${line.formula}\\)</div>
         </foreignObject>`;
 
-        // JUSTIFICATION en colonne alignée à X_JUSTIF
+        // JUSTIFICATION, in the column aligned at X_JUSTIF
         if (line.justification) {
           let cleanJustif = line.justification
             .replace(/-/g, '\\text{-}')
@@ -926,7 +926,7 @@ function shareURL() {
 
             fitchContainer.innerHTML = fitchContent;
 
-            // IMPORTANT: Appeler MathJax pour renderer les formules dans les foreignObject
+            // IMPORTANT: call MathJax to render the formulas inside the foreignObject
             MathJax.typesetPromise([fitchContainer]).then(() => {
               fitchContainer.style.transition = 'opacity 0.3s ease-in';
               fitchContainer.style.opacity = '1';
@@ -948,8 +948,8 @@ function shareURL() {
       }
     }
 
-    // Observer et setTimeout automatiques DÉSACTIVÉS en mode manuel
-    // Décommenter ces lignes pour revenir au mode automatique :
+    // Automatic observer and setTimeout are DISABLED in manual mode
+    // Uncomment these lines to go back to automatic mode:
     /*
     let renderTimeout;
     const renderObserver = new MutationObserver(() => {
@@ -969,12 +969,12 @@ function shareURL() {
     */
     // ===== FIN FONCTION MathJax =====
 
-    // ===== CONTRÔLE MANUEL MathJax via Ctrl+M =====
-    let mathJaxManualMode = true;  // Mode manuel activé par défaut
-    let mathJaxCurrentlyVisible = false;  // MathJax invisible au départ
+    // ===== MANUAL MathJax CONTROL, via Ctrl+M =====
+    let mathJaxManualMode = true;  // manual mode on by default
+    let mathJaxCurrentlyVisible = false;  // MathJax starts out invisible
 
-    console.log('🎨 MathJax en mode MANUEL - Utilisez Ctrl+M ou Cmd+M pour activer/désactiver');
-    // ===== FIN CONTRÔLE MANUEL =====
+    console.log('🎨 MathJax is in MANUAL mode -- press Ctrl+M or Cmd+M to toggle it');
+    // ===== END OF MANUAL CONTROL =====
 
 
     function getLatexByStyle(style) {
@@ -988,7 +988,7 @@ function shareURL() {
       console.log('📝 Console text length:', textContent.length);
       console.log('🔍 Looking for style:', style);
 
-      // Debug: afficher les sections trouvées
+      // Debug: show the sections found
 	const hasSequent = textContent.search(/sequent/i) !== -1;
         const hasTree = textContent.search(/tree/i) !== -1;
         const hasFlag = textContent.search(/flag/i) !== -1;
@@ -996,8 +996,8 @@ function shareURL() {
 	console.log('📌 Sections detected: Sequent=' + hasSequent + ', Tree=' + hasTree,  Flag=' + hasFlag + ');
 
       if (style === 'sequent') {
-        // Pour sequent: prendre uniquement entre "Sequent" et "Natural Deduction" ou "Flag"
-        // Chercher la section explicitement marquée "Sequent Calculus"
+        // For sequent: take only what lies between "Sequent" and "Natural Deduction" or "Flag"
+        // Look for the section explicitly marked "Sequent Calculus"
 
         const sequentStartMatch = textContent.match(/[-\s]*Sequent\s+Calculus\s*[-\s]*/i);
         if (!sequentStartMatch) {
@@ -1008,7 +1008,7 @@ function shareURL() {
         const sequentStart = textContent.indexOf(sequentStartMatch[0]);
         console.log('📍 Sequent starts at position:', sequentStart);
 
-        // Trouver où se termine la section Sequent (avant "Natural Deduction" ou "Flag")
+        // Find where the Sequent section ends (before "Natural Deduction" or "Flag")
         const naturalDeductionMatch = textContent.substring(sequentStart).search(/[-\s]*Natural\s+Deduction\s*[-\s]*/i);
         const fitchMatch = textContent.substring(sequentStart).search(/[-\s]*a\)\s*Flag\s+Style/i);
 
@@ -1038,7 +1038,7 @@ function shareURL() {
         return null;
 
       } else if (style === 'fitch') {
-        // Pour Flag: chercher depuis "Flag" jusqu'à la fin (Flag est maintenant en dernier)
+        // For Flag: search from "Flag" to the end (Flag now comes last)
         const fitchMatch = textContent.match(/Flag[\s-]*style[\s\S]*$/i);
         console.log('📋 Flag match:', fitchMatch ? 'found' : 'not found');
 
@@ -1059,7 +1059,7 @@ function shareURL() {
         return fitchMatches.map(fitch => '\\begin{center}\n' + fitch + '\n\\end{center}').join('\n\n\\vspace{1cm}\n\n');
 
       } else if (style === 'tree') {
-        // Pour Tree: chercher après "Tree-style" ou "Natural deduction" (Tree)
+        // For Tree: search after "Tree-style" or "Natural deduction" (Tree)
         const treeMatch = textContent.match(/Tree[\s-]*style[\s\S]*$/i);
         console.log('🌲 Tree match:', treeMatch ? 'found' : 'not found');
 
@@ -1081,7 +1081,7 @@ function shareURL() {
       return null;
     }
 
-    // Fonction utilitaire pour debug: afficher le contenu de la console
+    // Debug helper: print the console contents
     window.debugConsoleContent = function() {
       const consoleDiv = document.querySelector('.tinker-console');
       if (!consoleDiv) {
@@ -1287,13 +1287,13 @@ document.addEventListener('keydown', function(event) {
           mathJaxCurrentlyVisible = true;
           console.log('✅ MathJax rendered - Press Ctrl/Cmd+M again to hide');
         } else {
-          // Désactiver MathJax (supprimer les conteneurs)
+          // Turn MathJax off (remove the containers)
           console.log('⌨️  Ctrl/Cmd+M: Hiding MathJax rendering');
           const mathContainers = document.querySelectorAll('.mathjax-proof-container');
           mathContainers.forEach(container => container.remove());
           mathJaxCurrentlyVisible = false;
 
-          // Réinitialiser le cache pour permettre un nouveau rendu
+          // Reset the cache so a fresh render can happen
           lastRenderedContent = {
             sequent: '',
             tree: '',
@@ -1320,16 +1320,16 @@ document.addEventListener('keydown', function(event) {
             if (e.key === 'Enter') {
               const text = this.value.trim();
               if (text && (text.startsWith('prove(') || text.startsWith('decide('))) {
-                // VIDER LE CACHE après l'exécution
+                // CLEAR THE CACHE after the run
                 setTimeout(() => {
                   window.latexBlocks = []; // Vide le cache des blocs LaTeX
                   console.log('🧹 Latex cache cleared after execution');
-                }, 2000); // 2 secondes après l'exécution
+                }, 2000); // 2 seconds after the run
               }
             }
           });
 
-          // La logique de mise à jour de l'URL par input a été déplacée/consolidée dans le script "SOLUTION FINALE"
+          // The per-input URL-update logic has been moved into the "FINAL SOLUTION" script
           /* input.addEventListener('input', function() {
             setTimeout(() => {
               const text = this.value.trim();
@@ -1350,8 +1350,8 @@ document.addEventListener('keydown', function(event) {
   }, 3000);
 </script>
 <script>
-  // SOLUTION FINALE - Détection intelligente URL vs user input
-// À ajouter APRÈS le chargement de Tinker (avant </body>)
+  // FINAL SOLUTION -- tell a URL-supplied query from user input
+// To be added AFTER Tinker has loaded (before </body>)
 
 (function() {
   'use strict';
@@ -1359,19 +1359,19 @@ document.addEventListener('keydown', function(event) {
   let lastExecutedQuery = '';
   let loadedFromURL = false;
 
-  // Détecter si on charge depuis une URL avec hash
+  // Detect a load coming from a URL with a hash
   if (window.location.hash) {
     loadedFromURL = true;
     const hash = window.location.hash.substring(1);
     const urlQuery = window.G4micShare ? window.G4micShare.decompress(hash) : decodeURIComponent(hash);
-    lastExecutedQuery = urlQuery; // Marquer cette query comme "déjà vue"
+    lastExecutedQuery = urlQuery; // mark this query as already seen
     console.log('🔗 Loading from URL:', urlQuery);
 
-    // Après le chargement réussi, réinitialiser
+    // Reset once the load has succeeded
     setTimeout(() => {
       loadedFromURL = false;
       console.log('✅ URL loading complete, clearing now enabled');
-    }, 8000); // 8 secondes de grâce
+    }, 8000); // 8 seconds of grace
   }
 
   // Fonction pour vider VRAIMENT la console
@@ -1381,7 +1381,7 @@ document.addEventListener('keydown', function(event) {
 
     console.log('🧹 Clearing console...');
 
-    // Méthode 1: Utiliser l'API Tinker si disponible
+    // Method 1: use the Tinker API when available
     if (window.tinker && window.tinker.console) {
       if (typeof window.tinker.console.clear === 'function') {
         window.tinker.console.clear();
@@ -1390,12 +1390,12 @@ document.addEventListener('keydown', function(event) {
       }
     }
 
-    // Méthode 2: Supprimer manuellement les éléments de sortie
+    // Method 2: remove the output elements by hand
     const allChildren = Array.from(consoleDiv.children);
     allChildren.forEach(child => {
       // Garder seulement les inputs
       if (child.tagName !== 'INPUT' && child.tagName !== 'TEXTAREA') {
-        // Vérifier si l'élément contient un input
+        // Check whether the element holds an input
         const hasInput = child.querySelector('input, textarea');
         if (!hasInput) {
           child.remove();
@@ -1406,7 +1406,7 @@ document.addEventListener('keydown', function(event) {
     console.log('✅ Console cleared manually');
   }
 
-  // Attacher le listener sur TOUS les inputs de la console
+  // Attach the listener to EVERY console input
   function attachClearListener() {
     const inputs = document.querySelectorAll('.tinker-console input[type="text"], .tinker-console textarea');
 
@@ -1418,20 +1418,20 @@ document.addEventListener('keydown', function(event) {
         if (e.key === 'Enter' && !e.shiftKey) {
           const query = this.value.trim();
 
-          // Si c'est une nouvelle requête prove() ou decide()
+          // If this is a new prove() or decide() query
           if (query && (query.startsWith('prove(') || query.startsWith('decide('))) {
 
-            // Mettre à jour l'URL et lastQuery IMMÉDIATEMENT (POINT DE CORRECTION CLÉ)
+            // Update the URL and lastQuery IMMEDIATELY (the key fix)
             window.lastQuery = query;
             const compressed = window.G4micShare ? window.G4micShare.compress(query) : encodeURIComponent(query);
             window.location.hash = '#' + compressed;
             console.log('🔗 URL updated on Enter:', window.location.hash);
 
-            // Si c'est différent de la dernière requête exécutée
+            // If it differs from the last executed query
             if (query !== lastExecutedQuery) {
               console.log('🆕 New query detected:', query);
 
-              // IMPORTANT: Ne pas vider si on vient de charger depuis URL
+              // IMPORTANT: do not clear when we have just loaded from a URL
               if (!loadedFromURL) {
                 console.log('🧹 Clearing console (user typed new query)');
                 // VIDER LA CONSOLE
@@ -1440,7 +1440,7 @@ document.addEventListener('keydown', function(event) {
                 }, 10);
               } else {
                 console.log('⏭️  Skipping clear (loaded from URL)');
-                // Désactiver le flag après cette exécution
+                // Clear the flag after this run
                 setTimeout(() => {
                   loadedFromURL = false;
                   console.log('✅ URL query executed, clearing now enabled');
@@ -1455,7 +1455,7 @@ document.addEventListener('keydown', function(event) {
         }
       });
 
-      // Aussi mettre à jour l'URL pendant la frappe (debounce)
+      // Also update the URL while typing (debounced)
       let inputTimeout;
       input.addEventListener('input', function() {
         clearTimeout(inputTimeout);
@@ -1467,14 +1467,14 @@ document.addEventListener('keydown', function(event) {
             window.location.hash = '#' + compressed;
             console.log('🔗 URL updated on Input (debounce):', window.location.hash);
           }
-        }, 800); // ⬅️ DÉLAI DE 800ms pour éviter la troncature
+        }, 800); // <- 800ms delay, to avoid truncation
       });
 
       console.log('✅ Clear listener attached to input');
     });
   }
 
-  // Observer pour ré-attacher quand de nouveaux inputs apparaissent
+  // Observer that re-attaches when new inputs appear
   const observer = new MutationObserver(() => {
     attachClearListener();
   });
@@ -1484,17 +1484,17 @@ document.addEventListener('keydown', function(event) {
     observer.observe(consoleDiv, { childList: true, subtree: true });
   }
 
-  // Attacher régulièrement
+  // Attach on a regular tick
   setInterval(attachClearListener, 2000);
 
-  // Première tentative
+  // First attempt
   setTimeout(attachClearListener, 1000);
 
   console.log('🚀 Console clearing system initialized with URL protection');
   })();
 </script>
 <script>
- // CORRESPONDANCE PARENTHÈSES POUR LA CONSOLE
+ // PARENTHESIS MATCHING FOR THE CONSOLE
  function checkParenthesesBalance(input) {
      const value = input.value;
      const openParens = (value.match(/\(/g) || []).length;
@@ -1503,7 +1503,7 @@ document.addEventListener('keydown', function(event) {
      // Retirer les anciennes classes
      input.classList.remove('parens-unbalanced', 'parens-highlight');
 
-     // Ajouter la classe appropriée
+     // Add the appropriate class
      if (openParens !== closeParens) {
          input.classList.add('parens-unbalanced');
      }
@@ -1519,10 +1519,10 @@ document.addEventListener('keydown', function(event) {
          if (input.hasAttribute('data-parenthesis-enhanced')) return;
          input.setAttribute('data-parenthesis-enhanced', 'true');
 
-         // Vérifier immédiatement
+         // Check right away
          checkParenthesesBalance(input);
 
-         // Vérifier à chaque frappe
+         // Check on every keystroke
          input.addEventListener('input', function() {
              checkParenthesesBalance(this);
          });
@@ -1537,9 +1537,9 @@ document.addEventListener('keydown', function(event) {
 <script>
  // ===== CHARGEMENT AUTOMATIQUE DE scratch.pl =====
  window.addEventListener('load', function() {
-     console.log('🔍 Recherche de scratch.pl pour chargement par défaut...');
+     console.log('🔍 Looking for scratch.pl to load by default...');
 
-     // Attendre que le select soit peuplé
+     // Wait for the select to be populated
      setTimeout(() => {
          const fileSelect = document.querySelector('select[name="select-file"]');
 
@@ -1548,22 +1548,22 @@ document.addEventListener('keydown', function(event) {
              return;
          }
 
-         // Chercher scratch.pl dans les options
+         // Look for scratch.pl among the options
          let scratchFound = false;
          for (let i = 0; i < fileSelect.options.length; i++) {
              const optionText = fileSelect.options[i].text || fileSelect.options[i].value;
              if (optionText.includes('scratch.pl')) {
                  fileSelect.selectedIndex = i;
-                 // Déclencher l'événement change pour charger le fichier
+                 // Fire the change event to load the file
                  fileSelect.dispatchEvent(new Event('change', { bubbles: true }));
-                 console.log('✅ scratch.pl chargé par défaut');
+                 console.log('✅ scratch.pl loaded by default');
                  scratchFound = true;
                  break;
              }
          }
 
          if (!scratchFound) {
-             console.log('ℹ️  scratch.pl non trouvé dans la liste des fichiers');
+             console.log('ℹ️  scratch.pl not found in the file list');
          }
      }, 1500); // Attendre 1.5 secondes que Tinker initialise les fichiers
  });
@@ -1585,13 +1585,13 @@ function initTPTPHandler() {
 
   if (!btn || !uploadBtn || !fileInput) return;
 
-  // Clic sur le bouton upload déclenche le file input
+  // Clicking the upload button triggers the file input
   uploadBtn.addEventListener('click', function(e) {
     e.preventDefault();
     fileInput.click();
   });
 
-  // Quand un fichier est sélectionné, montrer le bouton Prove
+  // Once a file is selected, show the Prove button
   fileInput.addEventListener('change', function() {
     if (fileInput.files.length > 0) {
       btn.style.display = 'inline';
@@ -1640,10 +1640,10 @@ function initTPTPHandler() {
       const tempFilename = '/tmp/problem.p';
       window.Module.FS.writeFile(tempFilename, content);
 
-      // Afficher un message dans la console
+      // Print a message in the console
       window.tinker.console.print(`\n📄 Processing TPTP file: ${filename}`, 'query');
 
-      // Exécuter la preuve - l'output ira directement dans la console
+      // Run the proof -- the output goes straight to the console
       window.Prolog.call(`prove_tptp_file('${tempFilename}')`);
 
     } catch (error) {
@@ -1745,7 +1745,7 @@ function initTPTPHandler() {
 <!-- G4-mic Share Module -->
 <script src="g4mic-share.js"></script>
 <script>
-  // Initialiser le module de partage après le chargement complet
+  // Initialise the share module once everything has loaded
   window.addEventListener('load', () => {
     setTimeout(() => {
       if (window.G4micShare) {
@@ -1754,7 +1754,7 @@ function initTPTPHandler() {
       } else {
         console.warn('⚠️  G4-mic Share module not found');
       }
-    }, 3000); // Attendre que Tinker soit prêt
+    }, 3000); // Wait for Tinker to be ready
   });
 </script>
 

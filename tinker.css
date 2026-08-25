@@ -1,10 +1,10 @@
  /* =============================================================================
-   THÈME LEUVEN BLANC - Adapté from juba/color-theme-tangotango
+   LEUVEN LIGHT THEME -- adapted from juba/color-theme-tangotango
    ============================================================================= */
 
 :root {
     --margin: 10px;
-    /* Couleurs Leuven version blanche - contraste amélioré */
+    /* Leuven colours, light version -- improved contrast */
     --leuven-bg: #ffffff;
     --leuven-bg-alt: #f0f0f0;
     --leuven-fg: #000000;
@@ -144,7 +144,7 @@ div.tinker-source {
     color: var(--leuven-fg) !important;
 }
 
-/* CORRESPONDANCE PARENTHÈSES ÉDITEUR */
+/* EDITOR PARENTHESIS MATCHING */
 .CodeMirror-matchingbracket {
     background: #ffff00 !important;
     color: #000000 !important;
@@ -215,19 +215,19 @@ button.tinker-query-run {
 .tinker-query.run:not(.key) .tinker-abort    { display: block }
 .tinker-query.key           .tinker-keyboard { display: block }
 
-/* ZONE DE SAISIE AVEC CORRESPONDANCE PARENTHÈSES */
+/* INPUT AREA WITH PARENTHESIS MATCHING */
 .tinker-input input { 
     flex-grow: 1; 
     margin-left: 10px;
     background: var(--leuven-bg) !important;
     color: var(--leuven-fg) !important;
-    border: 2px solid var(--leuven-green) !important; /* Vert par défaut */
+    border: 2px solid var(--leuven-green) !important; /* Green by default */
     padding: 6px 10px !important;
     border-radius: 4px !important;
     transition: all 0.3s ease !important;
 }
 
-/* États des parenthèses dans la zone de saisie */
+/* Parenthesis states in the input area */
 .tinker-input input.parens-unbalanced {
     border-color: var(--leuven-red) !important;
     background: #fff5f5 !important;
@@ -250,7 +250,7 @@ button.tinker-query-run {
 
 .tinker-console-output div {
     white-space: pre-wrap;     /* Respecte les sauts de ligne */
-    font-family: monospace;    /* Police à chasse fixe */
+    font-family: monospace;    /* Fixed-width font */
     line-height: 1.4;          /* Espacement vertical */
 }
 
@@ -307,7 +307,7 @@ span.exch-files {
 span.exch-files input.upload-file { display: none; }
 span.exch-files.upload-armed input.upload-file { display: inline; }
 
-/* BOUTONS COPY-LATEX - Gris métallique */
+/* COPY-LATEX BUTTONS -- metallic grey */
 .latex-copy-btn {
     display: inline-block;
     margin-left: 10px;
@@ -338,7 +338,7 @@ span.exch-files.upload-armed input.upload-file { display: inline; }
 .CodeMirror-trace-redo      { background-color: var(--leuven-yellow) !important; }
 .CodeMirror-trace-exception { background-color: var(--leuven-purple) !important; }
 
-/* FORÇAGE OUTPUT G4-MIC */
+/* FORCED G4-MIC OUTPUT STYLING */
 .answer, .console-output, [class*="output"], [class*="answer"] {
     font-size: 16px !important;
     line-height: 1.7 !important;
@@ -346,12 +346,12 @@ span.exch-files.upload-armed input.upload-file { display: inline; }
     color: var(--leuven-fg) !important;
 }
 
-/* Cible large pour attraper tout l'output */
+/* Broad selector, to catch the whole output */
 div, pre, span {
     font-size: 16px !important;
 }
 
-/* FORÇAGE INPUT - CodeMirror */
+/* FORCED INPUT STYLING -- CodeMirror */
 .CodeMirror, .cm-editor, .cm-content, .cm-line {
     font-size: 16px !important;
     font-family: 'Monaco', 'Menlo', monospace !important;
@@ -359,7 +359,7 @@ div, pre, span {
     color: var(--leuven-fg) !important;
 }
 
-/* Cibler spécifiquement la zone d'édition */
+/* Target the editing area specifically */
 #left .CodeMirror, #left .cm-editor {
     font-size: 16px !important;
 }
@@ -377,7 +377,7 @@ div, pre, span {
 
 .tinker-console-output div {
     white-space: pre-wrap;     /* Respecte les sauts de ligne */
-    font-family: monospace;    /* Police à chasse fixe */
+    font-family: monospace;    /* Fixed-width font */
     line-height: 1.4;          /* Espacement vertical */
 }
 
@@ -393,7 +393,7 @@ img[alt="Preuve Fitch"] {
 }
 
 /* =============================================================================
-   SCROLLBARS - Meilleure visibilité
+   SCROLLBARS -- better visibility
    ============================================================================= */
 /* Pour Firefox */
 * {

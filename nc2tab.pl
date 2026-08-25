@@ -31,13 +31,13 @@ prove(F):-  time(run(F, tree)).
 
 run(F, Mode) :-
     reset_state,
-    % Détecte l'égalité dans la formule TPTP AVANT traduction
+    % Detect equality in the TPTP formula BEFORE translation
     ( nanocop_contains_equality(F) ->
         tptp_to_internal(F, I),
-        leancop_equal(I, I2)        % ajoute les axiomes d'égalité
+        leancop_equal(I, I2)        % add the equality axioms
     ;
         tptp_to_internal(F, I),
-        I2 = I                      % pas d'égalité, on garde I
+        I2 = I                      % no equality: keep I unchanged
     ),
     ( prove2(I2, [cut, comp(7)], Proof) ->
         resolve_free_vars(Proof),
@@ -45,10 +45,10 @@ run(F, Mode) :-
         build_skolem_map(Idx, 1, SkMap),
         format("~n===  Proof search for : ~w ===~n~n", [F]),
         ( Mode == tree ->
-            show_matrix(I2),         % utilise la formule enrichie
+            show_matrix(I2),         % uses the enriched formula
             show_connections(Proof, SkMap),
             format("~n=== Tableau ===~n~n"),
-            run_tree(F, SkMap),      % run_tree utilise la formule TPTP originale
+            run_tree(F, SkMap),      % run_tree uses the original TPTP formula
             nl
         ;
             format("(1)  ~w    [negated goal]~n", [~F]),
@@ -249,55 +249,55 @@ nanocop_contains_equality(Term) :-
 %% ============================================================
 
 %% ============================================================
-%% TABLEAU DE BETH — MOTEUR À DEUX NIVEAUX
+%% BETH TABLEAU -- TWO-LEVEL ENGINE
 %%
-%% Niveau 1 : règles du tableau de Beth (α, β, γ avec duplication,
-%%            δ, double négation, clôture par réduction).
-%%            Aucune « extension matricielle » n'est jamais une règle.
+%% Level 1: the Beth tableau rules proper (alpha, beta, gamma with
+%%          duplication, delta, double negation, closure by reduction).
+%%          A "matrix extension" is never one of the rules.
 %%
-%% Niveau 2 : la matrice nanoCoP, via le Proof, sert de base de données
-%%            qui ORIENTE le moteur :
-%%              - combien de fois instancier une γ-formule,
-%%              - avec quels témoins unifier les free variables,
-%%              - quelles branches ferment contre quelles lignes.
-%%            La matrice ne remplace jamais une règle d'inférence ;
-%%            elle guide leur application.
+%% Level 2: the nanoCoP matrix, read through Proof, acts as a database
+%%          that STEERS the engine:
+%%            - how many times to instantiate a gamma formula,
+%%            - which witnesses to unify the free variables with,
+%%            - which branches close against which lines.
+%%          The matrix never replaces an inference rule; it only guides
+%%          where the rules are applied.
 %% ============================================================
 
 run_tree(F, SkMap) :-
-    %% Pré-calcul : analyser Proof pour produire une « carte de preuve »
-    %% (nombre d'instances de chaque γ, témoins de fermeture, etc.).
-    %% Pour l'instant, la carte est simpliste ; on l'enrichira.
+    %% Pre-pass: read Proof into a "proof map" (how many instances of
+    %% each gamma, the witnesses used to close, and so on). The map is
+    %% rudimentary for now.
     retractall(gamma_budget(_, _)),
     retractall(witness(_, _)),
     build_gamma_budget,
-    %% Construire l'arbre du tableau avec règles de Beth uniquement.
+    %% Build the tableau with Beth rules only.
     next_line(1, _),
     build_root(F, SkMap, Tree),
-    %% Rendu.
+    %% Render.
     pretty_tree(Tree).
 
-%% build_gamma_budget : scanne les lit/4 pour déterminer combien de
-%% copies fraîches de chaque « clause source » (identifiée par sa
-%% γ-formule d'origine) ont été utilisées dans Proof.
-%% Implémentation minimale : on laisse un budget large par défaut.
+%% build_gamma_budget: scan the lit/4 facts to work out how many fresh
+%% copies of each "source clause" -- identified by the gamma formula it
+%% came from -- Proof actually used.
+%% Minimal implementation: leave a generous budget by default.
 build_gamma_budget.
 
-%% Budget par défaut pour toute γ-formule : 3 instances maximum.
-%% Tu peux ajuster selon tes besoins pédagogiques.
+%% Default budget for any gamma formula: at most 3 instances.
+%% Adjust to taste when using this for teaching.
 default_gamma_budget(3).
 
 %% ============================================================
-%% CONSTRUCTION DE L'ARBRE
+%% TREE CONSTRUCTION
 %%
-%% Un nœud est :
+%% A node is:
 %%   node(Kind, Form, Line, Children)
 %%     Kind in {root, alpha, beta_left, beta_right, dneg, gamma, delta, lit}
 %%   closure(Line, Form, WithLine, WithForm, EqLine)
-%%     — seule la réduction ferme une branche.
+%%     -- only reduction closes a branch.
 %%
-%% Un champ de branche Bs = [Lit-Line | ...] contient les littéraux
-%% déjà émis sur la branche courante, avec leurs lignes.
+%% A branch field Bs = [Lit-Line | ...] holds the literals already
+%% emitted on the current branch, each with its line.
 %% ============================================================
 
 build_root(F, SkMap, node(root, ~F, 1, 0, [Child])) :-
@@ -306,8 +306,9 @@ build_root(F, SkMap, node(root, ~F, 1, 0, [Child])) :-
     build_process(Queue0, Bs0, SkMap, Child).
 
 %% build_process(+Queue, +Bs, +SkMap, -Tree)
-%% Traite la queue en priorité (α < δ < γ < β), ajoute les littéraux
-%% à Bs, et tente la clôture par réduction après chaque ajout.
+%% Work through the queue in priority order (alpha < delta < gamma <
+%% beta), add literals to Bs, and try to close by reduction after each
+%% addition.
 
 build_process([], _Bs, _SkMap, node(open, 'branch remains open', 0, [])).
 
@@ -315,7 +316,7 @@ build_process(Queue, Bs, SkMap, Tree) :-
     pick(Queue, qitem(F, OriginLine, State), Rest),
     build_step(F, OriginLine, State, Rest, Bs, SkMap, Tree).
 
-%% Priorité : alpha=1, double-négation=2, delta=2, gamma=3, beta=4, literal=5.
+%% Priority: alpha=1, double negation=2, delta=2, gamma=3, beta=4, literal=5.
 pick(Queue, Best, Rest) :-
     rank_queue(Queue, Ranked),
     keysort(Ranked, Sorted),
@@ -335,7 +336,7 @@ priority(F, 1) :- is_alpha(F), !.
 priority(F, 2) :- F = ~(~_), !.
 priority(F, 2) :- is_delta(F), !.
 priority(F, 3) :- is_gamma(F), !.
-priority(F, 4) :- is_lit(F), !.      % <-- littéraux avant β
+priority(F, 4) :- is_lit(F), !.      % <-- literals before beta
 priority(F, 5) :- is_beta(F), !.     % <-- β en dernier
 priority(_, 6).
 
@@ -343,23 +344,23 @@ priority(_, 6).
 %% ============================================================
 %% build_step(+F, +Origin, +State, +Queue, +Bs, +SkMap, -Tree)
 %%
-%% Origin : la ligne source à citer pour le rendu [Origin].
-%% State  : 'fresh' (alloue une nouvelle ligne pour F) ou 'done'
-%%          (F est déjà à sa ligne, ne pas réallouer — cas du but
-%%          initial).
-%% Règle générale :
-%%   1. Allouer la ligne N = Origin (si done) ou next_line (si fresh).
-%%   2. Ajouter F-N à Bs.
-%%   3. Tenter la clôture par réduction.
-%%   4. Si la formule est décomposable : mettre ses parts en queue (fresh)
-%%      avec Origin=N.
+%% Origin: the source line to cite when rendering, as [Origin].
+%% State : 'fresh' (allocate a new line for F) or 'done' (F already sits
+%%         on its line, do not reallocate -- the case of the initial
+%%         goal).
+%% General rule:
+%%   1. Allocate line N = Origin (if done) or next_line (if fresh).
+%%   2. Add F-N to Bs.
+%%   3. Try to close by reduction.
+%%   4. If the formula decomposes, queue its parts (fresh) with
+%%      Origin=N.
 %% ============================================================
 
-%% Obtenir la ligne à utiliser pour F, selon State.
+%% The line to use for F, according to State.
 resolve_line(done, Origin, Origin) :- !.
 resolve_line(fresh, _, N) :- next_line(N, _).
 
-%% --- LITTÉRAL
+%% --- LITERAL
 build_step(F, Origin, State, Queue, Bs, SkMap, Tree) :-
     is_lit(F), !,
     resolve_line(State, Origin, N),
@@ -371,7 +372,7 @@ build_step(F, Origin, State, Queue, Bs, SkMap, Tree) :-
         Tree = node(lit, F, N, Origin, [Sub])
     ).
 
-%% --- DOUBLE NÉGATION : ~(~A) ==> A.
+%% --- DOUBLE NEGATION: ~(~A) ==> A.
 build_step(F, Origin, State, Queue, Bs, SkMap, node(dneg, F, N, Origin, [Sub])) :-
     F = ~(~A), !,
     resolve_line(State, Origin, N),
@@ -381,8 +382,9 @@ build_step(F, Origin, State, Queue, Bs, SkMap, node(dneg, F, N, Origin, [Sub])) 
     build_process(Queue1, Bs1, SkMap, Sub),
     ignore(BsNew = _).
 
-%% --- ALPHA : émettre F à sa ligne (si fresh), puis queue A et B.
-%%     On insère B puis A pour que A soit traité en premier (ordre naturel d'affichage).
+%% --- ALPHA: emit F on its line (if fresh), then queue A and B.
+%%     B is inserted before A so that A is processed first, which is the
+%%     natural display order.
 build_step(F, Origin, State, Queue, Bs, SkMap, node(alpha, F, N, Origin, [Sub])) :-
     is_alpha(F), !,
     resolve_line(State, Origin, N),
@@ -391,7 +393,7 @@ build_step(F, Origin, State, Queue, Bs, SkMap, node(alpha, F, N, Origin, [Sub]))
     ( State == done -> Bs1 = Bs ; Bs1 = [F-N | Bs] ),
     build_process(Queue1, Bs1, SkMap, Sub).
 
-%% --- DELTA : Skolémiser.
+%% --- DELTA: skolemise.
 build_step(F, Origin, State, Queue, Bs, SkMap, node(delta, F, N, Origin, [Sub])) :-
     is_delta(F), !,
     resolve_line(State, Origin, N),
@@ -400,22 +402,22 @@ build_step(F, Origin, State, Queue, Bs, SkMap, node(delta, F, N, Origin, [Sub]))
     ( State == done -> Bs1 = Bs ; Bs1 = [F-N | Bs] ),
     build_process(Queue1, Bs1, SkMap, Sub).
 
-%% --- GAMMA : instanciation avec free variable + ré-emprunt éventuel.
+%% --- GAMMA: instantiate with a free variable, possibly re-borrowing.
 build_step(F, Origin, State, Queue, Bs, SkMap, node(gamma, F, N, Origin, [Sub])) :-
     is_gamma(F), !,
     resolve_line(State, Origin, N),
     gamma_step(F, A),
     assertz(gamma_source(N, F)),
     tag_fvs_with_line(A, N),
-    %% Par défaut, une seule instanciation. Pas de ré-emprunt automatique
-    %% pour éviter l'explosion combinatoire.
+    %% One instantiation by default. No automatic re-borrowing, to keep
+    %% the search from blowing up combinatorially.
     Queue1 = [qitem(A, N, fresh) | Queue],
     ( State == done -> Bs1 = Bs ; Bs1 = [F-N | Bs] ),
     build_process(Queue1, Bs1, SkMap, Sub).
 
 
 %% ============================================================
-%% BETA avec listes et ordre naturel
+%% BETA, with lists and natural order
 %% ============================================================
 
 build_step(F, Origin, State, Queue, Bs, SkMap,
@@ -450,16 +452,16 @@ queue_add_list(Items, Line, State, Q, Qout) :-
     append(Q, QItems, Qout).
 
 %% ============================================================
-%% CLÔTURE PAR RÉDUCTION (et absurdité)
+%% CLOSURE BY REDUCTION (and absurdity)
 %% ============================================================
 
-%% is_false/1 : reconnaît les formes de l'absurdité.
+%% is_false/1: recognises the shapes absurdity can take.
 is_false(F) :- F == $false.
 is_false(F) :- F == false___.
 
-%% try_reduction/3 : essaie de fermer la branche. Retourne
+%% try_reduction/3: try to close the branch. Returns
 %%   red(Complement, LigneComplement, LigneEgalite)
-%%   LigneEgalite = 0 si aucune égalité n'a été utilisée.
+%%   EqualityLine = 0 when no equality was used.
 
 try_reduction(F, Bs, red(P, N, 0)) :-
     direct_reduction(F, Bs, P, N).
@@ -471,7 +473,7 @@ try_reduction(Lit, Bs, red(P, N, EqLine)) :-
     NewLit \== Lit,
     direct_reduction(NewLit, Bs, P, N).
 
-%% direct_reduction/4 : fermeture immédiate (absurdité, égalité, littéraux).
+%% direct_reduction/4: immediate closure (absurdity, equality, literals).
 direct_reduction(F, _Bs, '$false', 0) :-
     is_false(F), !.
 direct_reduction((A = B), Bs, P, N) :-
@@ -493,7 +495,7 @@ direct_reduction(F, Bs, P, N) :-
     lit_atom(P, A2),
     unify_with_occurs_check(A1, A2).
 
-%% paramodulate/4 : réécriture interne.
+%% paramodulate/4: internal rewriting.
 paramodulate_list([], _, _, []).
 paramodulate_list([A|As], Old, New, [B|Bs]) :-
     (   unify_with_occurs_check(A, Old) -> B = New
@@ -515,7 +517,7 @@ paramodulate(Term, _, _, Term) :-
 %% BUDGET DE GAMMA-DUPLICATION
 %% ============================================================
 
-%% gamma_remaining(+GammaForm, -N) : combien d'instances encore autorisées.
+%% gamma_remaining(+GammaForm, -N): how many instances are still allowed.
 gamma_remaining(F, N) :-
     ( gamma_budget_of(F, N) -> true
     ; default_gamma_budget(D), N = D,
@@ -537,7 +539,7 @@ decrement_gamma(_).
 :- dynamic witness/2.
 
 %% ============================================================
-%% CLASSIFIERS ET DÉCOMPOSITION
+%% CLASSIFIERS AND DECOMPOSITION
 %% ============================================================
 
 is_alpha(~(_ => _)) :- !.
@@ -595,8 +597,8 @@ delta_step(?[X]:F, Fi, SkMap, Bs) :-
     Sk = Nm^Deps,
     substitute(F, X, Sk, Fi).
 
-%% Collecter les free variables présentes dans les formules de la
-%% branche — ce sont les dépendances du Skolem frais.
+%% Collect the free variables occurring in the branch's formulas --
+%% these are the dependencies of the fresh Skolem term.
 collect_fvs_in_branch(Bs, Deps) :-
     findall(V,
             ( member(Form-_, Bs),
@@ -609,10 +611,10 @@ collect_fvs_in_branch(Bs, Deps) :-
     sort(RawVs, Deps).
 
 %% ============================================================
-%% UTILITAIRES DE POLARITÉ
+%% POLARITY UTILITIES
 %% ============================================================
 
-opp_polarity($false, ~ $false) :- !.      % pour cohérence
+opp_polarity($false, ~ $false) :- !.      % for consistency
 opp_polarity(~ $false, $false) :- !.
 opp_polarity(~A, B) :- \+ is_neg(A), \+ is_neg(B), !.
 opp_polarity(A, ~B) :- \+ is_neg(A), \+ is_neg(B), !.
@@ -641,12 +643,12 @@ is_negative_lit(-_).
 
 %% ============================================================
 %% PRETTY PRINTER
-%% Helper : émet la ligne "(N)  F  [Origin]" sauf si N == Origin
-%% (cas 'done' — la ligne a été émise par le parent).
+%% Helper: emit the line "(N)  F  [Origin]" unless N == Origin
+%% (the 'done' case -- the parent already emitted that line).
 %% ============================================================
 
 emit_line(N, _F, Origin, _) :-
-    N == Origin, !.  %% ligne déjà émise (cas done)
+    N == Origin, !.  %% line already emitted (the 'done' case)
 emit_line(N, F, Origin, _) :-
     pretty(F, P),
     ( Origin > 0 -> format("(~w)  ~w    [~w]~n", [N, P, Origin])
@@ -766,7 +768,7 @@ next_delta(SkMap, Name) :-
 
 next_line(N, N) :- retract(line_ctr(C)), N = C, C1 is C+1, assertz(line_ctr(C1)).
 
-is_lit(A) :- is_false(A), !.        % $false et false___ sont des littéraux
+is_lit(A) :- is_false(A), !.        % $false and false___ count as literals
 is_lit(~A) :- !, is_atom_sf(A).
 is_lit(A) :- is_atom_sf(A).
 is_atom_sf(A) :- atom(A), !, A \== true, A \== false.

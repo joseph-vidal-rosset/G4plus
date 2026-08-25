@@ -1,4 +1,4 @@
-%% File: minimal_driver_equal.pl  -  Version: 7.3 FINAL (time seulement dans proves)
+%% File: minimal_driver_equal.pl  -  Version: 7.3 FINAL (time only inside proves)
 
 :-style_check(-singleton).
 
@@ -6,7 +6,7 @@
 :-[nanocop_proof].
 :-[nanocop_tptp2].
 
-% Activer le format d'explication complète d'Otten
+% Enable Otten's full explanation format
 :-retractall(proof(_)).
 :-assert(proof(readable)).
 
@@ -20,10 +20,10 @@ nanocop_proves(Formula) :-
     % Forcer l'affichage
     retractall(g4mic_silent_mode),
 
-    % Limite d'inférences avec LOGIQUE CORRECTE
+    % Inference limit, with the CORRECT logic
     call_with_inference_limit(
         (
-            % Détecter l'égalité AVANT traduction
+            % Detect equality BEFORE translation
             (nanocop_contains_equality(Formula) ->
                 HasEquality = true
             ;
@@ -32,14 +32,14 @@ nanocop_proves(Formula) :-
 
             translate_formula(Formula, InternalFormula),
 
-            % N'appeler leancop_equal QUE si égalité présente
+            % Call leancop_equal ONLY when equality is present
             (HasEquality = true ->
                 leancop_equal(InternalFormula, FormulaToProve)
             ;
                 FormulaToProve = InternalFormula
             ),
 
-            % IMPORTANT : PAS DE NÉGATION - prove2 gère la réfutation en interne
+            % IMPORTANT: NO NEGATION -- prove2 handles the refutation internally
             ( time(prove2(FormulaToProve, [cut,comp(7)], Proof)) ->
               Result='Theorem'
             ;
@@ -47,13 +47,13 @@ nanocop_proves(Formula) :-
             ),
             bmatrix(FormulaToProve, [cut,comp(7)], Matrix),
             output_result(Formula, Matrix, Proof, Result),
-            % VÉRIFIER le résultat
+            % Check the result
             Result='Theorem'
         ),
         2000000,
         InfResult
     ),
-    % VÉRIFIER SI LIMITE ATTEINTE
+    % CHECK WHETHER THE LIMIT WAS REACHED
     ( InfResult == inference_limit_exceeded ->
         nl,
         write('❌ INFERENCE LIMIT EXCEEDED (2,000,000 inferences)'), nl,
@@ -71,7 +71,7 @@ nanocop_proves(Formula) :-
 nanocop_decides(Formula) :-
     assertz(g4mic_silent_mode),
 
-    % Détecter l'égalité AVANT traduction
+    % Detect equality BEFORE translation
     (nanocop_contains_equality(Formula) ->
         HasEquality = true
     ;
@@ -80,19 +80,19 @@ nanocop_decides(Formula) :-
 
     translate_formula(Formula, InternalFormula),
 
-    % N'appeler leancop_equal QUE si égalité présente
+    % Call leancop_equal ONLY when equality is present
     (HasEquality = true ->
         leancop_equal(InternalFormula, FormulaToProve)
     ;
         FormulaToProve = InternalFormula
     ),
 
-    % IMPORTANT : PAS DE NÉGATION - prove2 gère la réfutation en interne
+    % IMPORTANT: NO NEGATION -- prove2 handles the refutation internally
     prove2(FormulaToProve, [cut,comp(7)], _Proof),
     retractall(g4mic_silent_mode), !.
 
 % =========================================================================
-% EQUALITY DETECTION (copié de minimal_driver.pl)
+% EQUALITY DETECTION (copied from minimal_driver.pl)
 % =========================================================================
 
 nanocop_contains_equality((_ = _)) :- !.
