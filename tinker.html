@@ -29,15 +29,18 @@
     }
   };
   </script>
-  <!-- MathJax, LOCAL variant. This file is the one deployed to
-     g4mic.vidal-rosset.net, where MathJax lives in /var/www/html/mathjax.
-     The CDN copy is 283 KB, 78% of every third-party byte this page
-     pulls, and the bussproofs extension and the web fonts are further
-     requests to the same host. MathJax resolves [mathjax] relative to
-     this script, so those follow it here automatically.
-     tinker-cdn.html is the same page with the CDN kept; the two differ
-     only in the one script tag below. -->
-  <script defer src="/mathjax/tex-chtml.js"></script>
+  <!-- MathJax from the CDN, deliberately, for every deployment.
+     A local copy was tried: the server does serve /mathjax/tex-chtml.js
+     and /mathjax/input/tex/extensions/bussproofs.js, and it would save
+     283 KB gzipped -- 78% of this page's third-party bytes. It was
+     dropped anyway, because it needs a second, divergent copy of this
+     file for any machine without MathJax installed (a local Apache, for
+     one), and when the local path is missing the page fails in silence:
+     renderBussproofsWithMathJax() finds MathJax undefined and returns,
+     so Ctrl-M simply stops responding with nothing in the console.
+     One file that works everywhere beats 283 KB. Do not "optimise"
+     this back to a local path without also solving that. -->
+  <script defer src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-chtml.js"></script>
 
   <!-- LZ-String, for URL compression -->
   <script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"></script>
