@@ -29,15 +29,13 @@
     }
   };
   </script>
-  <!-- MathJax, LOCAL variant. This file is the one deployed to
-     g4mic.vidal-rosset.net, where MathJax lives in /var/www/html/mathjax.
-     The CDN copy is 283 KB, 78% of every third-party byte this page
-     pulls, and the bussproofs extension and the web fonts are further
-     requests to the same host. MathJax resolves [mathjax] relative to
-     this script, so those follow it here automatically.
-     tinker-cdn.html is the same page with the CDN kept; the two differ
-     only in the one script tag below. -->
-  <script defer src="/mathjax/tex-chtml.js"></script>
+  <!-- MathJax, CDN variant. This file is for a local Apache that has no
+     MathJax installed; it loads the 283 KB copy from jsdelivr, along
+     with the bussproofs extension and the web fonts.
+     tinker.html is the deployed page, which serves MathJax from
+     /mathjax/ instead; the two differ only in the one script tag
+     below. -->
+  <script defer src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-chtml.js"></script>
 
   <!-- LZ-String, for URL compression -->
   <script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"></script>
