@@ -92,8 +92,18 @@ G4+ supports the TPTP language including:
 Include file resolution (per TPTP specification):
    - Relative paths are searched:
      a) In the directory of the current file
-     b) In the directory specified by $TPTP environment variable
+     b) In the TPTP library root
    - Absolute paths are used as-is
+
+   The TPTP library root is, in order:
+     a) a directory set for the session with set_tptp_root/1, e.g.
+          ?- set_tptp_root('/path/to/TPTP').
+        put this in ~/.config/swi-prolog/init.pl to make it permanent
+     b) the $TPTP environment variable
+
+   No default path is compiled into G4+. If an include cannot be
+   resolved, G4+ reports every directory it tried, so a missing axiom
+   file is never mistaken for an unprovable problem.
 
 Example TPTP problem:
    %------------------------------------------------------------

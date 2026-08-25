@@ -49,7 +49,6 @@
 :- use_module(library(terms)).
 
 :-style_check(-singleton).
-:- (getenv('TPTP', _) -> true ; setenv('TPTP', '/home/joseph/src/TPTP-v9.2.1')).
 
 :-[i_operators].
 :-[nanocop20_swi_for_g4plus].
@@ -5384,6 +5383,70 @@ prove_tptp_file_safe(Filename) :-
         ( process_tptp_formulas(Formulas) -> true ; true )
     ).
 
+% =========================================================================
+% TPTP LIBRARY ROOT
+% =========================================================================
+% Where an include('Axioms/...') directive is resolved from when the file
+% is not sitting next to the problem itself.
+%
+% Search order, first hit wins:
+%   1. a root set for this session with set_tptp_root/1;
+%   2. the TPTP environment variable -- the TPTP library's own convention,
+%      and what SystemOnTPTP sets.
+%
+% No default is compiled in, deliberately. A path baked into the source
+% is correct on exactly one machine and silently wrong everywhere else,
+% which is worse than having none: the include then resolves to nothing
+% and the problem comes back unprovable several steps later, with no
+% indication that an axiom file went missing. Hence resolve_tptp_include/3
+% reports every directory it tried rather than failing quietly.
+
+:- dynamic tptp_root_setting/1.
+
+%!  set_tptp_root(+Dir) is det.
+%
+%   Point G4+ at a local TPTP distribution for this session, overriding
+%   the TPTP environment variable. Dir is the directory that contains
+%   Axioms/ and Problems/. Put it in ~/.config/swi-prolog/init.pl to make
+%   it permanent, rather than editing this file.
+set_tptp_root(Dir) :-
+    (   exists_directory(Dir)
+    ->  retractall(tptp_root_setting(_)),
+        assertz(tptp_root_setting(Dir))
+    ;   throw(error(existence_error(directory, Dir), set_tptp_root/1))
+    ).
+
+%!  tptp_root(-Dir) is semidet.
+tptp_root(Dir) :-
+    tptp_root_setting(Dir), !.
+tptp_root(Dir) :-
+    getenv('TPTP', Dir).
+
+%!  resolve_tptp_include(+RelPath, +ProblemDir, -AbsPath) is semidet.
+%
+%   Locate the file named by a TPTP include/1 directive. Fails, after
+%   saying where it looked, when no candidate exists.
+resolve_tptp_include(RelPath, ProblemDir, AbsPath) :-
+    tptp_include_candidate(RelPath, ProblemDir, AbsPath),
+    exists_file(AbsPath), !.
+resolve_tptp_include(RelPath, ProblemDir, _) :-
+    format('% WARNING: include file not found: ~w~n', [RelPath]),
+    forall(tptp_include_candidate(RelPath, ProblemDir, Tried),
+           format('%          tried: ~w~n', [Tried])),
+    (   tptp_root(_)
+    ->  true
+    ;   format('%          no TPTP root is set: export TPTP=/path/to/TPTP,~n', []),
+        format('%          or call set_tptp_root(\'/path/to/TPTP\').~n', [])
+    ),
+    fail.
+
+%!  tptp_include_candidate(+RelPath, +ProblemDir, -Path) is nondet.
+tptp_include_candidate(RelPath, ProblemDir, Path) :-
+    directory_file_path(ProblemDir, RelPath, Path).
+tptp_include_candidate(RelPath, _ProblemDir, Path) :-
+    tptp_root(Root),
+    directory_file_path(Root, RelPath, Path).
+
 % read_tptp_formulas_limited/5
 % Like read_tptp_formulas/3 but stops after Max formulae.
 % Truncated = true if limit was hit.
@@ -5406,17 +5469,9 @@ read_tptp_formulas_acc(Stream, FileDir, Formulas, Max, Count, Truncated) :-
             read_tptp_formulas_acc(Stream, FileDir, Rest, Max, Count1, Truncated)
         )
     ;   Term = include(RelPath) ->
-        ( atom_concat(FileDir, '/', Prefix),
-          atom_concat(Prefix, RelPath, AbsPath1),
-          exists_file(AbsPath1)
-        -> IncludePath = AbsPath1
-        ; getenv('TPTP', TTPTBase),
-          atom_concat(TTPTBase, '/', TPrefix),
-          atom_concat(TPrefix, RelPath, AbsPath2),
-          exists_file(AbsPath2)
-        -> IncludePath = AbsPath2
-        ;  format('% WARNING: Include file not found: ~w~n', [RelPath]),
-           IncludePath = ''
+        ( resolve_tptp_include(RelPath, FileDir, Resolved)
+        -> IncludePath = Resolved
+        ;  IncludePath = ''
         ),
         ( IncludePath \= '' ->
           file_directory_name(IncludePath, IncludeDir),

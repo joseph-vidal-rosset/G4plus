@@ -265,6 +265,35 @@ because `Fl` is scanned by each rule that fires. It touches every rule
 and its ND clause, and it does **not** preserve byte-for-byte output, so
 it needs a fresh reference log inspected by hand. Not urgent.
 
+## Deployment
+
+What ships is the **source**, never a QLF. A QLF is tied to the
+SWI-Prolog version that produced it, and on a machine you do not control
+— SystemOnTPTP, a user's laptop — that version is not yours and may
+change under you. Shipping both source and QLF does not help either:
+SWI arbitrates by mtime, and the mtimes of an extracted archive are not
+trustworthy. Keep QLF as a local batch-testing convenience only, built
+by whatever script needs it, and out of the repository.
+
+The measured startup saving is 0.118 s → 0.034 s, which matters when
+running thousands of problems back to back and is noise against a
+per-problem CPU limit of 60–300 s.
+
+The deliverable is the single-file packaging: `g4mic_nanocop.pl` plus
+`i_operators.pl`, `nanocop20_swi_for_g4plus.pl`, `nanocop_proof.pl` and
+`nanocop_tptp2.pl` — five files, one entry point. The modular packaging
+is for working on the code, not for shipping, and since the two are
+clause-for-clause identical nothing is lost by choosing the former.
+
+**No path may be compiled into the source.** The TPTP library root comes
+from `set_tptp_root/1` or `$TPTP`, in that order, with no baked-in
+default — see the TPTP LIBRARY ROOT section in the source for why a
+default is worse than none. Before releasing, check:
+
+```sh
+grep -rn "/home/" --include=*.pl .    # must be empty
+```
+
 ## Working practice
 
 - Work on a dedicated branch. Run the TPTP suite before deploying.

@@ -14,7 +14,6 @@
 
 :-style_check(-singleton).
 
-:- (getenv('TPTP', _) -> true ; setenv('TPTP', '/home/joseph/src/TPTP-v9.2.1')).
 
 :-[nanocop20_swi_for_g4plus].
 :-[nanocop_proof].
