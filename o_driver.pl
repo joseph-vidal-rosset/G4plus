@@ -1101,8 +1101,8 @@ provable_at_level(Sequent, constructive, P) :-
     Sequent = (Gamma > Delta),
     gamma_from_list(Gamma, At,Cj,Dj,I0,IA,IO,IT,Qt),
     init_eigenvars,  % Initialize before each attempt
-    ( g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, [], Threshold, 1, _, minimal, P) -> true    % <- Essayer minimal d'abord
-    ; init_eigenvars, g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, [], Threshold, 1, _, intuitionistic, P)     % <- Then intuitionistic if failure
+    ( g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Gamma,Delta, [], Threshold, 1, _, minimal, P) -> true    % <- Try minimal first
+    ; init_eigenvars, g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Gamma,Delta, [], Threshold, 1, _, intuitionistic, P)     % <- Then intuitionistic if failure
     ),
     !.
 
@@ -1113,7 +1113,7 @@ provable_at_level(Sequent, LogicLevel, Proof) :-
     Sequent = (Gamma > Delta),
     gamma_from_list(Gamma, At,Cj,Dj,I0,IA,IO,IT,Qt),
     init_eigenvars,
-    g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, [], Threshold, 1, _, LogicLevel, Proof),
+    g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Gamma,Delta, [], Threshold, 1, _, LogicLevel, Proof),
     !.
 
 % =========================================================================
@@ -1125,7 +1125,7 @@ provable_at_level(Sequent, classical, Proof) :-
     logic_iteration_limit(classical, MaxIter),
     for(Threshold, 0, MaxIter),
     init_eigenvars,
-    g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Delta, [], Threshold, 1, _, classical, Proof),
+    g4mic_proves(At,Cj,Dj,I0,IA,IO,IT,Qt,Gamma,Delta, [], Threshold, 1, _, classical, Proof),
     !.
 
 % =========================================================================
@@ -1171,12 +1171,10 @@ g4mic_decides(Formula) :-
     (   F2 = ((A => #) => #), A \= (_ => #)  ->
         % Double negation detected - try constructive first
         write('- Double negation detected -> Trying constructive logic first'), nl,
-        ((time(provable_at_level([] > [F2], constructive, _))) ->
-            ((time(provable_at_level([] > [F2], minimal, _))) ->
-                write('Valid in minimal logic'), nl
-            ;
-                write('Valid in intuitionistic logic'), nl
-            )
+        (   time(provable_at_level([] > [F2], minimal, _)) ->
+            write('Valid in minimal logic'), nl
+        ;   time(provable_at_level([] > [F2], intuitionistic, _)) ->
+            write('Valid in intuitionistic logic'), nl
         ;
             time(provable_at_level([] > [F2], classical, _)),
             write('Valid in classical logic'), nl
@@ -1184,12 +1182,10 @@ g4mic_decides(Formula) :-
     ; is_classical_pattern(F2) ->
         % Classical pattern detected - but still try constructive first!
         write('- Classical pattern detected -> Trying constructive logic first'), nl,
-        ((time(provable_at_level([] > [F2], constructive, _))) ->
-            ((time(provable_at_level([] > [F2], minimal, _))) ->
-                write('Valid in minimal logic'), nl
-            ;
-                write('Valid in intuitionistic logic'), nl
-            )
+        (   time(provable_at_level([] > [F2], minimal, _)) ->
+            write('Valid in minimal logic'), nl
+        ;   time(provable_at_level([] > [F2], intuitionistic, _)) ->
+            write('Valid in intuitionistic logic'), nl
         ;
             time(provable_at_level([] > [F2], classical, _)),
             write('Valid in classical logic'), nl
@@ -1198,7 +1194,7 @@ g4mic_decides(Formula) :-
         % Normal progression: minimal -> intuitionistic -> classical
         ( time(provable_at_level([] > [F2], minimal, _)) ->
             write('Valid in minimal logic'), nl
-        ; time(provable_at_level([] > [F2], constructive, _)) ->
+        ; time(provable_at_level([] > [F2], intuitionistic, _)) ->
             write('Valid in intuitionistic logic'), nl
         ; time(provable_at_level([] > [F2], classical, _)) ->
             write('Valid in classical logic'), nl
@@ -1238,7 +1234,7 @@ g4mic_logic_level_internal(F2, minimal) :-
 
 g4mic_logic_level_internal(F2, intuitionistic) :-
     catch(call_with_inference_limit(
-        provable_at_level([] > [F2], constructive, _), 10000000, InfRes), _, fail),
+        provable_at_level([] > [F2], intuitionistic, _), 10000000, InfRes), _, fail),
     InfRes \== inference_limit_exceeded, !.
 
 g4mic_logic_level_internal(F2, classical) :-
