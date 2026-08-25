@@ -142,7 +142,7 @@ Exit codes:
    2 - Timeout/Unknown/Error
 
 ================================================================================
-SYSTEMONTP INTEGRATION
+SystemOnTPTP INTEGRATION
 ================================================================================
 
 G4+ is designed to work with SystemOnTPTP. The interface is compatible
@@ -163,17 +163,32 @@ For SystemOnTPTP administrators:
 FILES IN DISTRIBUTION
 ================================================================================
 
-g4plus.sh            - Main shell script (entry point)
-g4plus_main.pl       - Main Prolog entry point
-g4mic_nanocop.pl     - G4-mic core prover
-operators.pl         - Operator declarations
-minimal_driver.pl    - Driver for nanocop integration
-nanocop20_swi.pl     - nanoCoP 2.0 core (SWI-Prolog)
-nanocop_proof.pl     - Proof presentation
-nanocop_main.pl      - nanoCoP main entry point
-nanocop_tptp2.pl     - TPTP parser and equality axioms
-README               - This file
-test/                - Test problems
+The prover, as delivered -- five files, one entry point:
+
+g4mic_nanocop.pl              - G4-mic core prover (load this one)
+i_operators.pl                - operator declarations
+nanocop20_swi_for_g4plus.pl   - nanoCoP 2.0 core, adapted for G4+
+nanocop_proof.pl              - proof presentation
+nanocop_tptp2.pl              - TPTP parser and equality axioms
+
+Also in the repository:
+
+test_suite.pl                 - the 116-test suite; run_tests/0
+prover_loader.pl              - loads the prover and the test suite
+o_driver.pl and i_*..x_*.pl   - the same prover, split into modules,
+                                clause-for-clause identical to
+                                g4mic_nanocop.pl; use it to work on the
+                                code, not to ship
+nanocop_main.pl               - nanoCoP's own entry point, for running
+                                nanoCoP alone on a file
+nc2tab.pl                     - Beth tableaux from a nanoCoP proof
+                                (standalone: beth/1, beth_tree/1)
+tinker.{html,js,css,pl}       - the browser front end (SWI-Prolog WASM),
+                                with highlight.pl and term.{js,css}
+README                        - this file
+CLAUDE.md                     - development notes: validation
+                                procedure, optimisation history,
+                                deployment rules
 
 ================================================================================
 TECHNICAL DETAILS

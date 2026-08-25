@@ -15,6 +15,7 @@
 :-style_check(-singleton).
 
 
+:-[i_operators].
 :-[nanocop20_swi_for_g4plus].
 :-[nanocop_proof].
 :-[nanocop_tptp2].
